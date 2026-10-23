@@ -1,0 +1,475 @@
+@import 'tailwindcss';
+
+/* ─────────────────────────────────────────────────────────────────────
+   FUENTES E ÍCONOS LOCALES (Soporte Offline PWA estricto)
+   Rutas relativas al archivo CSS. Vite las resuelve como assets.
+───────────────────────────────────────────────────────────────────── */
+
+/* ─── Bebas Neue — Títulos display ─── */
+@font-face {
+  font-family: 'Bebas Neue';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/BebasNeue-Regular.woff2') format('woff2');
+}
+
+/* ─── Lato — Cuerpo de texto ─── */
+@font-face {
+  font-family: 'Lato';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('../assets/fonts/Lato-Light.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Lato';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/Lato-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Lato';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../assets/fonts/Lato-Bold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Lato';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('../assets/fonts/Lato-Black.woff2') format('woff2');
+}
+
+/* ─── Work Sans — Interfaz / UI ─── */
+@font-face {
+  font-family: 'Work Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/WorkSans-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Work Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../assets/fonts/WorkSans-Medium.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Work Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../assets/fonts/WorkSans-SemiBold.woff2') format('woff2');
+}
+
+/* ─── JetBrains Mono — Código / versión ─── */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/JetBrainsMono-Regular.woff2') format('woff2');
+}
+
+/* ─── Material Symbols Rounded — Iconos variables ─── */
+@font-face {
+  font-family: 'Material Symbols Rounded';
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: block;
+  src: url('../assets/icons/MaterialSymbolsRounded.woff2') format('woff2');
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   TOKENS DEL SISTEMA — Idénticos al estándar institucional Cuadra (04)
+───────────────────────────────────────────────────────────────────── */
+@theme {
+  --color-marca-primario:       #482b2c;
+  --color-marca-primario-hover: #5d3d3e;
+  --color-marca-secundario:     #846768;
+  --color-marca-acento:         #66494a;
+  --color-cuadra-arena:         #F0EBE9;
+
+  --color-estado-pendiente:     #f59e0b;
+  --color-estado-asignada:      #3b82f6;
+  --color-estado-en-progreso:   #8b5cf6;
+  --color-estado-en-pausa:      #6b7280;
+  --color-estado-resuelto:      #10b981;
+  --color-estado-cerrado:       #1e293b;
+  --color-estado-rechazado:     #ef4444;
+  --color-estado-cancelada:     #9ca3af;
+
+  --color-prioridad-baja:       #10b981;
+  --color-prioridad-media:      #f59e0b;
+  --color-prioridad-alta:       #f97316;
+  --color-prioridad-critica:    #ef4444;
+
+  /* Aliases de conveniencia / compatibilidad */
+  --color-brand-primary:        var(--color-marca-primario);
+  --color-brand-primary-hover:  var(--color-marca-primario-hover);
+  --color-brand-secondary:      var(--color-marca-secundario);
+  --color-brand-accent:         var(--color-marca-acento);
+  --color-app-bg:               var(--color-cuadra-arena);
+  --color-app-surface:          #ffffff;
+  --color-app-surface-muted:    #f8f6f5;
+
+  --color-border:               #e2e8f0;
+  --color-border-subtle:        #f1f5f9;
+  --color-border-focus:         var(--color-marca-acento);
+
+  --color-text-primary:         #1e293b;
+  --color-text-secondary:       #64748b;
+  --color-text-muted:           #94a3b8;
+
+  --color-success:              var(--color-estado-resuelto);
+  --color-success-hover:        #059669;
+  --color-success-subtle:       #ecfdf5;
+  --color-success-text:         #065f46;
+
+  --color-warning:              var(--color-estado-pendiente);
+  --color-warning-hover:        #d97706;
+  --color-warning-subtle:       #fffbeb;
+  --color-warning-text:         #92400e;
+
+  --color-danger:               var(--color-estado-rechazado);
+  --color-danger-hover:         #dc2626;
+  --color-danger-subtle:        #fef2f2;
+  --color-danger-text:          #991b1b;
+
+  --color-info:                 var(--color-estado-asignada);
+  --color-info-hover:           #2563eb;
+  --color-info-subtle:          #eff6ff;
+  --color-info-text:            #1e40af;
+
+  --font-lectura:               "Lato", "Work Sans", ui-sans-serif, system-ui;
+  --font-titulos:               "Bebas Neue", sans-serif;
+  --font-codigo:                "JetBrains Mono", monospace;
+  --font-interfaz:              "Work Sans", "Lato", sans-serif;
+
+  --radius-sm:                  0.25rem;
+  --radius-cuadra:              0.25rem;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   BASE INSTITUCIONAL (Estándar exacto de Proyecto Mantenimiento)
+───────────────────────────────────────────────────────────────────── */
+@layer base {
+  body {
+    font-family: var(--font-lectura);
+    @apply antialiased text-slate-800 bg-cuadra-arena;
+  }
+
+  .fuente-titulos {
+    font-family: var(--font-titulos);
+    letter-spacing: 0.05em;
+  }
+
+  .fuente-lectura {
+    font-family: var(--font-lectura);
+  }
+
+  .font-codigo {
+    font-family: var(--font-codigo);
+  }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { @apply bg-slate-100; }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 rounded-full hover:bg-marca-secundario/50 transition-colors;
+  }
+
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(132 103 104 / 0.3) transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar       { width: 6px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgb(132 103 104 / 0.3); border-radius: 9999px; }
+
+  input, textarea, select {
+    @apply w-full border border-slate-300 px-3 py-2 rounded-sm
+           focus:outline-none focus:ring-2 focus:ring-marca-secundario/30
+           focus:border-marca-secundario transition-all bg-white;
+  }
+
+  @media screen and (max-width: 768px) {
+    input, textarea, select { font-size: 16px !important; }
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   COMPONENTS (Iconos y utilitarios)
+───────────────────────────────────────────────────────────────────── */
+@layer components {
+  /* CRÍTICO: Mantiene vivos los íconos del Sidebar y Navbar */
+  .material-symbols-rounded {
+    font-family: 'Material Symbols Rounded';
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    user-select: none;
+    flex-shrink: 0;
+    -webkit-font-feature-settings: 'liga';
+    font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+
+  .tarjeta-cuadra {
+    @apply bg-white border border-slate-200 shadow-sm rounded-sm overflow-hidden;
+  }
+
+  /* Animación suave y elegante de destello/resalte al registrar o separar materiales */
+  @keyframes listado-highlight-pulse {
+    0% {
+      background-color: rgb(253 230 138 / 0.85); /* amber-200 */
+      box-shadow: inset 4px 0 0 0 rgb(217 119 6); /* amber-600 */
+    }
+    25% {
+      background-color: rgb(253 230 138 / 0.25);
+      box-shadow: inset 4px 0 0 0 rgb(217 119 6 / 0.4);
+    }
+    50% {
+      background-color: rgb(253 230 138 / 0.9);
+      box-shadow: inset 4px 0 0 0 rgb(217 119 6);
+    }
+    75% {
+      background-color: rgb(253 230 138 / 0.35);
+      box-shadow: inset 4px 0 0 0 rgb(217 119 6 / 0.5);
+    }
+    100% {
+      background-color: transparent;
+      box-shadow: inset 4px 0 0 0 transparent;
+    }
+  }
+
+  .animate-highlight-row {
+    animation: listado-highlight-pulse 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  /* Animación verde de éxito y parpadeo al entregar a producción antes de desaparecer */
+  @keyframes listado-entregar-success {
+    0% {
+      background-color: rgb(209 250 229 / 0.85); /* emerald-100 */
+      box-shadow: inset 4px 0 0 0 rgb(16 185 129); /* emerald-500 */
+      opacity: 1;
+    }
+    20% {
+      background-color: rgb(209 250 229 / 0.25);
+      box-shadow: inset 4px 0 0 0 rgb(16 185 129 / 0.4);
+    }
+    45% {
+      background-color: rgb(209 250 229 / 0.9);
+      box-shadow: inset 4px 0 0 0 rgb(16 185 129);
+      opacity: 1;
+    }
+    70% {
+      background-color: rgb(209 250 229 / 0.3);
+      box-shadow: inset 4px 0 0 0 rgb(16 185 129 / 0.5);
+    }
+    85% {
+      background-color: rgb(209 250 229 / 0.7);
+      box-shadow: inset 4px 0 0 0 rgb(16 185 129);
+      opacity: 0.85;
+    }
+    100% {
+      background-color: transparent;
+      box-shadow: inset 4px 0 0 0 transparent;
+      opacity: 0;
+      transform: scaleY(0.9);
+    }
+  }
+
+  .animate-entregar-success {
+    animation: listado-entregar-success 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    pointer-events: none;
+  }
+
+  /* Animación morada de éxito y parpadeo al descontar en sistema antes de desaparecer */
+  @keyframes listado-descontar-success {
+    0% {
+      background-color: rgb(243 232 255 / 0.85); /* purple-100 */
+      box-shadow: inset 4px 0 0 0 rgb(147 51 234); /* purple-600 */
+      opacity: 1;
+    }
+    20% {
+      background-color: rgb(243 232 255 / 0.25);
+      box-shadow: inset 4px 0 0 0 rgb(147 51 234 / 0.4);
+    }
+    45% {
+      background-color: rgb(243 232 255 / 0.9);
+      box-shadow: inset 4px 0 0 0 rgb(147 51 234);
+      opacity: 1;
+    }
+    70% {
+      background-color: rgb(243 232 255 / 0.3);
+      box-shadow: inset 4px 0 0 0 rgb(147 51 234 / 0.5);
+    }
+    85% {
+      background-color: rgb(243 232 255 / 0.7);
+      box-shadow: inset 4px 0 0 0 rgb(147 51 234);
+      opacity: 0.85;
+    }
+    100% {
+      background-color: transparent;
+      box-shadow: inset 4px 0 0 0 transparent;
+      opacity: 0;
+      transform: scaleY(0.9);
+    }
+  }
+
+  .animate-descontar-success {
+    animation: listado-descontar-success 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    pointer-events: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   ADAPTABILIDAD DE ALTURA DEL SIDEBAR (Para pantallas/alturas pequeñas)
+   Solo en Desktop (min-width: 1024px) para no afectar el diseño Mobile.
+───────────────────────────────────────────────────────────────────── */
+@media (min-width: 1024px) {
+  /* Breakpoint 1: Alturas de pantalla menores a 820px */
+  @media (max-height: 820px) {
+    .sidebar-header {
+      height: 4.75rem !important; /* 76px */
+      padding-top: 0.5rem !important;
+      padding-bottom: 0.5rem !important;
+    }
+    .sidebar-logo {
+      height: 2.75rem !important; /* 44px */
+      max-height: 2.75rem !important;
+      width: auto !important;
+      max-width: 220px !important;
+    }
+    .sidebar-logo-collapsed {
+      height: 2.5rem !important; /* 40px */
+      width: 2.5rem !important;
+    }
+    .sidebar-nav {
+      padding-top: 0.75rem !important;
+      padding-bottom: 0.75rem !important;
+    }
+    .sidebar-item-link {
+      padding-top: 0.65rem !important; /* ~10px */
+      padding-bottom: 0.65rem !important;
+      padding-left: 1rem !important;
+      padding-right: 1rem !important;
+    }
+    .sidebar-item-icon {
+      font-size: 22px !important;
+      width: 22px !important;
+      height: 22px !important;
+    }
+    .sidebar-child-link {
+      padding-top: 0.4rem !important;
+      padding-bottom: 0.4rem !important;
+    }
+    .sidebar-footer {
+      padding: 0.75rem !important;
+    }
+    .sidebar-footer-credit {
+      display: none !important;
+    }
+    .sidebar-footer-version {
+      margin-bottom: 0.125rem !important;
+      margin-top: 0.125rem !important;
+    }
+  }
+
+  /* Breakpoint 2: Alturas de pantalla menores a 720px */
+  @media (max-height: 720px) {
+    .sidebar-header {
+      height: 4.25rem !important; /* 68px */
+      padding-top: 0.35rem !important;
+      padding-bottom: 0.35rem !important;
+    }
+    .sidebar-logo {
+      height: 2.35rem !important; /* ~38px */
+      max-height: 2.35rem !important;
+      width: auto !important;
+      max-width: 190px !important;
+    }
+    .sidebar-logo-collapsed {
+      height: 2.25rem !important; /* 36px */
+      width: 2.25rem !important;
+    }
+    .sidebar-nav {
+      padding-top: 0.5rem !important;
+      padding-bottom: 0.5rem !important;
+    }
+    .sidebar-item-link {
+      padding-top: 0.55rem !important; /* ~9px */
+      padding-bottom: 0.55rem !important;
+      padding-left: 0.75rem !important;
+      padding-right: 0.75rem !important;
+    }
+    .sidebar-item-icon {
+      font-size: 20px !important;
+      width: 20px !important;
+      height: 20px !important;
+    }
+    .sidebar-child-link {
+      padding-top: 0.3rem !important;
+      padding-bottom: 0.3rem !important;
+    }
+    .sidebar-child-list {
+      padding-left: 2.25rem !important;
+    }
+    .sidebar-child-line {
+      left: 17px !important;
+    }
+    .sidebar-child-dot {
+      left: -15px !important;
+    }
+    .sidebar-footer {
+      display: none !important;
+    }
+    .sidebar-nav ul {
+      gap: 0.25rem !important;
+    }
+    .sidebar-nav li.h-px {
+      margin-top: 0.5rem !important;
+      margin-bottom: 0.5rem !important;
+    }
+  }
+
+  /* Breakpoint 3: Alturas extremadamente pequeñas */
+  @media (max-height: 620px) {
+    .sidebar-header {
+      height: 3.75rem !important; /* 60px */
+      padding-top: 0.25rem !important;
+      padding-bottom: 0.25rem !important;
+    }
+    .sidebar-logo {
+      height: 2rem !important; /* 32px */
+      max-height: 2rem !important;
+      width: auto !important;
+      max-width: 160px !important;
+    }
+    .sidebar-logo-collapsed {
+      height: 1.85rem !important; /* ~30px */
+      width: 1.85rem !important;
+    }
+    .sidebar-item-link {
+      padding-top: 0.45rem !important; /* ~7px */
+      padding-bottom: 0.45rem !important;
+    }
+    .sidebar-child-link {
+      padding-top: 0.2rem !important;
+      padding-bottom: 0.2rem !important;
+    }
+  }
+}
