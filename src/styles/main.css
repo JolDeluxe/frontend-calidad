@@ -473,3 +473,38 @@
     }
   }
 }
+
+/* ─── Animación suave de destello para registros recién agregados ─── */
+@keyframes row-glow-pulse {
+  0% {
+    background-color: rgba(16, 185, 129, 0.28);
+    box-shadow: inset 3px 0 0 0 #059669;
+  }
+  50% {
+    background-color: rgba(16, 185, 129, 0.08);
+    box-shadow: inset 3px 0 0 0 #10b981;
+  }
+  100% {
+    background-color: rgba(16, 185, 129, 0.28);
+    box-shadow: inset 3px 0 0 0 #059669;
+  }
+}
+
+.row-newly-saved {
+  animation: row-glow-pulse 1.8s ease-in-out infinite;
+}
+
+/* ─── Animación de barra de progreso de pantalla de carga ─── */
+@keyframes slide-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+

@@ -1,7 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { defectosApi } from '../api/defectos-api';
-import type { Defecto } from '../types/defectos.types';
+import type {
+  Defecto,
+  ClasificacionDefecto,
+  GrupoCodificacion,
+  LoteDefectosPayload,
+  LotePreviewResponse,
+} from '../types/defectos.types';
 import { departamentosApi } from '@/features/departamentos/api/departamentos-api';
 import type { Departamento, Linea } from '@/features/departamentos/types/departamentos.types';
 import { DefectosTabla } from '../components/defectos-tabla';
@@ -13,6 +19,7 @@ import { DefectoDepartamentosModal } from '../components/defecto-departamentos-m
 import { DefectoDeleteModal } from '../components/defecto-delete-modal';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
+import { toast } from '@/components/ui/toast';
 
 /**
  * Controlador de vista del módulo de Defectos.
@@ -25,6 +32,7 @@ export function DefectosPage() {
   const [defectos, setDefectos] = useState<Defecto[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [lineas, setLineas] = useState<Linea[]>([]);
+  const [gruposCodificacion, setGruposCodificacion] = useState<GrupoCodificacion[]>([]);
   // Conteos dinámicos por línea y catálogo total
   const [conteosPorLinea, setConteosPorLinea] = useState<Record<number, number>>({});
   const [conteoTodas, setConteoTodas] = useState<number>(0);
@@ -48,6 +56,8 @@ export function DefectosPage() {
 
   const busqueda = searchParams.get('q') || '';
   const filtroClasificacion = searchParams.get('clasif') || '';
+  const deptoParam = searchParams.get('depto');
+  const filtroDepartamento = deptoParam && !isNaN(Number(deptoParam)) ? Number(deptoParam) : null;
   const verEliminados = searchParams.get('eliminados') === '1';
 
   // Filtro multi-checkbox de líneas en vista TODAS (ej. lineas=1,2)
@@ -85,6 +95,7 @@ export function DefectosPage() {
     updateUrlParams({
       seccion: seleccion === 'TODAS' ? 'todas' : seleccion.toString(),
       vista: seleccion === 'TODAS' ? 'tabla' : 'matriz',
+      depto: null,
       page: null,
     });
   };
@@ -99,6 +110,10 @@ export function DefectosPage() {
 
   const handleSetFiltroClasificacion = (val: string) => {
     updateUrlParams({ clasif: val || null, page: null });
+  };
+
+  const handleSetFiltroDepartamento = (val: number | null) => {
+    updateUrlParams({ depto: val ? val.toString() : null, page: null });
   };
 
   const handleSetVerEliminados = (val: boolean) => {
@@ -123,7 +138,7 @@ export function DefectosPage() {
 
   // Paginación continua tipo "Ver más"
   const [page, setPage] = useState(1);
-  const [limit] = useState(25);
+  const [limit] = useState(100);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -157,13 +172,15 @@ export function DefectosPage() {
 
   const fetchCatalogos = async () => {
     try {
-      const [deptosData, lineasData] = await Promise.all([
+      const [deptosData, lineasData, gruposData] = await Promise.all([
         defectosApi.getDepartamentosParaDefectos(),
         departamentosApi.getLineas(),
+        defectosApi.getGruposCodificacion().catch(() => [] as GrupoCodificacion[]),
         fetchConteosLineas(),
       ]);
       setDepartamentos(deptosData || []);
       setLineas((lineasData || []).filter((l) => l.estado === 'ACTIVO'));
+      setGruposCodificacion(gruposData || []);
     } catch {
       // Ignorar fallback silencioso
     }
@@ -181,6 +198,7 @@ export function DefectosPage() {
       const params: Parameters<typeof defectosApi.getDefectos>[0] = {
         busqueda: busqueda.trim() || undefined,
         clasificacion: filtroClasificacion || undefined,
+        departamentoId: filtroDepartamento || undefined,
         soloEliminados: verEliminados ? true : undefined,
         page: targetPage,
         limit,
@@ -228,7 +246,7 @@ export function DefectosPage() {
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     };
-  }, [busqueda, filtroClasificacion, verEliminados, lineaActivaId, lineasParam]);
+  }, [busqueda, filtroClasificacion, filtroDepartamento, verEliminados, lineaActivaId, lineasParam]);
 
   const handleCargarMas = () => {
     if (page < totalPages && !cargandoMas) {
@@ -264,12 +282,42 @@ export function DefectosPage() {
   // Operaciones de Mutación conectadas a la API
   const handleCreateSubmit = async (data: {
     defecto: string;
-    clasificacion: 'CRITICO' | 'MAYOR' | 'MENOR';
-    departamentoId?: number;
+    clasificacion: ClasificacionDefecto;
+    departamentoId: number;
+    lineaId: number;
     departamentosIds: number[];
   }) => {
-    await defectosApi.createDefecto(data);
-    await Promise.all([fetchDefectosData(1, false), fetchConteosLineas()]);
+    try {
+      await defectosApi.createDefecto(data);
+      await Promise.all([
+        fetchDefectosData(1, false),
+        fetchConteosLineas(),
+        defectosApi.getGruposCodificacion().then(setGruposCodificacion).catch(() => {}),
+      ]);
+      toast.success(`Defecto "${data.defecto}" creado exitosamente`);
+    } catch (err: any) {
+      toast.error(err.message || 'Error al crear defecto');
+      throw err;
+    }
+  };
+
+  const handlePreviewLote = async (data: LoteDefectosPayload): Promise<LotePreviewResponse> => {
+    return await defectosApi.previsualizarLote(data);
+  };
+
+  const handleSubmitLote = async (data: LoteDefectosPayload): Promise<void> => {
+    try {
+      await defectosApi.crearLote(data);
+      await Promise.all([
+        fetchDefectosData(1, false),
+        fetchConteosLineas(),
+        defectosApi.getGruposCodificacion().then(setGruposCodificacion).catch(() => {}),
+      ]);
+      toast.success(`Lote de ${data.filas.length} defectos guardado exitosamente`);
+    } catch (err: any) {
+      toast.error(err.message || 'Error al guardar lote de defectos');
+      throw err;
+    }
   };
 
   const handleEditSubmit = async (data: {
@@ -281,36 +329,54 @@ export function DefectosPage() {
   }) => {
     if (!currentDefecto) return;
 
-    if (data.nuevaClave && data.nuevaClave !== currentDefecto.clave) {
-      await defectosApi.updateClaveDefecto(currentDefecto.id, {
-        nuevaClave: data.nuevaClave,
+    try {
+      if (data.nuevaClave && data.nuevaClave !== currentDefecto.clave) {
+        await defectosApi.updateClaveDefecto(currentDefecto.id, {
+          nuevaClave: data.nuevaClave,
+        });
+      }
+
+      await defectosApi.updateDefecto(currentDefecto.id, {
+        defecto: data.defecto,
+        clasificacion: data.clasificacion,
+        departamentoId: data.departamentoId,
       });
+
+      if (data.departamentosList) {
+        await defectosApi.syncDefectoDepartamentos(currentDefecto.id, data.departamentosList);
+      }
+
+      await Promise.all([fetchDefectosData(1, false), fetchConteosLineas()]);
+      toast.success('Defecto actualizado correctamente');
+    } catch (err: any) {
+      toast.error(err.message || 'Error al actualizar defecto');
+      throw err;
     }
-
-    await defectosApi.updateDefecto(currentDefecto.id, {
-      defecto: data.defecto,
-      clasificacion: data.clasificacion,
-      departamentoId: data.departamentoId,
-    });
-
-    if (data.departamentosList) {
-      await defectosApi.syncDefectoDepartamentos(currentDefecto.id, data.departamentosList);
-    }
-
-    await Promise.all([fetchDefectosData(1, false), fetchConteosLineas()]);
   };
 
   const handleDeptosSubmit = async (
     list: Array<{ departamentoId: number; activo: boolean }>
   ) => {
     if (!currentDefecto) return;
-    await defectosApi.syncDefectoDepartamentos(currentDefecto.id, list);
-    await Promise.all([fetchDefectosData(page, false), fetchConteosLineas()]);
+    try {
+      await defectosApi.syncDefectoDepartamentos(currentDefecto.id, list);
+      await Promise.all([fetchDefectosData(page, false), fetchConteosLineas()]);
+      toast.success('Departamentos sincronizados exitosamente');
+    } catch (err: any) {
+      toast.error(err.message || 'Error al sincronizar departamentos');
+      throw err;
+    }
   };
 
   const handleDeleteConfirm = async (def: Defecto) => {
-    await defectosApi.deleteDefecto(def.id);
-    await Promise.all([fetchDefectosData(1, false), fetchConteosLineas()]);
+    try {
+      await defectosApi.deleteDefecto(def.id);
+      await Promise.all([fetchDefectosData(1, false), fetchConteosLineas()]);
+      toast.success(`Defecto #${def.clave} "${def.defecto}" eliminado exitosamente`);
+    } catch (err: any) {
+      toast.error(err.message || 'Error al eliminar defecto');
+      throw err;
+    }
   };
 
   const handleReactivar = async (def: Defecto) => {
@@ -318,9 +384,11 @@ export function DefectosPage() {
       setLoading(true);
       await defectosApi.reactivarDefecto(def.id);
       await Promise.all([fetchDefectosData(1, false), fetchConteosLineas()]);
+      toast.success(`Defecto #${def.clave} reactivado exitosamente`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al reactivar defecto';
       setError(msg);
+      toast.error(msg);
       setLoading(false);
     }
   };
@@ -350,9 +418,16 @@ export function DefectosPage() {
     );
 
     // Persistir en backend
-    await defectosApi.syncDefectoEtapas(defectoId, [
-      { departamentoId, permitido: nuevoPermitido },
-    ]);
+    try {
+      await defectosApi.syncDefectoEtapas(defectoId, [
+        { departamentoId, permitido: nuevoPermitido },
+      ]);
+      toast.success('Matriz de etapas actualizada');
+    } catch (err: any) {
+      toast.error(err.message || 'Error al actualizar etapa de defecto');
+      // Revertir recargando
+      fetchDefectosData(page, false);
+    }
   };
 
   return (
@@ -479,6 +554,8 @@ export function DefectosPage() {
           error={error}
           busqueda={busqueda}
           setBusqueda={handleSetBusqueda}
+          filtroDepartamento={filtroDepartamento}
+          setFiltroDepartamento={handleSetFiltroDepartamento}
           filtroClasificacion={filtroClasificacion}
           setFiltroClasificacion={handleSetFiltroClasificacion}
           verEliminados={verEliminados}
@@ -492,6 +569,7 @@ export function DefectosPage() {
           onOpenDeptos={openDeptosModal}
           onOpenDelete={openDeleteModal}
           onReactivar={handleReactivar}
+          departamentos={lineaActivaId === 'TODAS' ? departamentos : departamentos.filter((d) => d.lineasAsociadas?.some((l) => l.activo && l.lineaId === lineaActivaId))}
           mostrarColumnaLinea={lineaActivaId === 'TODAS'}
           lineas={lineas}
           selectedLineas={selectedLineas}
@@ -511,6 +589,8 @@ export function DefectosPage() {
           loading={loading}
           busqueda={busqueda}
           setBusqueda={handleSetBusqueda}
+          filtroDepartamento={filtroDepartamento}
+          setFiltroDepartamento={handleSetFiltroDepartamento}
           filtroClasificacion={filtroClasificacion}
           setFiltroClasificacion={handleSetFiltroClasificacion}
           verEliminados={verEliminados}
@@ -540,7 +620,12 @@ export function DefectosPage() {
         isOpen={isModalCreateOpen}
         onClose={() => setIsModalCreateOpen(false)}
         departamentos={departamentos}
+        lineas={lineas}
+        grupos={gruposCodificacion}
+        lineaInicialId={lineaActivaId !== 'TODAS' ? lineaActivaId : null}
         onSubmit={handleCreateSubmit}
+        onPreviewLote={handlePreviewLote}
+        onSubmitLote={handleSubmitLote}
       />
 
       <DefectoFormEditModal

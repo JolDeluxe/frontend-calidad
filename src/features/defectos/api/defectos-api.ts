@@ -1,5 +1,12 @@
 import { httpClient, type ApiResponse } from '@/lib/api/http-client';
-import type { Defecto, GetDefectosResponse } from '../types/defectos.types';
+import type {
+  Defecto,
+  GetDefectosResponse,
+  GrupoCodificacion,
+  LoteCreadoResponse,
+  LoteDefectosPayload,
+  LotePreviewResponse,
+} from '../types/defectos.types';
 import type { Departamento } from '@/features/departamentos/types/departamentos.types';
 
 export const defectosApi = {
@@ -49,9 +56,26 @@ export const defectosApi = {
     defecto: string;
     clasificacion: 'CRITICO' | 'MAYOR' | 'MENOR';
     departamentoId?: number;
+    lineaId?: number;
     departamentosIds?: number[];
   }) => {
     const res = await httpClient.post<ApiResponse<Defecto>>('/defectos', data);
+    return res.data!;
+  },
+
+  getGruposCodificacion: async (lineaId?: number) => {
+    const qs = lineaId ? `?lineaId=${lineaId}` : '';
+    const res = await httpClient.get<ApiResponse<GrupoCodificacion[]>>(`/defectos/grupos-codificacion${qs}`);
+    return res.data || [];
+  },
+
+  previsualizarLote: async (data: LoteDefectosPayload) => {
+    const res = await httpClient.post<ApiResponse<LotePreviewResponse>>('/defectos/batch/preview', data);
+    return res.data!;
+  },
+
+  crearLote: async (data: LoteDefectosPayload) => {
+    const res = await httpClient.post<ApiResponse<LoteCreadoResponse>>('/defectos/batch', data);
     return res.data!;
   },
 
@@ -60,7 +84,7 @@ export const defectosApi = {
     return res.data!;
   },
 
-  updateClaveDefecto: async (id: number, data: { nuevaClave: number; motivo?: string }) => {
+  updateClaveDefecto: async (id: number, data: { nuevaClave: number }) => {
     const res = await httpClient.patch<ApiResponse<Defecto>>(`/defectos/${id}/clave`, data);
     return res.data!;
   },
@@ -101,9 +125,9 @@ export const defectosApi = {
     return res.data;
   },
 
-  // Consulta de departamentos para filtros y asignación en defectos
+  // Consulta de departamentos para filtros y asignación en defectos (solo activos)
   getDepartamentosParaDefectos: async () => {
-    const res = await httpClient.get<ApiResponse<Departamento[]>>('/departamentos');
+    const res = await httpClient.get<ApiResponse<Departamento[]>>('/departamentos?estado=ACTIVO');
     return res.data || [];
   },
 

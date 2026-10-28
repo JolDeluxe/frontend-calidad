@@ -53,7 +53,7 @@ export function DefectoDeleteModal({
           </div>
           <p className="text-xs text-text-secondary leading-relaxed">
             ¿Confirma que desea eliminar el defecto{' '}
-            <strong className="text-text-primary">#{defecto.clave} - {defecto.defecto}</strong>?
+            <strong className="text-text-primary">{defecto.clave} - {defecto.defecto}</strong>?
           </p>
           <p className="text-xs text-text-muted">
             El defecto dejará de ser seleccionable para nuevas capturas. El historial previo se preservará intacto y podrá ser reactivado en cualquier momento desde &quot;Ver Eliminados&quot;.

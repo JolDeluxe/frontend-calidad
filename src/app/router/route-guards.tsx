@@ -1,17 +1,13 @@
 import { Navigate, Outlet } from 'react-router';
 import { useAuthSession } from '@/providers/auth-provider';
-import { Spinner } from '@/components/ui/spinner';
+import { PantallaCarga } from '@/components/ui/pantalla-carga';
 import type { ReactNode } from 'react';
 
 export function RequireAuth({ children }: { children?: ReactNode }) {
   const { isAuthenticated, sessionState, isLoading } = useAuthSession();
 
   if (isLoading || sessionState === 'pending_validation') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-cuadra-arena">
-        <Spinner size="36px" />
-      </div>
-    );
+    return <PantallaCarga />;
   }
 
   if (!isAuthenticated || sessionState === 'revoked' || sessionState === 'unauthenticated') {
@@ -31,11 +27,7 @@ export function RequireRole({
   const { user, isAuthenticated, isLoading } = useAuthSession();
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-cuadra-arena">
-        <Spinner size="36px" />
-      </div>
-    );
+    return <PantallaCarga />;
   }
 
   if (!isAuthenticated) {
@@ -54,11 +46,7 @@ export function RedirectIfAuthenticated({ children }: { children?: ReactNode }) 
   const { isAuthenticated, sessionState, isLoading } = useAuthSession();
 
   if (isLoading || sessionState === 'pending_validation') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-cuadra-arena">
-        <Spinner size="36px" />
-      </div>
-    );
+    return <PantallaCarga />;
   }
 
   if (isAuthenticated && sessionState !== 'revoked') {

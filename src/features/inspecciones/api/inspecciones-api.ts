@@ -18,9 +18,12 @@ export const inspeccionesApi = {
 
   /**
    * Crea atómicamente la inspección con todos sus defectos capturados.
+   * `idempotencyKey` evita duplicados ante doble envío o reintentos de red.
    */
-  createInspeccion: async (payload: CreateInspeccionPayload): Promise<any> => {
-    const res = await httpClient.post<ApiResponse<any>>('/inspecciones', payload);
+  createInspeccion: async (payload: CreateInspeccionPayload, idempotencyKey?: string): Promise<any> => {
+    const res = await httpClient.post<ApiResponse<any>>('/inspecciones', payload, {
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+    });
     return res.data!;
   },
 
@@ -41,23 +44,45 @@ export const inspeccionesApi = {
   },
 
   /**
+   * Obtiene los inspectores registrados (con rol de inspector/administrador o con inspecciones registradas).
+   */
+  getInspectores: async (): Promise<Array<{ id: number; nombre: string; usuario: string; rol?: { id: number; codigo: string; nombre: string } }>> => {
+    const res = await httpClient.get<ApiResponse<Array<{ id: number; nombre: string; usuario: string; rol?: { id: number; codigo: string; nombre: string } }>>>('/inspecciones/inspectores');
+    return res.data || [];
+  },
+
+  /**
    * Consulta el listado de filas de defectos de inspección del departamento (HOY, ULTIMOS, TODOS).
    */
   getFilasInspeccion: async (params?: {
     periodo?: 'hoy' | 'ultimos' | 'todos';
     busqueda?: string;
+    departamentoId?: number;
     departamentoAuditoriaId?: number;
+    departamentoResponsableId?: number;
+    clasificacion?: 'CRITICO' | 'MAYOR' | 'MENOR';
+    lineaId?: number;
+    lineaTexto?: string;
+    inspectorId?: number;
     mes?: number;
     anio?: number;
+    soloEliminados?: boolean;
     page?: number;
     limit?: number;
   }): Promise<GetFilasInspeccionResponse> => {
     const query = new URLSearchParams();
     if (params?.periodo) query.set('periodo', params.periodo);
     if (params?.busqueda) query.set('busqueda', params.busqueda);
+    if (params?.departamentoId) query.set('departamentoId', params.departamentoId.toString());
     if (params?.departamentoAuditoriaId) query.set('departamentoAuditoriaId', params.departamentoAuditoriaId.toString());
+    if (params?.departamentoResponsableId) query.set('departamentoResponsableId', params.departamentoResponsableId.toString());
+    if (params?.clasificacion) query.set('clasificacion', params.clasificacion);
+    if (params?.lineaId) query.set('lineaId', params.lineaId.toString());
+    if (params?.lineaTexto) query.set('lineaTexto', params.lineaTexto);
+    if (params?.inspectorId) query.set('inspectorId', params.inspectorId.toString());
     if (params?.mes) query.set('mes', params.mes.toString());
     if (params?.anio) query.set('anio', params.anio.toString());
+    if (params?.soloEliminados !== undefined) query.set('soloEliminados', String(params.soloEliminados));
     if (params?.page) query.set('page', params.page.toString());
     if (params?.limit) query.set('limit', params.limit.toString());
 
@@ -66,5 +91,27 @@ export const inspeccionesApi = {
       `/inspecciones${qs}`
     );
     return res.data || { items: [], total: 0, periodo: 'ultimos', page: 1, limit: 30, totalPages: 1 };
+  },
+
+  /**
+   * Elimina un detalle de defecto (solo permitido dentro de los últimos 30 días).
+   */
+  cancelarDetalleInspeccion: async (
+    detalleId: number,
+    payload?: { motivo?: string; codigoConfirmacion?: string }
+  ): Promise<any> => {
+    const res = await httpClient.post<ApiResponse<any>>(`/inspecciones/detalles/${detalleId}/cancelar`, payload || {});
+    return res.data;
+  },
+
+  /**
+   * Recupera un detalle de defecto eliminado lógicamente.
+   */
+  recuperarDetalleInspeccion: async (
+    detalleId: number,
+    payload?: { motivo?: string }
+  ): Promise<any> => {
+    const res = await httpClient.post<ApiResponse<any>>(`/inspecciones/detalles/${detalleId}/recuperar`, payload || {});
+    return res.data;
   },
 };

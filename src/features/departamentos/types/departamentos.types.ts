@@ -35,6 +35,7 @@ export interface Departamento {
   codigo: string;
   nombre: string;
   categoriaDepartamentoId?: number | null;
+  numeroLineas?: number;
   estado: 'ACTIVO' | 'INACTIVO';
   fechaCreacion?: string;
   fechaActualizacion?: string;

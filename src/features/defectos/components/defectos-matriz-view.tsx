@@ -5,6 +5,7 @@ import type { Departamento } from '@/features/departamentos/types/departamentos.
 import { Icon } from '@/components/ui/icon';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
+import { TableRowsSkeleton } from '@/components/ui/skeleton';
 import { DefectoClasificacionIndicator } from './defecto-clasificacion-indicator';
 
 export interface DefectosMatrizViewProps {
@@ -15,6 +16,8 @@ export interface DefectosMatrizViewProps {
   setBusqueda: (val: string) => void;
   filtroClasificacion: string;
   setFiltroClasificacion: (val: string) => void;
+  filtroDepartamento?: number | null;
+  setFiltroDepartamento?: (val: number | null) => void;
   verEliminados: boolean;
   setVerEliminados: (val: boolean) => void;
   puedeCargarMas: boolean;
@@ -230,6 +233,8 @@ export function DefectosMatrizView({
   setBusqueda,
   filtroClasificacion,
   setFiltroClasificacion,
+  filtroDepartamento = null,
+  setFiltroDepartamento,
   verEliminados,
   setVerEliminados,
   puedeCargarMas,
@@ -271,8 +276,8 @@ export function DefectosMatrizView({
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden flex flex-col">
       {/* Barra de Filtros Compacta */}
-      <div className="p-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-slate-50/60">
-        <div className="relative flex-1 min-w-[220px] max-w-sm">
+      <div className="p-3 border-b border-slate-200 flex items-center justify-between gap-3 bg-slate-50/60">
+        <div className="relative flex-1 min-w-[150px] max-w-sm">
           <Icon
             name="search"
             size="16px"
@@ -296,14 +301,32 @@ export function DefectosMatrizView({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Selector de Departamento */}
+          {setFiltroDepartamento && departamentos.length > 0 && (
+            <select
+              value={filtroDepartamento ? String(filtroDepartamento) : ""}
+              onChange={(e) => setFiltroDepartamento(e.target.value ? Number(e.target.value) : null)}
+              className="bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0 w-36" style={{ width: "9rem" }}
+              title="Filtrar por departamento"
+            >
+              <option value="">Todos los deptos</option>
+              {departamentos.map((dep) => (
+                <option key={dep.id} value={dep.id}>
+                  {dep.nombre}
+                </option>
+              ))}
+            </select>
+          )}
+
           {/* Selector de Clasificación Compacto */}
           <select
             value={filtroClasificacion}
             onChange={(e) => setFiltroClasificacion(e.target.value)}
-            className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer"
+            className="bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0 w-32" style={{ width: "8rem" }}
+            title="Filtrar por clasificación"
           >
-            <option value="">Todas</option>
+            <option value="">Todas las clasif.</option>
             <option value="CRITICO">Crítico</option>
             <option value="MAYOR">Mayor</option>
             <option value="MENOR">Menor</option>
@@ -314,7 +337,7 @@ export function DefectosMatrizView({
             type="button"
             onClick={() => setVerEliminados(!verEliminados)}
             title={verEliminados ? 'Papelera: Viendo defectos eliminados' : 'Papelera: Ver defectos eliminados'}
-            className={`p-1.5 rounded-lg border transition-colors cursor-pointer flex items-center justify-center ${
+            className={`p-1.5 rounded-lg border transition-colors cursor-pointer flex items-center justify-center shrink-0 ${
               verEliminados
                 ? 'bg-rose-100 text-rose-700 border-rose-300'
                 : 'bg-white text-slate-500 border-slate-300 hover:text-slate-700 hover:bg-slate-50'
@@ -337,17 +360,17 @@ export function DefectosMatrizView({
                 Descripción
               </th>
               <th className="py-2.5 px-3 w-28 text-center border-r border-slate-200">
-                Propietario
+                Departamento
               </th>
               <th className="py-2.5 px-3 w-24 text-center border-r border-slate-200">
                 Clasif.
               </th>
-              {/* 9 Columnas Oficiales de Etapas de Detección */}
+              {/* Columnas de Departamentos de Detección */}
               {etapasOrdenadas.map((etapa) => (
                 <th
                   key={etapa.codigo}
                   className="py-2.5 px-2 text-center text-xs font-black border-r border-slate-200 last:border-r-0 min-w-[70px] whitespace-nowrap cursor-help hover:bg-slate-200/80 transition-colors"
-                  title={`Etapa de Detección: ${etapa.nombre}`}
+                  title={`Departamento de Detección: ${etapa.nombre}`}
                 >
                   <span className="tracking-wider text-slate-700 font-mono">
                     {abreviarEtapa(etapa.codigo, etapa.nombre)}
@@ -358,14 +381,7 @@ export function DefectosMatrizView({
           </thead>
           <tbody className="divide-y divide-slate-100 text-xs text-slate-800">
             {loading && defectos.length === 0 ? (
-              <tr>
-                <td colSpan={4 + etapasOrdenadas.length} className="py-12 text-center text-slate-400">
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <Spinner size="md" className="text-brand-primary" />
-                    <span>Cargando matriz...</span>
-                  </div>
-                </td>
-              </tr>
+              <TableRowsSkeleton columns={4 + etapasOrdenadas.length} rows={10} />
             ) : defectos.length === 0 ? (
               <tr>
                 <td colSpan={4 + etapasOrdenadas.length} className="py-12 text-center text-slate-400 italic">
@@ -394,8 +410,8 @@ export function DefectosMatrizView({
                     }`}
                   >
                     {/* Clave Sticky */}
-                    <td className="py-2 px-3 font-mono font-bold text-center text-brand-primary sticky left-0 z-10 bg-white border-r border-slate-200 whitespace-nowrap">
-                      #{def.clave}
+                    <td className="py-2 px-3 font-mono font-bold text-center text-lg text-brand-primary sticky left-0 z-10 bg-white border-r border-slate-200 whitespace-nowrap">
+                      {def.clave}
                     </td>
 
                     {/* Descripción Sticky con Ojito y 3 Puntos */}
@@ -441,7 +457,7 @@ export function DefectosMatrizView({
                       </div>
                     </td>
 
-                    {/* Celdas de Etapas de Detección: Palomita (Permitido) / Tachita (Bloqueado) interactivo */}
+                    {/* Celdas de Departamentos de Detección: Palomita (Permitido) / Tachita (Bloqueado) interactivo */}
                     {etapasOrdenadas.map((etapa) => {
                       const permitido = etapa.id > 0
                         ? mapEtapasPermitidas.get(etapa.id)

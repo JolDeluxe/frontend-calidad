@@ -34,6 +34,10 @@ export function DefectoDepartamentosModal({
         const exists = defecto.departamentos?.some((rel) => rel.departamentoId === d.id && rel.activo);
         map[d.id] = !!exists;
       });
+      // El departamento propietario siempre está activo
+      if (defecto.departamentoId) {
+        map[defecto.departamentoId] = true;
+      }
       setSelectedDeptosMap(map);
       setBusquedaDeptoModal('');
       setError(null);
@@ -43,13 +47,16 @@ export function DefectoDepartamentosModal({
 
   if (!isOpen || !defecto) return null;
 
-  const deptosModalFiltrados = departamentos.filter(
+  const propIdNum = defecto.departamentoId;
+  const deptosSinPropietario = departamentos.filter((d) => d.id !== propIdNum);
+
+  const deptosModalFiltrados = deptosSinPropietario.filter(
     (dep) =>
       dep.nombre.toLowerCase().includes(busquedaDeptoModal.toLowerCase()) ||
       dep.codigo.toLowerCase().includes(busquedaDeptoModal.toLowerCase())
   );
 
-  const seleccionadosEnModalCount = Object.values(selectedDeptosMap).filter(Boolean).length;
+  const seleccionadosEnModalCount = deptosSinPropietario.filter((d) => Boolean(selectedDeptosMap[d.id])).length;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,7 +80,7 @@ export function DefectoDepartamentosModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} className="max-w-xl max-h-[90vh]">
       <ModalHeader
-        title={`Departamentos Disponibles (#${defecto.clave})`}
+        title={`Departamentos Disponibles ({defecto.clave})`}
         onClose={onClose}
       />
       <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -89,7 +96,7 @@ export function DefectoDepartamentosModal({
             <div className="flex items-center gap-2">
               <Icon name="corporate_fare" size="16px" className="text-brand-primary" />
               <span>
-                Departamento Propietario del Defecto:{' '}
+                Departamento:{' '}
                 <strong className="text-brand-primary uppercase">
                   {defecto.departamento?.nombre || 'CORTE'}
                 </strong>
@@ -130,6 +137,7 @@ export function DefectoDepartamentosModal({
                   deptosModalFiltrados.forEach((d) => {
                     next[d.id] = true;
                   });
+                  if (propIdNum) next[propIdNum] = true;
                   setSelectedDeptosMap(next);
                 }}
                 className="text-brand-primary hover:underline font-medium cursor-pointer"
@@ -144,6 +152,7 @@ export function DefectoDepartamentosModal({
                   deptosModalFiltrados.forEach((d) => {
                     next[d.id] = false;
                   });
+                  if (propIdNum) next[propIdNum] = true;
                   setSelectedDeptosMap(next);
                 }}
                 className="text-text-muted hover:text-text-primary cursor-pointer"

@@ -1,9 +1,10 @@
-import { useIsDesktop } from '@/hooks/useMediaQuery';
 import { DesktopLayout } from './desktop-layout';
-import { MobileLayout } from './mobile-layout';
 
+/**
+ * DashboardLayout unificado:
+ * En este sistema no existe menú mobile independiente; se utiliza exclusivamente
+ * la experiencia de escritorio completa y fija para todas las resoluciones.
+ */
 export function DashboardLayout() {
-  const isDesktop = useIsDesktop();
-
-  return isDesktop ? <DesktopLayout /> : <MobileLayout />;
+  return <DesktopLayout />;
 }

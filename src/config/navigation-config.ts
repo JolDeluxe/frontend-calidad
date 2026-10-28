@@ -13,28 +13,35 @@ export const NAVIGATION_CONFIG: NavItem[] = [
     name: 'Inicio',
     icon: 'home',
     route: '/',
-    allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'USUARIO', 'INSPECTOR', 'COORD'],
+    allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'INSPECTOR', 'COORD', 'VISUALIZADOR'],
   },
   {
     id: 'inspecciones',
     name: 'Captura',
-    icon: 'assignment_turned_in',
+    icon: 'assignment_add',
     route: '/inspecciones',
-    allowedRoles: ['SUPER_ADMIN', 'INSPECTOR'],
+    allowedRoles: ['SUPER_ADMIN', 'INSPECTOR', 'VISUALIZADOR'],
   },
   {
-    id: 'departamentos',
-    name: 'Departamentos y Operación',
-    icon: 'domain',
-    route: '/departamentos',
-    allowedRoles: ['SUPER_ADMIN', 'ADMIN'],
+    id: 'registro',
+    name: 'Registro',
+    icon: 'list_alt',
+    route: '/registro',
+    allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'COORD', 'VISUALIZADOR'],
   },
   {
     id: 'defectos',
     name: 'Defectos',
-    icon: 'bug_report',
+    icon: 'deployed_code_alert',
     route: '/defectos',
-    allowedRoles: ['SUPER_ADMIN', 'ADMIN'],
+    allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'VISUALIZADOR'],
+  },
+  {
+    id: 'departamentos',
+    name: 'Departamentos',
+    icon: 'domain',
+    route: '/departamentos',
+    allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'VISUALIZADOR'],
   },
   {
     id: 'usuarios',
@@ -45,8 +52,8 @@ export const NAVIGATION_CONFIG: NavItem[] = [
   },
   {
     id: 'sistema',
-    name: 'Sistema y Auditoría',
-    icon: 'history',
+    name: 'Configuración',
+    icon: 'settings',
     route: '/sistema/auditoria',
     allowedRoles: ['SUPER_ADMIN'],
   },
@@ -63,6 +70,7 @@ export function getNavigationByRole(rolCodigo?: string): NavItem[] {
 export function getRouteTitle(pathname: string): string {
   if (pathname === '/') return 'Inicio';
   if (pathname.startsWith('/inspecciones')) return 'Captura de Defectos';
+  if (pathname.startsWith('/registro')) return 'Registro Histórico de Defectos';
   if (pathname.startsWith('/departamentos')) return 'Catálogo de Departamentos';
   if (pathname.startsWith('/defectos')) return 'Catálogo de Defectos';
   if (pathname.startsWith('/usuarios')) return 'Gestión de Usuarios';

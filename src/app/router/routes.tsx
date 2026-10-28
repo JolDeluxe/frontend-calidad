@@ -5,7 +5,7 @@ import { NotFoundPage } from '@/app/errors/not-found-page';
 import { ErrorPage } from '@/app/errors/error-page';
 import { DashboardLayout } from '@/layouts/dashboard-layout';
 import { RequireAuth, RequireRole, RedirectIfAuthenticated } from './route-guards';
-import { Spinner } from '@/components/ui/spinner';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const LoginPage = lazy(() =>
   import('@/features/auth/pages/login-page').then((m) => ({ default: m.LoginPage })),
@@ -25,6 +25,9 @@ const TechnicalLogsPage = lazy(() =>
 const Pm2ConsolePage = lazy(() =>
   import('@/features/auditoria/pages/consola-page').then((m) => ({ default: m.Pm2ConsolePage })),
 );
+const TerminalesPage = lazy(() =>
+  import('@/features/auditoria/pages/terminales-page').then((m) => ({ default: m.TerminalesPage })),
+);
 const DepartamentosPage = lazy(() =>
   import('@/features/departamentos/pages/departamentos-page').then((m) => ({ default: m.DepartamentosPage })),
 );
@@ -34,13 +37,24 @@ const DefectosPage = lazy(() =>
 const InspeccionesPage = lazy(() =>
   import('@/features/inspecciones/pages/inspecciones-page').then((m) => ({ default: m.InspeccionesPage })),
 );
+const RegistroPage = lazy(() =>
+  import('@/features/registro/pages/registro-page').then((m) => ({ default: m.RegistroPage })),
+);
+const UsuariosPage = lazy(() =>
+  import('@/features/usuarios/pages/usuarios-page').then((m) => ({ default: m.UsuariosPage })),
+);
 
 function withSuspense(component: ReactNode): ReactNode {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-cuadra-arena">
-          <Spinner size="36px" />
+        <div className="w-full h-full min-h-[300px] p-6 space-y-4">
+          <div className="flex justify-between items-center">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-8 w-32" />
+          </div>
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-64 w-full" />
         </div>
       }
     >
@@ -74,7 +88,7 @@ export const routes: RouteObject[] = [
           {
             path: ROUTES.DEPARTAMENTOS,
             element: (
-              <RequireRole roles={['SUPER_ADMIN', 'ADMIN']}>
+              <RequireRole roles={['SUPER_ADMIN', 'ADMIN', 'VISUALIZADOR']}>
                 {withSuspense(<DepartamentosPage />)}
               </RequireRole>
             ),
@@ -82,16 +96,24 @@ export const routes: RouteObject[] = [
           {
             path: ROUTES.DEFECTOS,
             element: (
-              <RequireRole roles={['SUPER_ADMIN', 'ADMIN']}>
+              <RequireRole roles={['SUPER_ADMIN', 'ADMIN', 'VISUALIZADOR']}>
                 {withSuspense(<DefectosPage />)}
               </RequireRole>
             ),
           },
-          // Módulo Operativo de Inspección de Defectos: SUPER_ADMIN, ADMIN, INSPECTOR, COORD
+          {
+            path: ROUTES.USUARIOS,
+            element: (
+              <RequireRole roles={['SUPER_ADMIN', 'ADMIN']}>
+                {withSuspense(<UsuariosPage />)}
+              </RequireRole>
+            ),
+          },
+          // Módulo Operativo de Inspección de Defectos: SUPER_ADMIN, ADMIN, INSPECTOR, COORD, VISUALIZADOR
           {
             path: ROUTES.INSPECCIONES,
             element: (
-              <RequireRole roles={['SUPER_ADMIN', 'ADMIN', 'INSPECTOR', 'COORD']}>
+              <RequireRole roles={['SUPER_ADMIN', 'ADMIN', 'INSPECTOR', 'COORD', 'VISUALIZADOR']}>
                 {withSuspense(<InspeccionesPage />)}
               </RequireRole>
             ),
@@ -99,6 +121,15 @@ export const routes: RouteObject[] = [
           {
             path: ROUTES.INSPECCION_CAPTURA,
             element: <Navigate to={ROUTES.INSPECCIONES} replace />,
+          },
+          // Módulo de Registro Histórico de Defectos: SUPER_ADMIN, ADMIN, COORD y VISUALIZADOR
+          {
+            path: ROUTES.REGISTRO,
+            element: (
+              <RequireRole roles={['SUPER_ADMIN', 'ADMIN', 'COORD', 'VISUALIZADOR']}>
+                {withSuspense(<RegistroPage />)}
+              </RequireRole>
+            ),
           },
           // Rutas del Módulo Unificado de Sistema y Auditoría: EXCLUSIVO SUPER_ADMIN
           {
@@ -124,6 +155,10 @@ export const routes: RouteObject[] = [
               {
                 path: 'consola',
                 element: withSuspense(<Pm2ConsolePage />),
+              },
+              {
+                path: 'terminales',
+                element: withSuspense(<TerminalesPage />),
               },
             ],
           },

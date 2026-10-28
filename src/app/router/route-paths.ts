@@ -24,12 +24,19 @@ export const ROUTES = {
   /** Submódulo: Consola PM2 en Vivo */
   AUDITORIA_CONSOLA: '/sistema/consola',
 
+  /** Submódulo: Gestión de Terminales Físicas y Códigos OTP */
+  AUDITORIA_TERMINALES: '/sistema/terminales',
+
   /** Catálogos Administrativos */
   DEPARTAMENTOS: '/departamentos',
   DEFECTOS: '/defectos',
+  USUARIOS: '/usuarios',
 
   /** Módulo Operativo de Inspección de Defectos */
   INSPECCIONES: '/inspecciones',
+
+  /** Módulo de Registro Histórico de Defectos (ADMIN y COORD) */
+  REGISTRO: '/registro',
   INSPECCION_CAPTURA: '/inspecciones/captura',
 
   // Alias de compatibilidad para evitar roturas

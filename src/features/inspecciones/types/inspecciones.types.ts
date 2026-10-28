@@ -54,6 +54,12 @@ export interface InspeccionFilaResponse {
   paresDefectuosos: number;
   notas: string | null;
   usuario: string;
+  terminal?: string | null;
+  terminalId?: number | null;
+  eliminadoEn?: string | null;
+  eliminadoPor?: number | null;
+  eliminadoPorNombre?: string | null;
+  eliminadoMotivo?: string | null;
 }
 
 export interface GetFilasInspeccionResponse {
@@ -68,7 +74,7 @@ export interface GetFilasInspeccionResponse {
 export interface CreateInspeccionPayload {
   lote: string;
   lineaId?: number | null;
-  departamentoAuditoriaId?: number;
+  lineaTexto?: string | null;
   horma?: string | null;
   notas?: string | null;
   detalles: Array<{

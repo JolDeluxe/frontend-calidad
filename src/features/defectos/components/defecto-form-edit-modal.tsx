@@ -75,12 +75,17 @@ export function DefectoFormEditModal({
     }
 
     const nuevaClaveNum = Number(formNuevaClave);
-    if (
+    const vaACambiarClave =
       mostrarEditarClave &&
-      (!nuevaClaveNum || isNaN(nuevaClaveNum) || nuevaClaveNum <= 0)
-    ) {
-      setError('Ingresa un número válido de clave de defecto');
-      return;
+      !isNaN(nuevaClaveNum) &&
+      nuevaClaveNum > 0 &&
+      nuevaClaveNum !== defecto.clave;
+
+    if (mostrarEditarClave) {
+      if (!nuevaClaveNum || isNaN(nuevaClaveNum) || nuevaClaveNum <= 0) {
+        setError('Ingresa un número válido de clave de defecto');
+        return;
+      }
     }
 
     try {
@@ -100,10 +105,7 @@ export function DefectoFormEditModal({
         defecto: formDefecto.trim(),
         clasificacion: formClasificacion,
         departamentoId: formDepartamentoId,
-        nuevaClave:
-          mostrarEditarClave && !isNaN(nuevaClaveNum) && nuevaClaveNum > 0 && nuevaClaveNum !== defecto.clave
-            ? nuevaClaveNum
-            : undefined,
+        nuevaClave: vaACambiarClave ? nuevaClaveNum : undefined,
         departamentosList,
       });
 
@@ -154,7 +156,7 @@ export function DefectoFormEditModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label className="mb-1 block">
-                Departamento Propietario *
+                Departamento *
               </Label>
               <Select
                 value={formDepartamentoId.toString()}
@@ -342,7 +344,7 @@ export function DefectoFormEditModal({
             </div>
 
             {mostrarEditarClave && (
-              <div className="mt-3 pt-3 border-t border-border space-y-2 animate-in fade-in duration-150">
+              <div className="mt-3 pt-3 border-t border-border space-y-3 animate-in fade-in duration-150">
                 <div>
                   <Label className="mb-1 block">
                     Nueva Clave *
@@ -360,10 +362,23 @@ export function DefectoFormEditModal({
         </ModalBody>
 
         <ModalFooter>
-          <Button type="button" variant="cancelar" onClick={onClose} disabled={isSubmitting}>
+          <Button
+            type="button"
+            variant="cancelar"
+            onClick={() => {
+              setError(null);
+              onClose();
+            }}
+            disabled={isSubmitting}
+          >
             Cancelar
           </Button>
-          <Button type="submit" variant="guardar" disabled={isSubmitting} icon={isSubmitting ? undefined : 'check_circle'}>
+          <Button
+            type="submit"
+            variant="guardar"
+            disabled={isSubmitting || !formDefecto.trim()}
+            icon={isSubmitting ? undefined : 'check_circle'}
+          >
             {isSubmitting ? (
               <span className="flex items-center gap-2">
                 <Spinner size="xs" />

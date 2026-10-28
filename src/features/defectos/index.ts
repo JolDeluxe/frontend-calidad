@@ -9,3 +9,6 @@ export * from './components/defecto-form-create-modal';
 export * from './components/defecto-form-edit-modal';
 export * from './components/defecto-departamentos-modal';
 export * from './components/defecto-delete-modal';
+export * from './components/defecto-departamentos-selector';
+export * from './components/defecto-carga-masiva-tabla';
+export * from './utils/pegado-excel';

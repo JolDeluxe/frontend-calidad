@@ -89,11 +89,11 @@ export function DefectoDetailModal({
           <div>
             <div className="flex items-center gap-3 mb-1.5 flex-wrap">
               <span className="font-mono text-xl font-extrabold text-brand-primary">
-                #{defecto.clave}
+                {defecto.clave}
               </span>
               <DefectoClasificacionIndicator clasificacion={defecto.clasificacion} />
               <div className="flex items-center gap-1.5 text-sm text-gray-800">
-                <span className="text-xs text-text-muted">Propietario:</span>
+                <span className="text-xs text-text-muted">Departamento:</span>
                 <span className="font-medium text-gray-800">{defecto.departamento?.nombre || 'CORTE'}</span>
               </div>
             </div>
@@ -114,13 +114,13 @@ export function DefectoDetailModal({
           </div>
         </div>
 
-        {/* Etapas de Detección Permitidas */}
+        {/* Departamentos de Detección Permitidos */}
         {defecto.etapas && defecto.etapas.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider flex items-center gap-1.5">
                 <Icon name="fact_check" size="15px" className="text-brand-primary" />
-                Etapas de Detección Permitidas ({defecto.etapas.filter((e) => e.permitido).length} de {defecto.etapas.length})
+                Departamentos de Detección Permitidos ({defecto.etapas.filter((e) => e.permitido).length} de {defecto.etapas.length})
               </label>
             </div>
 
@@ -165,7 +165,7 @@ export function DefectoDetailModal({
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
-              Departamentos Disponibles ({deptosAsociadosActivos.length})
+              Es seleccionable en ({deptosAsociadosActivos.length})
             </label>
           </div>
 

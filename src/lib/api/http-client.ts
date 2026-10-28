@@ -1,4 +1,5 @@
 import { env } from '@/config/env';
+import { terminalStorage } from '@/features/terminales/services/terminal-storage';
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -126,6 +127,12 @@ async function request<T>(path: string, options: CustomRequestInit = {}): Promis
   const token = authState.getAccessToken();
   if (token && !headers.Authorization) {
     headers.Authorization = `Bearer ${token}`;
+  }
+
+  // Inyección automática de la credencial física de terminal en cabecera HTTP
+  const terminalCredential = terminalStorage.getCredential();
+  if (terminalCredential && !headers['x-terminal-credential']) {
+    headers['x-terminal-credential'] = terminalCredential;
   }
 
   const response = await fetch(url, {

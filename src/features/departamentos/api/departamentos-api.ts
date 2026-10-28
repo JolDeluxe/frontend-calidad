@@ -9,7 +9,7 @@ export const departamentosApi = {
     return res.data || [];
   },
 
-  createTipoOperacion: async (data: { codigo: string; nombre: string; descripcion?: string | null }) => {
+  createTipoOperacion: async (data: { codigo?: string; nombre: string; descripcion?: string | null }) => {
     const res = await httpClient.post<ApiResponse<TipoOperacion>>('/tipos-operacion', data);
     return res.data!;
   },
@@ -39,7 +39,7 @@ export const departamentosApi = {
     return res.data || [];
   },
 
-  createLinea: async (data: { tipoOperacionId: number; codigo: string; nombre: string; descripcion?: string | null }) => {
+  createLinea: async (data: { tipoOperacionId: number; codigo?: string; nombre: string; descripcion?: string | null }) => {
     const res = await httpClient.post<ApiResponse<Linea>>('/lineas', data);
     return res.data!;
   },
@@ -74,6 +74,7 @@ export const departamentosApi = {
     categoriaDepartamentoId?: number;
     estado?: string;
     busqueda?: string;
+    incluirEliminados?: boolean;
   }) => {
     const query = new URLSearchParams();
     if (params?.lineaId) query.set('lineaId', params.lineaId.toString());
@@ -81,6 +82,7 @@ export const departamentosApi = {
     if (params?.categoriaDepartamentoId) query.set('categoriaDepartamentoId', params.categoriaDepartamentoId.toString());
     if (params?.estado) query.set('estado', params.estado);
     if (params?.busqueda) query.set('busqueda', params.busqueda);
+    if (params?.incluirEliminados) query.set('incluirEliminados', 'true');
 
     const qs = query.toString() ? `?${query.toString()}` : '';
     const res = await httpClient.get<ApiResponse<Departamento[]>>(`/departamentos${qs}`);
@@ -93,9 +95,10 @@ export const departamentosApi = {
   },
 
   createDepartamento: async (data: {
-    codigo: string;
+    codigo?: string;
     nombre: string;
     categoriaDepartamentoId?: number | null;
+    numeroLineas?: number;
     lineasIds?: number[];
   }) => {
     const res = await httpClient.post<ApiResponse<Departamento>>('/departamentos', data);
@@ -108,6 +111,7 @@ export const departamentosApi = {
       nombre?: string;
       codigo?: string;
       categoriaDepartamentoId?: number | null;
+      numeroLineas?: number;
       lineasIds?: number[];
     }
   ) => {

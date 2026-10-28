@@ -10,10 +10,10 @@ export function DesktopLayout() {
         <DesktopSidebar />
       </div>
 
-      <div className="relative z-10 flex min-w-0 flex-1 flex-col">
+      <div className="relative z-10 flex min-w-0 max-w-full flex-1 flex-col">
         <DesktopHeader />
-        <main className="min-h-0 flex-1 overflow-y-auto bg-transparent custom-scrollbar flex flex-col">
-          <div className="mx-auto w-full max-w-[1680px] flex-1 px-5 py-5 2xl:px-6 flex flex-col gap-4">
+        <main className="min-h-0 min-w-0 max-w-full flex-1 overflow-y-auto bg-transparent custom-scrollbar flex flex-col">
+          <div className="mx-auto w-full max-w-[1680px] min-w-0 flex-1 px-3 py-3 xl:px-5 xl:py-5 2xl:px-6 flex flex-col gap-4">
             <Outlet />
           </div>
           <Footer />

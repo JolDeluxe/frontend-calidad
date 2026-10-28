@@ -12,24 +12,24 @@ export function DesktopHeader() {
   const { isOfflineMode } = useAuthSession();
 
   return (
-    <header className="sticky top-0 z-[70] border-b border-slate-200 bg-white shadow-sm">
-      <div className="grid grid-cols-3 items-center gap-4 px-4 py-3">
+    <header className="sticky top-0 z-[70] border-b border-slate-200 bg-white shadow-sm shrink-0">
+      <div className="grid grid-cols-3 items-center gap-4 px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2 justify-self-start">
           <Icon
             name="dashboard"
-            size={!sidebarExpanded ? '32px' : '24px'}
-            className="hidden text-marca-acento transition-all duration-300 sm:block"
+            size={!sidebarExpanded ? '28px' : '22px'}
+            className="text-marca-acento transition-all duration-300 shrink-0"
           />
           <h2
-            className={`hidden truncate font-normal uppercase text-marca-primario fuente-titulos transition-all duration-300 md:block ${
-              !sidebarExpanded ? 'text-xl sm:text-2xl' : 'text-base sm:text-lg'
+            className={`truncate font-normal uppercase text-marca-primario fuente-titulos transition-all duration-300 ${
+              !sidebarExpanded ? 'text-lg sm:text-xl' : 'text-base sm:text-lg'
             }`}
           >
             {title}
           </h2>
           {isOfflineMode && (
             <span
-              className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-900 border border-amber-300 shadow-xs"
+              className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-900 border border-amber-300 shadow-xs shrink-0"
               title="Trabajando con sesión persistente en caché local. Los cambios se sincronizarán al reconectar."
             >
               <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
@@ -42,7 +42,7 @@ export function DesktopHeader() {
           <img
             src="/img/01_Cuadra.webp"
             alt="Cuadra"
-            className="h-8 w-auto object-contain sm:h-10"
+            className="h-7 sm:h-9 w-auto object-contain"
           />
         </div>
 

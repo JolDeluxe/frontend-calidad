@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,305 +6,442 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Icon } from '@/components/ui/icon';
 import { Spinner } from '@/components/ui/spinner';
-import type { Departamento } from '@/features/departamentos/types/departamentos.types';
+import { ApiError } from '@/lib/api/http-client';
+import type { Departamento, Linea } from '@/features/departamentos/types/departamentos.types';
+import type {
+  ClasificacionDefecto,
+  GrupoCodificacion,
+  LoteDefectosPayload,
+  LotePreviewResponse,
+} from '../types/defectos.types';
+import { crearFilaVacia, type FilaLoteEditable } from '../utils/pegado-excel';
+import { DefectoDepartamentosSelector } from './defecto-departamentos-selector';
+import {
+  DefectoCargaMasivaTabla,
+  generarIdFila,
+  type EstadoFilaLote,
+} from './defecto-carga-masiva-tabla';
 
 export interface DefectoFormCreateModalProps {
   isOpen: boolean;
   onClose: () => void;
   departamentos: Departamento[];
+  lineas: Linea[];
+  grupos: GrupoCodificacion[];
+  lineaInicialId?: number | null;
   onSubmit: (data: {
     defecto: string;
-    clasificacion: 'CRITICO' | 'MAYOR' | 'MENOR';
-    departamentoId?: number;
+    clasificacion: ClasificacionDefecto;
+    departamentoId: number;
+    lineaId: number;
     departamentosIds: number[];
   }) => Promise<void>;
+  onPreviewLote: (data: LoteDefectosPayload) => Promise<LotePreviewResponse>;
+  onSubmitLote: (data: LoteDefectosPayload) => Promise<void>;
 }
+
+type Modo = 'individual' | 'masiva';
+
+const mensajeDe = (err: unknown, fallback: string): string => (err instanceof Error ? err.message : fallback);
+
+// Plantillas históricas por omisión de departamentos evaluadores según el depto propietario
+const PLANTILLAS_EVALUADORES_POR_DEPTO: Record<number, number[]> = {
+  2: [5, 6, 7, 8, 9, 11], // CORTE: preliminares, bordado, pespunte, montado, acabado, adorno
+  8: [5, 6, 7, 9, 11],    // PRELIMINARES: bordado, pespunte, montado, acabado, adorno
+  9: [5, 6, 7, 11],       // BORDADO: pespunte, montado, acabado, adorno
+  5: [6, 7, 11],          // PESPUNTE: montado, acabado, adorno
+  6: [7, 11],             // MONTADO: acabado, adorno
+  10: [7, 11],            // AVIOS: acabado, adorno
+  7: [11],                // ACABADO: adorno
+  11: [],                 // ADORNO: ninguno adicional
+};
 
 export function DefectoFormCreateModal({
   isOpen,
   onClose,
   departamentos,
+  lineas,
+  grupos,
+  lineaInicialId,
   onSubmit,
+  onPreviewLote,
+  onSubmitLote,
 }: DefectoFormCreateModalProps) {
+  const [modo, setModo] = useState<Modo>('individual');
+  const [lineaId, setLineaId] = useState<number | ''>('');
+  const [departamentoId, setDepartamentoId] = useState<number | ''>('');
+  const [grupoInfo, setGrupoInfo] = useState<LotePreviewResponse['grupo'] | null>(null);
+  const [grupoError, setGrupoError] = useState<string | null>(null);
+
   const [defecto, setDefecto] = useState('');
-  const [clasificacion, setClasificacion] = useState<'CRITICO' | 'MAYOR' | 'MENOR'>('MENOR');
-  const [departamentoId, setDepartamentoId] = useState<number>(2); // CORTE por defecto
+  const [clasificacion, setClasificacion] = useState<ClasificacionDefecto>('MENOR');
   const [selectedDeptosMap, setSelectedDeptosMap] = useState<Record<number, boolean>>({});
-  const [busquedaDepto, setBusquedaDepto] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [filas, setFilas] = useState<FilaLoteEditable[]>([]);
+  const [clasifDefecto, setClasifDefecto] = useState<ClasificacionDefecto>('MENOR');
+  const [preview, setPreview] = useState<LotePreviewResponse | null>(null);
+  const [erroresServidor, setErroresServidor] = useState<Record<number, string[]>>({});
+  const [confirmando, setConfirmando] = useState(false);
+
+  const [isWorking, setIsWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const peticionGrupo = useRef(0);
 
   useEffect(() => {
-    if (isOpen) {
-      setDefecto('');
-      setClasificacion('MENOR');
-      setDepartamentoId(departamentos[0]?.id || 2);
-      setBusquedaDepto('');
-      const initialMap: Record<number, boolean> = {};
-      departamentos.forEach((d) => {
-        initialMap[d.id] = false;
-      });
-      setSelectedDeptosMap(initialMap);
-      setError(null);
-      setIsSubmitting(false);
-    }
-  }, [isOpen, departamentos]);
+    if (!isOpen) return;
+    setModo('individual');
+    setLineaId(lineaInicialId ?? '');
+    setDepartamentoId('');
+    setGrupoInfo(null);
+    setGrupoError(null);
+    setDefecto('');
+    setClasificacion('MENOR');
+    setClasifDefecto('MENOR');
+    setSelectedDeptosMap(Object.fromEntries(departamentos.map((d) => [d.id, false])));
+    setFilas([crearFilaVacia(generarIdFila(), 'MENOR')]);
+    setPreview(null);
+    setErroresServidor({});
+    setConfirmando(false);
+    setError(null);
+    setIsWorking(false);
+  }, [isOpen, departamentos, lineaInicialId]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Consulta (sin reservar) el grupo de codificación de la línea + departamento elegidos.
+  useEffect(() => {
+    setGrupoInfo(null);
+    setGrupoError(null);
+    if (!isOpen || !lineaId || !departamentoId) return;
+    const turno = ++peticionGrupo.current;
+    onPreviewLote({ lineaId, departamentoId, filas: [] })
+      .then((r) => turno === peticionGrupo.current && setGrupoInfo(r.grupo))
+      .catch((err: unknown) => turno === peticionGrupo.current && setGrupoError(mensajeDe(err, 'No se pudo consultar el grupo de codificación')));
+  }, [isOpen, lineaId, departamentoId, onPreviewLote]);
+
+  if (!isOpen) return null;
+
+  const gruposActivos = new Set(
+    grupos.filter((g) => g.activo && g.lineaId === lineaId).map((g) => g.departamentoId),
+  );
+  const deptosDeLinea = departamentos
+    .filter((d) => d.estado === 'ACTIVO' && d.lineasAsociadas?.some((l) => l.activo && l.lineaId === lineaId))
+    .sort(
+      (a, b) =>
+        (a.lineasAsociadas?.find((l) => l.lineaId === lineaId)?.orden ?? 0) -
+        (b.lineasAsociadas?.find((l) => l.lineaId === lineaId)?.orden ?? 0),
+    );
+
+  const payloadLote = (): LoteDefectosPayload => {
+    const deptosIdsSet = new Set(
+      Object.entries(selectedDeptosMap).filter(([, c]) => c).map(([id]) => Number(id))
+    );
+    if (departamentoId) deptosIdsSet.add(Number(departamentoId));
+
+    return {
+      lineaId: Number(lineaId),
+      departamentoId: Number(departamentoId),
+      filas: filas.map((f) => ({ descripcion: f.descripcion, clasificacion: f.clasificacion })),
+      departamentosIds: Array.from(deptosIdsSet),
+      etapasPermitidasIds: Array.from(deptosIdsSet),
+    };
+  };
+
+  const cambiarFilas = (nuevas: FilaLoteEditable[]) => {
+    setFilas(nuevas);
+    setPreview(null); // el cambio invalida la previsualización
+    setErroresServidor({});
+    setConfirmando(false);
+  };
+
+  const estados: Record<number, EstadoFilaLote> = {};
+  if (preview) {
+    preview.filas.forEach((f) => {
+      estados[f.indice] = { validada: true, errores: f.errores, clave: f.clavePropuesta };
+    });
+  } else {
+    Object.entries(erroresServidor).forEach(([i, errores]) => {
+      estados[Number(i)] = { validada: true, errores, clave: null };
+    });
+  }
+
+  const handleSubmitIndividual = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!defecto.trim()) {
-      setError('La descripción del defecto es obligatoria');
-      return;
-    }
+    if (!defecto.trim()) return setError('La descripción del defecto es obligatoria');
+    if (!lineaId) return setError('Debes seleccionar la línea de referencia');
+    if (!departamentoId) return setError('Debes seleccionar explícitamente un departamento propietario');
     try {
-      setIsSubmitting(true);
+      setIsWorking(true);
       setError(null);
-      const departamentosIds = Object.entries(selectedDeptosMap)
-        .filter(([, checked]) => checked)
-        .map(([id]) => Number(id));
+      const deptosIdsSet = new Set(
+        Object.entries(selectedDeptosMap).filter(([, c]) => c).map(([id]) => Number(id))
+      );
+      // El departamento propietario SIEMPRE queda asociado
+      deptosIdsSet.add(departamentoId);
 
       await onSubmit({
         defecto: defecto.trim(),
         clasificacion,
         departamentoId,
-        departamentosIds,
+        lineaId,
+        departamentosIds: Array.from(deptosIdsSet),
       });
       onClose();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al crear defecto';
-      setError(msg);
+      setError(mensajeDe(err, 'Error al crear defecto'));
     } finally {
-      setIsSubmitting(false);
+      setIsWorking(false);
     }
   };
 
-  if (!isOpen) return null;
+  const handleValidar = async () => {
+    try {
+      setIsWorking(true);
+      setError(null);
+      setErroresServidor({});
+      setPreview(await onPreviewLote(payloadLote()));
+    } catch (err: unknown) {
+      setError(mensajeDe(err, 'Error al validar el lote'));
+    } finally {
+      setIsWorking(false);
+    }
+  };
 
-  const seleccionadosCount = Object.values(selectedDeptosMap).filter(Boolean).length;
+  const handleGuardarLote = async () => {
+    try {
+      setIsWorking(true);
+      setError(null);
+      await onSubmitLote(payloadLote());
+      onClose();
+    } catch (err: unknown) {
+      setConfirmando(false);
+      setPreview(null); // se conservan las filas para corregir
+      setError(mensajeDe(err, 'Error al guardar el lote'));
+      if (err instanceof ApiError) {
+        const detalle = err.body.errors as { filas?: Array<{ indice: number; errores: string[] }> } | undefined;
+        if (detalle?.filas) {
+          setErroresServidor(Object.fromEntries(detalle.filas.map((f) => [f.indice, f.errores])));
+        }
+      }
+    } finally {
+      setIsWorking(false);
+    }
+  };
 
-  const deptosFiltrados = departamentos.filter((d) => {
-    if (!busquedaDepto.trim()) return true;
-    const term = busquedaDepto.toLowerCase().trim();
-    const matchNombre = d.nombre.toLowerCase().includes(term);
-    const matchLinea = d.lineasAsociadas?.some((l) =>
-      l.linea?.nombre.toLowerCase().includes(term)
-    );
-    return matchNombre || matchLinea;
-  });
+  const clavesPropuestas = preview?.filas.map((f) => f.clavePropuesta).filter((c): c is number => c !== null) ?? [];
+  const puedeConfirmar = !!preview?.valido && !isWorking;
+  const sinGrupo = !!lineaId && !!departamentoId && !!grupoError;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-xl max-h-[90vh]">
-      <ModalHeader title="Crear Nuevo Defecto" onClose={onClose} />
-      <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+    <Modal isOpen={isOpen} onClose={onClose} className={modo === 'masiva' ? 'max-w-4xl max-h-[92vh]' : 'max-w-xl max-h-[90vh]'}>
+      <ModalHeader title="Nuevo Defecto" onClose={onClose} />
+      <form onSubmit={handleSubmitIndividual} className="flex flex-col flex-1 min-h-0 overflow-hidden">
         <ModalBody className="space-y-4 overflow-y-auto">
+          <div className="inline-flex p-1 bg-app-surface-muted rounded-lg border border-border text-xs" role="tablist">
+            {(['individual', 'masiva'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="tab"
+                aria-selected={modo === m}
+                disabled={isWorking}
+                onClick={() => { setModo(m); setError(null); }}
+                className={`px-3 py-1.5 rounded-md font-semibold cursor-pointer transition-all ${
+                  modo === m ? 'bg-app-surface text-text-primary shadow-xs' : 'text-text-muted hover:text-text-primary'
+                }`}
+              >
+                {m === 'individual' ? 'Individual' : 'Carga masiva'}
+              </button>
+            ))}
+          </div>
+
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs">
-              {error}
-            </div>
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs">{error}</div>
           )}
 
-          <div className="p-3 bg-app-surface-muted rounded-lg border border-border text-xs text-text-secondary flex items-start gap-2">
-            <Icon name="info" size="16px" className="text-brand-primary shrink-0 mt-0.5" />
-            <span>
-              La <strong>clave de defecto</strong> será generada automáticamente por el servidor con secuencia consecutiva única.
-            </span>
-          </div>
-
-          <div>
-            <Label className="mb-1 block">
-              Descripción del Defecto *
-            </Label>
-            <Input
-              value={defecto}
-              onChange={(e) => setDefecto(e.target.value)}
-              placeholder="Ej. Costura desalineada en tubo"
-              required
-            />
-          </div>
-
+          {/* Grupo de codificación: línea de referencia + departamento propietario */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label className="mb-1 block">
-                Departamento Propietario *
-              </Label>
+              <Label className="mb-1 block">Línea de referencia *</Label>
               <Select
-                value={departamentoId.toString()}
-                onChange={(e) => setDepartamentoId(Number(e.target.value))}
+                value={lineaId ? String(lineaId) : ''}
+                disabled={isWorking}
+                onChange={(e) => {
+                  setLineaId(e.target.value ? Number(e.target.value) : '');
+                  setDepartamentoId('');
+                  cambiarFilas(filas);
+                }}
               >
-                {departamentos.map((dep) => (
-                  <option key={dep.id} value={dep.id.toString()}>
-                    {dep.nombre}
+                <option value="" disabled>-- Selecciona una línea --</option>
+                {lineas.map((l) => (
+                  <option key={l.id} value={l.id}>{l.nombre}</option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label className="mb-1 block">Departamento *</Label>
+              <Select
+                value={departamentoId ? String(departamentoId) : ''}
+                disabled={isWorking || !lineaId}
+                onChange={(e) => {
+                  const nuevoDeptoId = e.target.value ? Number(e.target.value) : '';
+                  setDepartamentoId(nuevoDeptoId);
+                  cambiarFilas(filas);
+                  if (nuevoDeptoId) {
+                    const sugeridos = PLANTILLAS_EVALUADORES_POR_DEPTO[nuevoDeptoId] ?? [];
+                    const nextMap: Record<number, boolean> = {};
+                    departamentos.forEach((d) => {
+                      nextMap[d.id] = sugeridos.includes(d.id);
+                    });
+                    setSelectedDeptosMap(nextMap);
+                  }
+                }}
+              >
+                <option value="" disabled>-- Selecciona un departamento --</option>
+                {deptosDeLinea.map((d) => (
+                  <option key={d.id} value={d.id} disabled={!gruposActivos.has(d.id)}>
+                    {d.nombre}{gruposActivos.has(d.id) ? '' : ' (codificación pendiente)'}
                   </option>
                 ))}
               </Select>
             </div>
-
-            <div>
-              <Label className="mb-1 block">
-                Clasificación *
-              </Label>
-              <Select
-                value={clasificacion}
-                onChange={(e) => setClasificacion(e.target.value as 'CRITICO' | 'MAYOR' | 'MENOR')}
-              >
-                <option value="CRITICO">Crítico</option>
-                <option value="MAYOR">Mayor</option>
-                <option value="MENOR">Menor</option>
-              </Select>
-            </div>
           </div>
 
-          {/* Sección de Selección de Departamentos Disponibles */}
-          <div>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-2">
-              <Label className="block">
-                Departamentos Disponibles
-              </Label>
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary shrink-0">
-                {seleccionadosCount} seleccionados
+          {grupoInfo && (
+            <div className="p-3 bg-app-surface-muted rounded-lg border border-border text-xs text-text-secondary flex items-start gap-2">
+              <Icon name="tag" size="16px" className="text-brand-primary shrink-0 mt-0.5" />
+              <span>
+                Grupo de codificación <strong>{grupoInfo.prefijo}xx</strong> (rango {grupoInfo.rangoMin}–{grupoInfo.rangoMax}).{' '}
+                {grupoInfo.proximaClave
+                  ? <>Próxima clave: <strong>#{grupoInfo.proximaClave}</strong> · {grupoInfo.disponibles} libres. </>
+                  : <strong className="text-red-700">Grupo agotado. </strong>}
+                La clave definitiva la asigna el servidor al guardar.
               </span>
             </div>
+          )}
+          {sinGrupo && (
+            <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-xs">{grupoError}</div>
+          )}
 
-            {/* Barra de búsqueda de departamentos */}
-            <div className="relative mb-2">
-              <Icon name="search" size="16px" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-              <Input
-                type="text"
-                placeholder="Filtrar departamentos..."
-                value={busquedaDepto}
-                onChange={(e) => setBusquedaDepto(e.target.value)}
-                className="pl-9 h-9 text-xs"
+          {modo === 'individual' ? (
+            <>
+              <div>
+                <Label className="mb-1 block">Descripción del Defecto *</Label>
+                <Input
+                  value={defecto}
+                  onChange={(e) => setDefecto(e.target.value)}
+                  placeholder="Ej. Costura desalineada en tubo"
+                  required
+                />
+              </div>
+              <div>
+                <Label className="mb-1 block">Clasificación *</Label>
+                <Select value={clasificacion} onChange={(e) => setClasificacion(e.target.value as ClasificacionDefecto)}>
+                  <option value="CRITICO">Crítico</option>
+                  <option value="MAYOR">Mayor</option>
+                  <option value="MENOR">Menor</option>
+                </Select>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="w-44">
+                  <Label className="mb-1 block">Clasificación por defecto</Label>
+                  <Select value={clasifDefecto} onChange={(e) => setClasifDefecto(e.target.value as ClasificacionDefecto)}>
+                    <option value="CRITICO">Crítico</option>
+                    <option value="MAYOR">Mayor</option>
+                    <option value="MENOR">Menor</option>
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isWorking}
+                  onClick={() => cambiarFilas(filas.map((f) => ({ ...f, clasificacion: clasifDefecto })))}
+                >
+                  Aplicar a todas las filas
+                </Button>
+              </div>
+
+              <DefectoCargaMasivaTabla
+                filas={filas}
+                onChange={cambiarFilas}
+                clasificacionPorDefecto={clasifDefecto}
+                estados={estados}
+                disabled={isWorking}
+              />
+
+              {preview && preview.errores.length > 0 && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs space-y-1">
+                  {preview.errores.map((m) => <p key={m}>{m}</p>)}
+                </div>
+              )}
+              {preview && preview.clavesOmitidas.length > 0 && (
+                <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-xs">
+                  Se omitieron claves ya ocupadas dentro del rango del grupo: {preview.clavesOmitidas.map((c) => `#${c}`).join(', ')}.
+                </div>
+              )}
+              {confirmando && (
+                <div className="p-3 bg-brand-primary/5 border border-brand-primary/30 rounded-lg text-xs">
+                  Se crearán <strong>{filas.length}</strong> defectos con las claves{' '}
+                  <strong>#{clavesPropuestas[0]}</strong>–<strong>#{clavesPropuestas[clavesPropuestas.length - 1]}</strong>.
+                  Las claves definitivas se reasignan en el servidor al guardar; la operación es atómica.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Selector de departamentos disponible para AMBOS modos (individual y carga masiva) */}
+          {!!departamentoId && (
+            <div className="pt-2 border-t border-border/70">
+              <DefectoDepartamentosSelector
+                departamentos={departamentos}
+                selectedDeptosMap={selectedDeptosMap}
+                onChange={setSelectedDeptosMap}
+                departamentoPropietarioId={departamentoId}
               />
             </div>
-
-            {/* Marcar todos / Desmarcar */}
-            <div className="flex items-center justify-between text-xs px-1 mb-2 text-text-muted">
-              <span>{deptosFiltrados.length} departamentos mostrados</span>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next: Record<number, boolean> = { ...selectedDeptosMap };
-                    deptosFiltrados.forEach((d) => {
-                      next[d.id] = true;
-                    });
-                    setSelectedDeptosMap(next);
-                  }}
-                  className="text-brand-primary hover:underline font-medium cursor-pointer"
-                >
-                  Marcar todos
-                </button>
-                <span>|</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next: Record<number, boolean> = { ...selectedDeptosMap };
-                    deptosFiltrados.forEach((d) => {
-                      next[d.id] = false;
-                    });
-                    setSelectedDeptosMap(next);
-                  }}
-                  className="text-text-muted hover:text-text-primary cursor-pointer"
-                >
-                  Desmarcar
-                </button>
-              </div>
-            </div>
-
-            {/* Lista agrupada por líneas de producción */}
-            <div className="max-h-72 overflow-y-auto overflow-x-hidden border border-border/80 rounded-xl bg-app-surface p-3 space-y-4">
-              {(() => {
-                const agrupadosPorLinea: Record<string, { lineaNombre: string; deptos: Departamento[] }> = {};
-
-                deptosFiltrados.forEach((dep) => {
-                  const lineas = dep.lineasAsociadas?.filter((l) => l.activo && l.linea) || [];
-                  lineas.forEach((rel) => {
-                    const lineaNombre = rel.linea.nombre;
-                    if (!agrupadosPorLinea[lineaNombre]) {
-                      agrupadosPorLinea[lineaNombre] = { lineaNombre, deptos: [] };
-                    }
-                    if (!agrupadosPorLinea[lineaNombre].deptos.some((d) => d.id === dep.id)) {
-                      agrupadosPorLinea[lineaNombre].deptos.push(dep);
-                    }
-                  });
-                });
-
-                const gruposLineas = Object.values(agrupadosPorLinea);
-
-                if (gruposLineas.length === 0) {
-                  return (
-                    <div className="py-8 text-center text-xs text-text-muted italic">
-                      No se encontraron departamentos asociados a líneas de producción.
-                    </div>
-                  );
-                }
-
-                const renderDeptoItem = (dep: Departamento, keyPrefix: string) => {
-                  const isChecked = !!selectedDeptosMap[dep.id];
-                  return (
-                    <label
-                      key={`${keyPrefix}-${dep.id}`}
-                      className={`flex items-center gap-2.5 p-2.5 rounded-lg border text-xs cursor-pointer transition-colors min-w-0 ${
-                        isChecked
-                          ? 'bg-brand-primary/5 border-brand-primary/40 text-brand-primary font-semibold shadow-2xs'
-                          : 'bg-app-surface border-border/80 text-text-primary hover:bg-app-surface-muted'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={(e) =>
-                          setSelectedDeptosMap((prev) => ({
-                            ...prev,
-                            [dep.id]: e.target.checked,
-                          }))
-                        }
-                        className="w-4 h-4 rounded border-border text-brand-primary focus:ring-brand-accent cursor-pointer shrink-0"
-                      />
-                      <span className="leading-snug text-left truncate" title={dep.nombre}>
-                        {dep.nombre}
-                      </span>
-                    </label>
-                  );
-                };
-
-                return (
-                  <>
-                    {gruposLineas.map((grupo) => (
-                      <div key={grupo.lineaNombre} className="space-y-2">
-                        <div className="flex items-center gap-2 pb-1 border-b border-border/60">
-                          <Icon name="linear_scale" size="14px" className="text-brand-primary" />
-                          <span className="text-xs font-bold text-brand-primary uppercase tracking-wide">
-                            Línea {grupo.lineaNombre} ({grupo.deptos.length})
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {grupo.deptos.map((dep) => renderDeptoItem(dep, grupo.lineaNombre))}
-                        </div>
-                      </div>
-                    ))}
-                  </>
-                );
-              })()}
-            </div>
-          </div>
+          )}
         </ModalBody>
 
         <ModalFooter>
-          <Button type="button" variant="cancelar" onClick={onClose} disabled={isSubmitting}>
+          <Button type="button" variant="cancelar" onClick={onClose} disabled={isWorking}>
             Cancelar
           </Button>
-          <Button type="submit" variant="guardar" disabled={isSubmitting} icon={isSubmitting ? undefined : 'check_circle'}>
-            {isSubmitting ? (
-              <span className="flex items-center gap-2">
-                <Spinner size="xs" />
-                Guardando...
-              </span>
-            ) : (
-              'Crear Defecto'
-            )}
-          </Button>
+
+          {modo === 'individual' ? (
+            <Button
+              type="submit"
+              variant="guardar"
+              disabled={isWorking || !defecto.trim() || !lineaId || !departamentoId || sinGrupo}
+              icon={isWorking ? undefined : 'check_circle'}
+            >
+              {isWorking ? <span className="flex items-center gap-2"><Spinner size="xs" />Guardando...</span> : 'Crear Defecto'}
+            </Button>
+          ) : confirmando ? (
+            <>
+              <Button type="button" variant="outline" onClick={() => setConfirmando(false)} disabled={isWorking}>
+                Volver
+              </Button>
+              <Button type="button" variant="guardar" onClick={handleGuardarLote} disabled={isWorking}>
+                {isWorking ? <span className="flex items-center gap-2"><Spinner size="xs" />Guardando...</span> : 'Confirmar y guardar'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleValidar}
+                disabled={isWorking || !lineaId || !departamentoId || filas.length === 0 || sinGrupo}
+              >
+                {isWorking ? <span className="flex items-center gap-2"><Spinner size="xs" />Validando...</span> : 'Validar y previsualizar claves'}
+              </Button>
+              <Button type="button" variant="guardar" onClick={() => setConfirmando(true)} disabled={!puedeConfirmar}>
+                Crear {filas.length} defectos
+              </Button>
+            </>
+          )}
         </ModalFooter>
       </form>
     </Modal>

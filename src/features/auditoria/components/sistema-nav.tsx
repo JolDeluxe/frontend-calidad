@@ -21,6 +21,12 @@ const SISTEMA_AUDITORIA_TABS: SectionTabItem[] = [
     to: ROUTES.AUDITORIA_CONSOLA,
     icon: 'terminal',
   },
+  {
+    id: 'terminales',
+    label: 'Terminales',
+    to: ROUTES.AUDITORIA_TERMINALES,
+    icon: 'devices',
+  },
 ];
 
 export interface SistemaNavProps {
@@ -32,7 +38,7 @@ export function SistemaNav({ className = '' }: SistemaNavProps) {
     <SectionTabs
       tabs={SISTEMA_AUDITORIA_TABS}
       className={className}
-      label="Submódulos de Auditoría"
+      label="Submódulos del Sistema"
     />
   );
 }

@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { Defecto } from '../types/defectos.types';
-import type { Linea } from '@/features/departamentos/types/departamentos.types';
+import type { Departamento, Linea } from '@/features/departamentos/types/departamentos.types';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Spinner } from '@/components/ui/spinner';
+import { TableRowsSkeleton } from '@/components/ui/skeleton';
 import { DefectoClasificacionIndicator } from './defecto-clasificacion-indicator';
 
 interface DefectosTablaProps {
@@ -15,6 +16,9 @@ interface DefectosTablaProps {
   setBusqueda: (val: string) => void;
   filtroClasificacion: string;
   setFiltroClasificacion: (val: string) => void;
+  departamentos?: Departamento[];
+  filtroDepartamento?: number | null;
+  setFiltroDepartamento?: (val: number | null) => void;
   verEliminados: boolean;
   setVerEliminados: (val: boolean) => void;
   totalItems: number;
@@ -217,6 +221,9 @@ export function DefectosTabla({
   setBusqueda,
   filtroClasificacion,
   setFiltroClasificacion,
+  departamentos = [],
+  filtroDepartamento = null,
+  setFiltroDepartamento,
   verEliminados,
   setVerEliminados,
   totalItems,
@@ -254,11 +261,11 @@ export function DefectosTabla({
     };
   }, [isLineasOpen]);
   return (
-    <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden flex flex-col">
+    <div className="bg-white rounded-xl shadow-xs border border-border flex flex-col w-full min-w-0">
       {/* Barra de Filtros Compacta: Buscador a la izquierda | LINEA (Select) | CLASIFICACION | BOTE DE BASURA a la derecha */}
-      <div className="p-3 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/60">
+      <div className="p-3 border-b border-slate-200 flex items-center justify-between gap-3 bg-slate-50/60">
         {/* Columna 1: Buscador */}
-        <div className="relative flex-1 min-w-[220px] max-w-sm">
+        <div className="relative flex-1 min-w-[150px] max-w-sm">
           <Icon
             name="search"
             size="16px"
@@ -283,7 +290,7 @@ export function DefectosTabla({
         </div>
 
         {/* Columna 2: Filtros Compactos: LINEA (Select Checkbox) | CLASIFICACION | BOTE DE BASURA */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {/* Selector de Línea Tipo Checkbox Desplegable (Compacto y adaptable a la UX) */}
           {mostrarColumnaLinea && lineas.length > 0 && onToggleLinea && (
             <div className="relative" ref={lineasDropdownRef}>
@@ -357,13 +364,31 @@ export function DefectosTabla({
             </div>
           )}
 
+          {/* Selector de Departamento */}
+          {setFiltroDepartamento && departamentos.length > 0 && (
+            <select
+              value={filtroDepartamento ? String(filtroDepartamento) : ""}
+              onChange={(e) => setFiltroDepartamento(e.target.value ? Number(e.target.value) : null)}
+              className="bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0 w-36" style={{ width: "9rem" }}
+              title="Filtrar por departamento"
+            >
+              <option value="">Todos los deptos</option>
+              {departamentos.map((dep) => (
+                <option key={dep.id} value={dep.id}>
+                  {dep.nombre}
+                </option>
+              ))}
+            </select>
+          )}
+
           {/* Selector de Clasificación Compacto */}
           <select
             value={filtroClasificacion}
             onChange={(e) => setFiltroClasificacion(e.target.value)}
-            className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer"
+            className="bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0 w-32" style={{ width: "8rem" }}
+            title="Filtrar por clasificación"
           >
-            <option value="">Todas las clasificaciones</option>
+            <option value="">Todas las clasif.</option>
             <option value="CRITICO">Crítico</option>
             <option value="MAYOR">Mayor</option>
             <option value="MENOR">Menor</option>
@@ -374,7 +399,7 @@ export function DefectosTabla({
             type="button"
             onClick={() => setVerEliminados(!verEliminados)}
             title={verEliminados ? 'Papelera: Viendo defectos eliminados' : 'Papelera: Ver defectos eliminados'}
-            className={`p-1.5 rounded-lg border transition-colors cursor-pointer flex items-center justify-center ${
+            className={`p-1.5 rounded-lg border transition-colors cursor-pointer flex items-center justify-center shrink-0 ${
               verEliminados
                 ? 'bg-rose-100 text-rose-700 border-rose-300'
                 : 'bg-white text-slate-500 border-slate-300 hover:text-slate-700 hover:bg-slate-50'
@@ -394,12 +419,7 @@ export function DefectosTabla({
       )}
 
       {/* Tabla de Resultados Limpia */}
-      {loading && defectos.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-16 bg-app-surface rounded-xl border border-border">
-          <Spinner size="36px" />
-          <span className="mt-3 text-xs text-text-muted">Cargando defectos...</span>
-        </div>
-      ) : defectos.length === 0 ? (
+      {!loading && defectos.length === 0 ? (
         <div className="text-center py-16 px-4 bg-app-surface rounded-xl border border-border text-text-muted">
           <Icon name="search_off" size="40px" className="mx-auto mb-2 opacity-50" />
           <p className="text-sm font-medium">No se encontraron defectos registrados.</p>
@@ -417,107 +437,111 @@ export function DefectosTabla({
                 <tr className="bg-app-surface-muted/60 text-text-secondary text-xs uppercase tracking-wider border-b border-border font-semibold">
                   <th className="py-3 px-4 w-28">Clave</th>
                   <th className="py-3 px-4">Descripción del Defecto</th>
-                  <th className="py-3 px-4 w-40">Propietario</th>
+                  <th className="py-3 px-4 w-40">Departamento</th>
                   <th className="py-3 px-4 w-32">Clasificación</th>
                   {mostrarColumnaLinea && (
                     <th className="py-3 px-4 w-36">Línea</th>
                   )}
-                  <th className="py-3 px-4 w-52">Etapas Permitidas</th>
+                  <th className="py-3 px-4 w-52">Es seleccionable en</th>
                   <th className="py-3 px-4 w-24 text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
-                {defectos.map((def) => {
-                  const isEliminado = Boolean(def.eliminadoEn);
-                  const etapasPermitidasCount = def.etapas?.filter((e) => e.permitido).length || 0;
-                  const totalEtapasCount = def.etapas?.length || 8;
+                {loading ? (
+                  <TableRowsSkeleton columns={mostrarColumnaLinea ? 7 : 6} rows={10} />
+                ) : (
+                  defectos.map((def) => {
+                    const isEliminado = Boolean(def.eliminadoEn);
+                    const deptosPermitidosCount = def.etapas?.filter((e) => e.permitido).length || 0;
+                    const totalDeptosCount = def.etapas?.length || 8;
 
-                  return (
-                    <tr
-                      key={def.id}
-                      className={`hover:bg-app-surface-muted/50 transition-colors ${
-                        isEliminado ? 'opacity-60 bg-red-50/20' : ''
-                      }`}
-                    >
-                      <td className="py-3.5 px-4 font-mono font-bold text-brand-primary text-base">
-                        #{def.clave}
-                      </td>
-                      <td className="py-3.5 px-4 font-medium text-text-primary">
-                        <button
-                          type="button"
-                          onClick={() => onVerDetalle(def)}
-                          className="hover:underline text-left cursor-pointer font-semibold"
-                        >
-                          {def.defecto}
-                        </button>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="text-sm text-gray-800">
-                          {def.departamento?.nombre || '—'}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <DefectoClasificacionIndicator clasificacion={def.clasificacion} />
-                      </td>
-                      {mostrarColumnaLinea && (
-                        <td className="py-3.5 px-4">
-                          {(() => {
-                            const lineasSet = new Set<string>();
-                            def.departamentos?.forEach((d) => {
-                              if (d.activo) {
-                                d.departamento.lineasAsociadas?.forEach((l) => {
-                                  if (l.activo && l.linea) {
-                                    lineasSet.add(l.linea.nombre);
-                                  }
-                                });
-                              }
-                            });
-                            const lineasArr = Array.from(lineasSet);
-                            if (lineasArr.length === 0) return <span className="text-text-muted text-sm">—</span>;
-                            return (
-                              <div className="flex flex-col gap-1">
-                                {lineasArr.map((lin) => (
-                                  <div key={lin} className="flex items-center gap-1.5 text-sm text-gray-700">
-                                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full shrink-0" aria-hidden="true" />
-                                    <span>{lin}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            );
-                          })()}
+                    return (
+                      <tr
+                        key={def.id}
+                        className={`hover:bg-app-surface-muted/50 transition-colors ${
+                          isEliminado ? 'opacity-60 bg-red-50/20' : ''
+                        }`}
+                      >
+                        <td className="py-3.5 px-4 font-mono font-bold text-brand-primary text-lg">
+                          {def.clave}
                         </td>
-                      )}
-                      <td className="py-3.5 px-4">
-                        {!isEliminado ? (
+                        <td className="py-3.5 px-4 font-medium text-text-primary">
                           <button
                             type="button"
-                            onClick={() => onOpenDeptos(def)}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-app-surface-muted hover:bg-border/60 text-text-primary border border-border transition-colors cursor-pointer"
-                            title="Ver o consultar etapas de detección permitidas"
+                            onClick={() => onVerDetalle(def)}
+                            className="hover:underline text-left cursor-pointer font-semibold"
                           >
-                            <Icon name="verified" size="14px" className="text-emerald-600" />
-                            <span>
-                              {etapasPermitidasCount} / {totalEtapasCount} etapas
-                            </span>
+                            {def.defecto}
                           </button>
-                        ) : (
-                          <span className="text-xs text-text-muted italic">Inactivo</span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="text-sm text-gray-800">
+                            {def.departamento?.nombre || '—'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <DefectoClasificacionIndicator clasificacion={def.clasificacion} />
+                        </td>
+                        {mostrarColumnaLinea && (
+                          <td className="py-3.5 px-4">
+                            {(() => {
+                              const lineasSet = new Set<string>();
+                              def.departamentos?.forEach((d) => {
+                                if (d.activo) {
+                                  d.departamento.lineasAsociadas?.forEach((l) => {
+                                    if (l.activo && l.linea) {
+                                      lineasSet.add(l.linea.nombre);
+                                    }
+                                  });
+                                }
+                              });
+                              const lineasArr = Array.from(lineasSet);
+                              if (lineasArr.length === 0) return <span className="text-text-muted text-sm">—</span>;
+                              return (
+                                <div className="flex flex-col gap-1">
+                                  {lineasArr.map((lin) => (
+                                    <div key={lin} className="flex items-center gap-1.5 text-sm text-gray-700">
+                                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full shrink-0" aria-hidden="true" />
+                                      <span>{lin}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+                          </td>
                         )}
-                      </td>
-                      <td className="py-3.5 px-4 text-center">
-                        <MenuAccionesDefecto
-                          def={def}
-                          isEliminado={isEliminado}
-                          onVerDetalle={onVerDetalle}
-                          onOpenEdit={onOpenEdit}
-                          onOpenDeptos={onOpenDeptos}
-                          onOpenDelete={onOpenDelete}
-                          onReactivar={onReactivar}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
+                        <td className="py-3.5 px-4">
+                          {!isEliminado ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenDeptos(def)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-app-surface-muted hover:bg-border/60 text-text-primary border border-border transition-colors cursor-pointer"
+                              title="Ver o consultar departamentos de detección permitidos"
+                            >
+                              <Icon name="verified" size="14px" className="text-emerald-600" />
+                              <span>
+                                {deptosPermitidosCount} / {totalDeptosCount} deptos
+                              </span>
+                            </button>
+                          ) : (
+                            <span className="text-xs text-text-muted italic">Inactivo</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <MenuAccionesDefecto
+                            def={def}
+                            isEliminado={isEliminado}
+                            onVerDetalle={onVerDetalle}
+                            onOpenEdit={onOpenEdit}
+                            onOpenDeptos={onOpenDeptos}
+                            onOpenDelete={onOpenDelete}
+                            onReactivar={onReactivar}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>

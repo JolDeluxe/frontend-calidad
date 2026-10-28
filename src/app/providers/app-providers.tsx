@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { AuthProvider } from './auth-provider';
+import { ToastContainer } from '@/components/ui/toast';
 
 /**
  * Ensamble jerárquico de todos los proveedores de contexto globales.
@@ -9,6 +10,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
       {children}
+      <ToastContainer />
     </AuthProvider>
   );
 }

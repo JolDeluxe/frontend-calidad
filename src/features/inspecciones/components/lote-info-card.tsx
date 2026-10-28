@@ -1,12 +1,39 @@
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Icon } from '@/components/ui/icon';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { ProduccionLote } from '../types/inspecciones.types';
 
 interface LoteInfoCardProps {
-  lote: ProduccionLote;
+  lote?: ProduccionLote | null;
+  cargando?: boolean;
 }
 
-export function LoteInfoCard({ lote }: LoteInfoCardProps) {
+export function LoteInfoCard({ lote, cargando }: LoteInfoCardProps) {
+  if (cargando || !lote) {
+    return (
+      <div className="rounded-md border border-cuadra-arena-dark bg-white p-4 shadow-xs space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cuadra-arena pb-3">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-8 w-8 rounded-sm" />
+            <div className="space-y-1">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-5 w-24" />
+            </div>
+          </div>
+          <Skeleton className="h-5 w-16 rounded-full" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={`lote-skeleton-${i}`} className="space-y-1">
+              <Skeleton className="h-2.5 w-14" />
+              <Skeleton className="h-4 w-20" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-md border border-cuadra-arena-dark bg-white p-4 shadow-xs">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cuadra-arena pb-3 mb-3">
