@@ -43,6 +43,9 @@ const RegistroPage = lazy(() =>
 const UsuariosPage = lazy(() =>
   import('@/features/usuarios/pages/usuarios-page').then((m) => ({ default: m.UsuariosPage })),
 );
+const ProyeccionPage = lazy(() =>
+  import('@/features/proyeccion/pages/proyeccion-page').then((m) => ({ default: m.ProyeccionPage })),
+);
 
 function withSuspense(component: ReactNode): ReactNode {
   return (
@@ -70,6 +73,16 @@ export const routes: RouteObject[] = [
       <RedirectIfAuthenticated>
         {withSuspense(<LoginPage />)}
       </RedirectIfAuthenticated>
+    ),
+    errorElement: <ErrorPage />,
+  },
+  // Modo Proyección Kiosco / TV (Pestaña dedicada independiente sin Sidebar ni Header)
+  {
+    path: ROUTES.PROYECCION,
+    element: (
+      <RequireAuth>
+        {withSuspense(<ProyeccionPage />)}
+      </RequireAuth>
     ),
     errorElement: <ErrorPage />,
   },

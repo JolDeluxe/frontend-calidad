@@ -39,6 +39,9 @@ export const ROUTES = {
   REGISTRO: '/registro',
   INSPECCION_CAPTURA: '/inspecciones/captura',
 
+  /** Modo Proyección Kiosco / TV */
+  PROYECCION: '/proyeccion',
+
   // Alias de compatibilidad para evitar roturas
   AUDITORIA: '/sistema/auditoria',
   LOGS: '/sistema/logs',

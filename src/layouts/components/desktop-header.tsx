@@ -46,7 +46,17 @@ export function DesktopHeader() {
           />
         </div>
 
-        <div className="flex items-center justify-end gap-2 sm:gap-4">
+        <div className="flex items-center justify-end gap-2 sm:gap-3">
+          <button
+            type="button"
+            onClick={() => window.open('/proyeccion', '_blank', 'noopener,noreferrer')}
+            title="Abrir Modo Proyección (Kiosco / TV) en pestaña dedicada"
+            className="p-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5 text-xs uppercase tracking-wider"
+          >
+            <Icon name="tv" size="18px" className="text-slate-950" />
+            <span className="hidden md:inline">Proyectar</span>
+          </button>
+
           <button
             type="button"
             onClick={() => window.location.reload()}
