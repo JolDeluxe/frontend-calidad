@@ -72,28 +72,10 @@ export function CapturaDefectoForm({
     >
       <div className="flex items-end gap-2 xl:gap-3 w-full">
         {/* 1. CLAVE DEFECTO */}
-        <div className="w-20 xl:w-28 shrink-0">
-          <div className="flex items-center justify-between mb-1.5">
-            <Label className="block text-xs font-bold uppercase text-text-secondary truncate">
-              Clave *
-            </Label>
-            {onAbrirTeclado && loteActivo && (
-              <button
-                type="button"
-                onClick={onAbrirTeclado}
-                title={tecladoActivo ? 'Ocultar teclado táctil' : 'Abrir teclado táctil'}
-                className={cn(
-                  'px-2 py-0.5 rounded-md text-[11px] font-black border shadow-2xs transition-all cursor-pointer active:scale-95 flex items-center gap-1',
-                  tecladoActivo
-                    ? 'bg-marca-primario text-white border-marca-primario ring-2 ring-marca-primario/30'
-                    : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 hover:border-amber-400'
-                )}
-              >
-                <Icon name="dialpad" size="14px" className={tecladoActivo ? 'text-white' : 'text-amber-700'} />
-                <span className="hidden sm:inline">Touch</span>
-              </button>
-            )}
-          </div>
+        <div className="w-18 xl:w-22 shrink-0">
+          <Label className="block text-xs font-bold uppercase mb-1.5 text-text-secondary truncate">
+            Clave *
+          </Label>
           <div className="relative">
             <Input
               ref={claveInputRef}
@@ -122,13 +104,29 @@ export function CapturaDefectoForm({
               }}
               disabled={guardando || !loteActivo}
               placeholder={!loteActivo ? '—' : ''}
-              className="h-10 xl:h-12 text-xs xl:text-sm font-mono font-bold text-center pr-4 rounded-xl"
+              className="h-10 xl:h-12 text-xs xl:text-sm font-mono font-bold text-center pr-8 rounded-xl"
             />
-            {buscandoDefecto && (
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 text-brand-primary">
-                <Spinner size="14px" />
-              </div>
-            )}
+            <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center">
+              {buscandoDefecto ? (
+                <div className="text-brand-primary">
+                  <Spinner size="14px" />
+                </div>
+              ) : onAbrirTeclado && loteActivo ? (
+                <button
+                  type="button"
+                  onClick={onAbrirTeclado}
+                  title={tecladoActivo ? 'Cerrar teclado numérico' : 'Abrir teclado numérico'}
+                  className={cn(
+                    'h-6 w-6 rounded-md flex items-center justify-center transition-all cursor-pointer',
+                    tecladoActivo
+                      ? 'bg-marca-primario text-white shadow-xs'
+                      : 'text-slate-400 hover:text-marca-primario hover:bg-slate-100'
+                  )}
+                >
+                  <Icon name="dialpad" size="15px" />
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
 

@@ -793,11 +793,11 @@ export function DefectoModalCaptura({
       <FloatingNumpad
         isOpen={Boolean(tecladoTarget)}
         onClose={() => setTecladoTarget(null)}
-        title={tecladoTarget === 'lote' ? 'Teclado: Número de Lote' : 'Teclado: Clave de Defecto'}
+        title={tecladoTarget === 'lote' ? 'Número de Lote' : 'Clave de Defecto'}
         targetInputName={
           tecladoTarget === 'lote'
-            ? `Lote actual: [ ${loteInput || 'vacío'} ]`
-            : `Clave actual: [ ${claveDefecto || 'vacío'} ]`
+            ? `Lote: ${loteInput || '—'}`
+            : `Clave: ${claveDefecto || '—'}`
         }
         submitLabel={tecladoTarget === 'lote' ? 'Buscar Lote' : 'Agregar Defecto'}
         onDigit={(digito) => {

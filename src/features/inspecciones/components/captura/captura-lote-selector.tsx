@@ -41,27 +41,9 @@ export function CapturaLoteSelector({
       <div className="flex items-end gap-2.5 xl:gap-3 w-full">
         {/* Si solo hay 1 línea (ej. CORTE), el input de lote ocupa todo el ancho flex-1 */}
         <div className={tieneMultiplesLineas ? 'flex-1 min-w-[110px]' : 'w-full'}>
-          <div className="flex items-center justify-between mb-1.5">
-            <Label className="block text-xs font-bold uppercase tracking-wider text-text-primary">
-              Número de Lote *
-            </Label>
-            {onAbrirTeclado && (
-              <button
-                type="button"
-                onClick={onAbrirTeclado}
-                title={tecladoActivo ? 'Ocultar teclado táctil' : 'Abrir teclado táctil'}
-                className={cn(
-                  'px-3 py-1 rounded-lg text-xs font-black flex items-center gap-1.5 border shadow-sm transition-all cursor-pointer active:scale-95',
-                  tecladoActivo
-                    ? 'bg-marca-primario text-white border-marca-primario ring-2 ring-marca-primario/30'
-                    : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 hover:border-amber-400'
-                )}
-              >
-                <Icon name="dialpad" size="16px" className={tecladoActivo ? 'text-white' : 'text-amber-700'} />
-                <span>Teclado Touch</span>
-              </button>
-            )}
-          </div>
+          <Label className="block text-xs font-bold uppercase tracking-wider mb-1.5 text-text-primary">
+            Número de Lote *
+          </Label>
           <div className="relative">
             <Input
               ref={loteInputRef}
@@ -82,13 +64,29 @@ export function CapturaLoteSelector({
                 }
               }}
               disabled={guardando}
-              className="h-10 xl:h-12 font-mono font-bold text-base xl:text-lg text-brand-primary tracking-wider pr-8 rounded-xl"
+              className="h-10 xl:h-12 font-mono font-bold text-base xl:text-lg text-brand-primary tracking-wider pr-14 rounded-xl"
             />
-            {cargandoLote && (
-              <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-brand-primary">
-                <Spinner size="18px" />
-              </div>
-            )}
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+              {cargandoLote ? (
+                <div className="text-brand-primary mr-1">
+                  <Spinner size="18px" />
+                </div>
+              ) : onAbrirTeclado ? (
+                <button
+                  type="button"
+                  onClick={onAbrirTeclado}
+                  title={tecladoActivo ? 'Cerrar teclado numérico' : 'Abrir teclado numérico'}
+                  className={cn(
+                    'h-7 w-7 rounded-lg flex items-center justify-center transition-all cursor-pointer',
+                    tecladoActivo
+                      ? 'bg-marca-primario text-white shadow-xs'
+                      : 'text-slate-400 hover:text-marca-primario hover:bg-slate-100'
+                  )}
+                >
+                  <Icon name="dialpad" size="18px" />
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
 
