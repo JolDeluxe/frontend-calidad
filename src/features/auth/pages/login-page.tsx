@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { LoginForm } from '../components/login-form';
 import { useAuthSession } from '@/providers/auth-provider';
+import { ROUTES } from '@/app/router/route-paths';
 
 export function LoginPage() {
   const [loading, setLoading] = useState(false);
@@ -13,9 +14,11 @@ export function LoginPage() {
     setLoading(true);
     setBackendError(null);
     try {
-      const ok = await login({ usuario, password });
-      if (ok) {
-        navigate('/', { replace: true });
+      const loggedUser = await login({ usuario, password });
+      if (loggedUser) {
+        const esInspector = loggedUser.rol?.codigo?.toUpperCase() === 'INSPECTOR';
+        const destino = esInspector ? ROUTES.INSPECCIONES : ROUTES.ROOT;
+        navigate(destino, { replace: true });
       } else {
         setBackendError('Credenciales inválidas o cuenta inactiva');
       }

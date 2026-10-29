@@ -62,6 +62,28 @@ export function InspeccionDetalleModal({
     <Modal isOpen={isOpen} onClose={onClose} className="max-w-lg">
       <ModalHeader title="Detalle Completo de Captura" onClose={onClose} />
       <ModalBody className="space-y-3.5 text-xs">
+        {item.esLocalPendiente && (
+          <div className="p-3 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 space-y-1">
+            <div className="flex items-center justify-between gap-2 font-bold text-2xs uppercase tracking-wider">
+              <span className="inline-flex items-center gap-1.5">
+                <Icon name="cloud_upload" size="14px" className="text-amber-700" />
+                <span>Captura Local Pendiente de Sincronización</span>
+              </span>
+              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-amber-200/70">
+                {item.estadoColaLocal || 'PENDIENTE'}
+              </span>
+            </div>
+            <p className="text-[11px] text-amber-800 leading-relaxed">
+              Esta captura está resguardada en el almacenamiento local de esta estación ({item.idLocalCliente?.slice(0, 12)}) y se enviará automáticamente a MySQL al restablecer la conexión.
+            </p>
+            {item.ultimoErrorSync && (
+              <p className="text-[11px] font-semibold text-orange-800 pt-1 border-t border-amber-200/80">
+                Último estado de red: {item.ultimoErrorSync}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Cabecera con Defecto y Criticidad */}
         <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
           <div className="flex items-center justify-between mb-1">
@@ -150,27 +172,17 @@ export function InspeccionDetalleModal({
           )}
         </div>
 
-        {/* Trazabilidad Departamental (solo si se encontró en otro departamento) */}
+        {/* Trazabilidad Departamental (solo si se detectó en una estación diferente a su origen, diseño discreto) */}
         {esDeptoExterno && (
-          <div className="border border-amber-300 rounded-xl bg-amber-50/50 p-3.5 space-y-2.5">
-            <div className="font-bold text-2xs uppercase tracking-wider text-amber-900 pb-1 border-b border-amber-200 flex items-center gap-1.5">
-              <Icon name="sync_alt" size="14px" className="text-amber-700" />
-              <span>Trazabilidad Departamental</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="p-2.5 rounded-lg border border-amber-200 bg-white/80">
-                <span className="text-2xs text-text-muted block mb-0.5">Estación de Detección</span>
-                <strong className="text-xs text-slate-900 uppercase">{item.departamentoAuditoria}</strong>
-              </div>
-
-              <div className="p-2.5 rounded-lg border border-amber-300 bg-amber-100/60">
-                <span className="text-2xs text-amber-900 block mb-0.5">Departamento del Defecto</span>
-                <strong className="text-xs text-amber-950 font-black uppercase">
-                  {item.defDepto}
-                </strong>
-              </div>
-            </div>
+          <div className="rounded-lg bg-slate-50 border border-slate-200/80 px-3 py-2 flex items-center justify-between text-2xs text-slate-600 gap-2">
+            <span className="flex items-center gap-1.5 font-medium text-slate-500">
+              <Icon name="sync_alt" size="13px" className="text-slate-400" />
+              <span>Detectado en: <strong className="text-slate-700 uppercase font-semibold">{item.departamentoAuditoria}</strong></span>
+            </span>
+            <span className="text-slate-400">|</span>
+            <span className="flex items-center gap-1 font-medium text-slate-500">
+              <span>Origen del defecto: <strong className="text-amber-800 uppercase font-semibold">{item.defDepto}</strong></span>
+            </span>
           </div>
         )}
 

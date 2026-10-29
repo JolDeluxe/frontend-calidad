@@ -1,6 +1,7 @@
 import { Navigate, Outlet } from 'react-router';
 import { useAuthSession } from '@/providers/auth-provider';
 import { PantallaCarga } from '@/components/ui/pantalla-carga';
+import { ROUTES } from './route-paths';
 import type { ReactNode } from 'react';
 
 export function RequireAuth({ children }: { children?: ReactNode }) {
@@ -11,7 +12,7 @@ export function RequireAuth({ children }: { children?: ReactNode }) {
   }
 
   if (!isAuthenticated || sessionState === 'revoked' || sessionState === 'unauthenticated') {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={ROUTES.LOGIN} replace />;
   }
 
   return children ? <>{children}</> : <Outlet />;
@@ -31,26 +32,29 @@ export function RequireRole({
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={ROUTES.LOGIN} replace />;
   }
 
   const userRole = user?.rol?.codigo;
   if (!userRole || !roles.includes(userRole)) {
-    return <Navigate to="/" replace />;
+    const destinoFallback = userRole?.toUpperCase() === 'INSPECTOR' ? ROUTES.INSPECCIONES : ROUTES.ROOT;
+    return <Navigate to={destinoFallback} replace />;
   }
 
   return children ? <>{children}</> : <Outlet />;
 }
 
 export function RedirectIfAuthenticated({ children }: { children?: ReactNode }) {
-  const { isAuthenticated, sessionState, isLoading } = useAuthSession();
+  const { user, isAuthenticated, sessionState, isLoading } = useAuthSession();
 
   if (isLoading || sessionState === 'pending_validation') {
     return <PantallaCarga />;
   }
 
   if (isAuthenticated && sessionState !== 'revoked') {
-    return <Navigate to="/" replace />;
+    const esInspector = user?.rol?.codigo?.toUpperCase() === 'INSPECTOR';
+    const destino = esInspector ? ROUTES.INSPECCIONES : ROUTES.ROOT;
+    return <Navigate to={destino} replace />;
   }
 
   return children ? <>{children}</> : <Outlet />;

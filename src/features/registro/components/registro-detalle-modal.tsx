@@ -92,32 +92,20 @@ export function RegistroDetalleModal({ isOpen, onClose, item }: RegistroDetalleM
           </div>
         </div>
 
-        {/* Trazabilidad Departamental */}
-        <div className="border border-border/80 rounded-xl bg-app-surface p-3.5 space-y-2 text-xs">
-          <div className="font-bold text-2xs uppercase tracking-wider text-slate-400 pb-1 border-b border-slate-100 flex items-center gap-1.5">
-            <Icon name="sync_alt" size="14px" className="text-slate-500" />
-            <span>Trazabilidad de Inspección</span>
-          </div>
+        {/* Trazabilidad Departamental (discreta) */}
+        <div className="rounded-lg bg-slate-50 border border-slate-200/80 px-3 py-2 flex items-center justify-between text-2xs text-slate-600 gap-2">
+          <span className="flex items-center gap-1.5 font-medium text-slate-500">
+            <Icon name="fact_check" size="13px" className="text-slate-400" />
+            <span>Auditado en: <strong className="text-slate-700 uppercase font-semibold">{item.departamentoAuditoria}</strong></span>
+          </span>
+          <span className="text-slate-400">|</span>
+          <span className="flex items-center gap-1 font-medium text-slate-500">
+            <span>Origen defecto: <strong className="text-amber-800 uppercase font-semibold">{item.defDepto}</strong></span>
+          </span>
+        </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            <div className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/60">
-              <span className="text-2xs text-text-muted block mb-1">Auditado en (Detección)</span>
-              <div className="flex items-center gap-1.5 font-bold text-slate-800">
-                <Icon name="fact_check" size="16px" className="text-slate-500" />
-                <span>{item.departamentoAuditoria}</span>
-              </div>
-            </div>
-
-            <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50/40">
-              <span className="text-2xs text-amber-800 block mb-1">Departamento Responsable (Origen)</span>
-              <div className="flex items-center gap-1.5 font-bold text-amber-950">
-                <Icon name="corporate_fare" size="16px" className="text-amber-600" />
-                <span>{item.defDepto}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-2 text-2xs text-text-muted flex items-center justify-between">
+        <div className="border border-border/80 rounded-xl bg-app-surface p-3 space-y-2 text-xs">
+          <div className="text-2xs text-text-muted flex items-center justify-between">
             <span>Inspector: <strong className="text-slate-700">{item.usuario}</strong></span>
             <span>Fecha: {fechaFormateada}</span>
           </div>

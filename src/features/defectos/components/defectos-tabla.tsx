@@ -12,6 +12,9 @@ interface DefectosTablaProps {
   defectos: Defecto[];
   loading: boolean;
   error: string | null;
+  sinConexion?: boolean;
+  mostrandoDatosLocales?: boolean;
+  onReintentar?: () => void;
   busqueda: string;
   setBusqueda: (val: string) => void;
   filtroClasificacion: string;
@@ -217,6 +220,9 @@ export function DefectosTabla({
   defectos,
   loading,
   error,
+  sinConexion = false,
+  mostrandoDatosLocales = false,
+  onReintentar,
   busqueda,
   setBusqueda,
   filtroClasificacion,
@@ -410,25 +416,88 @@ export function DefectosTabla({
         </div>
       </div>
 
-      {/* Alerta de Error */}
-      {error && (
-        <div className="m-3 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs flex items-center gap-2">
-          <Icon name="error" size="16px" />
-          <span>{error}</span>
+      {/* Alerta de Error (cuando ya hay datos en pantalla) */}
+      {error && defectos.length > 0 && (
+        <div className="m-3 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Icon name="error" size="16px" />
+            <span>{error}</span>
+          </div>
+          {onReintentar && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onReintentar}
+              className="h-7 px-2.5 text-[11px] font-semibold cursor-pointer"
+            >
+              Reintentar
+            </Button>
+          )}
         </div>
       )}
 
       {/* Tabla de Resultados Limpia */}
       {!loading && defectos.length === 0 ? (
-        <div className="text-center py-16 px-4 bg-app-surface rounded-xl border border-border text-text-muted">
-          <Icon name="search_off" size="40px" className="mx-auto mb-2 opacity-50" />
-          <p className="text-sm font-medium">No se encontraron defectos registrados.</p>
-          <p className="text-xs text-text-muted/80 mt-1">
-            {verEliminados
-              ? 'No hay defectos en la papelera o eliminados.'
-              : 'Intenta con otro término de búsqueda o limpia los filtros.'}
-          </p>
-        </div>
+        sinConexion ? (
+          <div className="text-center py-14 px-4 bg-amber-50/40 rounded-b-xl text-amber-900">
+            <div className="h-12 w-12 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-3">
+              <Icon name="wifi_off" size="26px" />
+            </div>
+            <p className="text-sm font-bold text-slate-900">
+              Sin conexión con el servidor
+            </p>
+            <p className="text-xs text-slate-600 mt-1 max-w-md mx-auto leading-relaxed">
+              No se puede consultar el catálogo de defectos porque el servidor no responde y no hay datos locales guardados en este equipo para los filtros seleccionados.
+            </p>
+            {onReintentar && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onReintentar}
+                className="mt-4 text-xs font-semibold px-4 py-1.5 cursor-pointer"
+              >
+                <Icon name="refresh" size="15px" className="mr-1.5" />
+                <span>Reintentar consulta</span>
+              </Button>
+            )}
+          </div>
+        ) : error ? (
+          <div className="text-center py-14 px-4 bg-rose-50/30 rounded-b-xl text-rose-900">
+            <div className="h-12 w-12 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center mx-auto mb-3">
+              <Icon name="error_outline" size="26px" />
+            </div>
+            <p className="text-sm font-bold text-slate-900">
+              No se pudo consultar el catálogo de defectos
+            </p>
+            <p className="text-xs text-slate-600 mt-1 max-w-md mx-auto leading-relaxed">
+              {error}
+            </p>
+            {onReintentar && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onReintentar}
+                className="mt-4 text-xs font-semibold px-4 py-1.5 cursor-pointer"
+              >
+                <Icon name="refresh" size="15px" className="mr-1.5" />
+                <span>Reintentar</span>
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-16 px-4 bg-app-surface rounded-xl border border-border text-text-muted">
+            <Icon name="search_off" size="40px" className="mx-auto mb-2 opacity-50" />
+            <p className="text-sm font-medium">No se encontraron defectos registrados.</p>
+            <p className="text-xs text-text-muted/80 mt-1">
+              {verEliminados
+                ? 'No hay defectos en la papelera o eliminados.'
+                : 'Intenta con otro término de búsqueda o limpia los filtros.'}
+            </p>
+          </div>
+        )
       ) : (
         <div className="bg-app-surface rounded-xl shadow-xs border border-border overflow-hidden">
           <div className="overflow-x-auto">
@@ -548,10 +617,18 @@ export function DefectosTabla({
 
           {/* Footer Cargar Más & Contador Total */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-border bg-app-surface text-xs">
-            <span className="text-text-secondary">
-              Mostrando <strong className="text-text-primary">{defectos.length}</strong> de{' '}
-              <strong className="text-text-primary">{totalItems}</strong> defectos
-            </span>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="text-text-secondary">
+                Mostrando <strong className="text-text-primary">{defectos.length}</strong> de{' '}
+                <strong className="text-text-primary">{totalItems}</strong> defectos
+              </span>
+              {(sinConexion || mostrandoDatosLocales) && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium">
+                  <Icon name="wifi_off" size="12px" />
+                  <span>Mostrando catálogo guardado en este equipo</span>
+                </span>
+              )}
+            </div>
 
             {puedeCargarMas && (
               <Button

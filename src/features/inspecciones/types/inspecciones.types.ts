@@ -60,6 +60,17 @@ export interface InspeccionFilaResponse {
   eliminadoPor?: number | null;
   eliminadoPorNombre?: string | null;
   eliminadoMotivo?: string | null;
+  esLocalPendiente?: boolean;
+  idLocalCliente?: string;
+  estadoColaLocal?:
+    | 'PENDIENTE'
+    | 'SINCRONIZANDO'
+    | 'ERROR_REINTENTABLE'
+    | 'REQUIERE_REVISION'
+    | 'RECHAZADA';
+  ultimoErrorSync?: string | null;
+  esContingencia?: boolean;
+  motivoContingencia?: string | null;
 }
 
 export interface GetFilasInspeccionResponse {
@@ -79,7 +90,11 @@ export interface CreateInspeccionPayload {
   notas?: string | null;
   detalles: Array<{
     defectoId: number;
+    defectoClave?: number;
+    defectoNombre?: string;
+    clasificacion?: 'CRITICO' | 'MAYOR' | 'MENOR';
     defDeptoId: number;
+    defDeptoNombre?: string;
     paresDefectuosos: number;
     notas?: string;
   }>;

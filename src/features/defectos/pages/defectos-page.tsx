@@ -20,6 +20,8 @@ import { DefectoDeleteModal } from '../components/defecto-delete-modal';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { toast } from '@/components/ui/toast';
+import { ApiError, connectivityState } from '@/lib/api/http-client';
+import { catalogoOfflineService } from '@/features/catalogo-offline/services/catalogo-offline.service';
 
 /**
  * Controlador de vista del módulo de Defectos.
@@ -72,6 +74,9 @@ export function DefectosPage() {
   const [loading, setLoading] = useState(true);
   const [cargandoMas, setCargandoMas] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sinConexion, setSinConexion] = useState(false);
+  const [mostrandoDatosLocales, setMostrandoDatosLocales] = useState(false);
+  const cachedDefectosRef = useRef<Defecto[]>([]);
 
   // Funciones de actualización de URL (Navigable State)
   const updateUrlParams = (updates: Record<string, string | null | undefined>) => {
@@ -187,6 +192,42 @@ export function DefectosPage() {
   };
 
   const fetchDefectosData = async (targetPage = 1, append = false) => {
+    const cargarDesdeCacheLocal = async () => {
+      const localRes = await catalogoOfflineService.consultarDefectosLocales({
+        busqueda: busqueda.trim() || undefined,
+        clasificacion: filtroClasificacion || undefined,
+        departamentoId: filtroDepartamento || undefined,
+        lineaId: lineaActivaId !== 'TODAS' ? lineaActivaId : undefined,
+        lineasIds: lineaActivaId === 'TODAS' && selectedLineas.length > 0 ? selectedLineas : undefined,
+        soloEliminados: verEliminados ? true : undefined,
+        page: targetPage,
+        limit,
+      });
+
+      setSinConexion(true);
+      setError(null);
+
+      if (localRes.items.length > 0) {
+        if (append) {
+          setDefectos((prev) => [...prev, ...localRes.items]);
+        } else {
+          setDefectos(localRes.items);
+        }
+        setMostrandoDatosLocales(true);
+        setPage(targetPage);
+        setTotalPages(localRes.totalPages || 1);
+        setTotalItems(localRes.total || localRes.items.length);
+      } else if (!append && cachedDefectosRef.current.length > 0 && !busqueda.trim()) {
+        setDefectos(cachedDefectosRef.current);
+        setMostrandoDatosLocales(true);
+      } else if (!append) {
+        setDefectos([]);
+        setTotalItems(0);
+        setTotalPages(1);
+        setMostrandoDatosLocales(false);
+      }
+    };
+
     try {
       if (append) {
         setCargandoMas(true);
@@ -194,6 +235,11 @@ export function DefectosPage() {
         setLoading(true);
       }
       setError(null);
+
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        await cargarDesdeCacheLocal();
+        return;
+      }
 
       const params: Parameters<typeof defectosApi.getDefectos>[0] = {
         busqueda: busqueda.trim() || undefined,
@@ -212,18 +258,39 @@ export function DefectosPage() {
 
       const data = await defectosApi.getDefectos(params);
 
+      setSinConexion(false);
+      setMostrandoDatosLocales(false);
+      setError(null);
+
+      if (data.items && data.items.length > 0) {
+        void catalogoOfflineService.guardarDefectosEnCacheLocal(data.items);
+      }
+
       if (append) {
-        setDefectos((prev) => [...prev, ...(data.items || [])]);
+        setDefectos((prev) => {
+          const next = [...prev, ...(data.items || [])];
+          cachedDefectosRef.current = next;
+          return next;
+        });
       } else {
-        setDefectos(data.items || []);
+        const next = data.items || [];
+        cachedDefectosRef.current = next;
+        setDefectos(next);
       }
 
       setPage(targetPage);
       setTotalPages(data.totalPages || 1);
       setTotalItems(data.total || 0);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al cargar defectos';
-      setError(msg);
+      const esErrorHttp = err instanceof ApiError && err.statusCode >= 400;
+      if (esErrorHttp) {
+        const msg = err instanceof Error ? err.message : 'Error al consultar el catálogo de defectos';
+        setSinConexion(false);
+        setMostrandoDatosLocales(false);
+        setError(msg);
+      } else {
+        await cargarDesdeCacheLocal();
+      }
     } finally {
       setLoading(false);
       setCargandoMas(false);
@@ -233,6 +300,27 @@ export function DefectosPage() {
   useEffect(() => {
     fetchCatalogos();
   }, []);
+
+  useEffect(() => {
+    const prevReachableRef = { current: connectivityState.isBackendReachable() };
+    const unsub = connectivityState.subscribe((reachable) => {
+      const pasoDeOfflineAOnline = !prevReachableRef.current && reachable;
+      prevReachableRef.current = reachable;
+      if (pasoDeOfflineAOnline) {
+        void fetchCatalogos();
+        void fetchDefectosData(1, false);
+      }
+    });
+    const handleOnline = () => {
+      void fetchCatalogos();
+      void fetchDefectosData(1, false);
+    };
+    window.addEventListener('online', handleOnline);
+    return () => {
+      unsub();
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [busqueda, filtroClasificacion, filtroDepartamento, verEliminados, lineaActivaId, lineasParam]);
 
   // Recargar al cambiar filtros con debounce para la barra de búsqueda general
   useEffect(() => {
@@ -552,6 +640,12 @@ export function DefectosPage() {
           defectos={defectos}
           loading={loading}
           error={error}
+          sinConexion={sinConexion}
+          mostrandoDatosLocales={mostrandoDatosLocales}
+          onReintentar={() => {
+            void fetchCatalogos();
+            void fetchDefectosData(1, false);
+          }}
           busqueda={busqueda}
           setBusqueda={handleSetBusqueda}
           filtroDepartamento={filtroDepartamento}
@@ -587,6 +681,13 @@ export function DefectosPage() {
                 )
           }
           loading={loading}
+          error={error}
+          sinConexion={sinConexion}
+          mostrandoDatosLocales={mostrandoDatosLocales}
+          onReintentar={() => {
+            void fetchCatalogos();
+            void fetchDefectosData(1, false);
+          }}
           busqueda={busqueda}
           setBusqueda={handleSetBusqueda}
           filtroDepartamento={filtroDepartamento}

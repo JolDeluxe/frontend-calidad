@@ -41,6 +41,96 @@ export const authState = {
   },
 };
 
+let backendReachableState = true;
+const connectivityListeners = new Set<(reachable: boolean) => void>();
+
+let sseConnection: EventSource | null = null;
+
+export const connectivityState = {
+  isBackendReachable: (): boolean => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return false;
+    }
+    return backendReachableState;
+  },
+  setBackendReachable: (reachable: boolean): void => {
+    const changed = backendReachableState !== reachable;
+    backendReachableState = reachable;
+    if (changed) {
+      for (const listener of connectivityListeners) {
+        try {
+          listener(reachable);
+        } catch {
+          // Ignorar errores en observadores
+        }
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent(reachable ? 'backend:reachable' : 'backend:unreachable', {
+            detail: { reachable },
+          }),
+        );
+      }
+    }
+  },
+  startRealtimeDetection: (): void => {
+    if (typeof window === 'undefined' || typeof EventSource === 'undefined') return;
+    if (sseConnection) return;
+
+    try {
+      const streamUrl = `${env.API_BASE_URL}/connectivity/stream`;
+      sseConnection = new EventSource(streamUrl);
+
+      sseConnection.onopen = () => {
+        connectivityState.setBackendReachable(true);
+      };
+
+      sseConnection.onmessage = () => {
+        connectivityState.setBackendReachable(true);
+      };
+
+      sseConnection.onerror = () => {
+        connectivityState.setBackendReachable(false);
+      };
+    } catch {
+      connectivityState.setBackendReachable(false);
+    }
+  },
+  stopRealtimeDetection: (): void => {
+    if (sseConnection) {
+      try {
+        sseConnection.close();
+      } catch {}
+      sseConnection = null;
+    }
+  },
+  checkBackendHealth: async (): Promise<boolean> => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      connectivityState.setBackendReachable(false);
+      return false;
+    }
+    try {
+      const baseUrl = env.API_BASE_URL.replace(/\/api\/v1\/?$/, '');
+      const resp = await fetch(`${baseUrl}/health`, {
+        method: 'GET',
+        cache: 'no-store',
+      });
+      const ok = resp.ok;
+      connectivityState.setBackendReachable(ok);
+      return ok;
+    } catch {
+      connectivityState.setBackendReachable(false);
+      return false;
+    }
+  },
+  subscribe: (listener: (reachable: boolean) => void): (() => void) => {
+    connectivityListeners.add(listener);
+    return () => {
+      connectivityListeners.delete(listener);
+    };
+  },
+};
+
 export type RefreshStatus = 'success' | 'unauthorized' | 'network_error';
 
 export interface RefreshResultData {
@@ -64,6 +154,8 @@ export async function performTokenRefresh(): Promise<RefreshResultData> {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
       });
+
+      connectivityState.setBackendReachable(true);
 
       if (response.status === 401 || response.status === 403) {
         authState.setAccessToken(null);
@@ -94,6 +186,7 @@ export async function performTokenRefresh(): Promise<RefreshResultData> {
       return { status: 'success', token: newToken, user: payload.data?.usuario };
     } catch {
       // Error de red, fetch abortado, servidor caído / offline
+      connectivityState.setBackendReachable(false);
       return { status: 'network_error', token: null };
     } finally {
       activeRefreshPromise = null;
@@ -135,21 +228,40 @@ async function request<T>(path: string, options: CustomRequestInit = {}): Promis
     headers['x-terminal-credential'] = terminalCredential;
   }
 
-  const response = await fetch(url, {
-    credentials: 'include',
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      credentials: 'include',
+      ...options,
+      headers,
+    });
+    connectivityState.setBackendReachable(true);
+  } catch (networkErr) {
+    connectivityState.setBackendReachable(false);
+    throw networkErr;
+  }
 
   if (response.status === 401) {
+    const errorBody = (await response.json().catch(() => ({ message: 'No autorizado' }))) as ApiErrorResponse;
     const isAuthEndpoint = path.startsWith('/auth/login') || path.startsWith('/auth/refresh');
+
+    // Si el 401 proviene de la validación de la terminal física (o del token offline en sincronización)
+    // y NO de la sesión del usuario (`Authorization` / `auth_session`), NO debemos cerrar la sesión del usuario.
+    const msgLower = (errorBody?.message || '').toLowerCase();
+    const isTerminalOrOfflineToken401 =
+      msgLower.includes('terminal') ||
+      msgLower.includes('token offline') ||
+      msgLower.includes('captura offline');
+
+    if (isTerminalOrOfflineToken401) {
+      throw new ApiError(401, errorBody);
+    }
 
     if (isAuthEndpoint || options._isRetry) {
       if (!path.startsWith('/auth/login')) {
         authState.setAccessToken(null);
         window.dispatchEvent(new CustomEvent('auth:session-expired', { detail: { status: 401 } }));
       }
-      const errorBody = (await response.json().catch(() => ({ message: 'No autorizado' }))) as ApiErrorResponse;
       throw new ApiError(401, errorBody);
     }
 
@@ -168,13 +280,11 @@ async function request<T>(path: string, options: CustomRequestInit = {}): Promis
     if (refreshResult.status === 'unauthorized') {
       authState.setAccessToken(null);
       window.dispatchEvent(new CustomEvent('auth:session-expired', { detail: { status: 401 } }));
-      const errorBody = (await response.json().catch(() => ({ message: 'Sesión expirada' }))) as ApiErrorResponse;
-      throw new ApiError(401, errorBody);
+      throw new ApiError(401, { message: errorBody?.message || 'Sesión expirada' });
     }
 
     // En caso de fallo temporal de red durante refresh, no emitimos session-expired para no expulsar al usuario
-    const errorBody = (await response.json().catch(() => ({ message: 'Servidor no disponible temporalmente' }))) as ApiErrorResponse;
-    throw new ApiError(503, errorBody);
+    throw new ApiError(503, { message: errorBody?.message || 'Servidor no disponible temporalmente' });
   }
 
   if (response.status === 403) {

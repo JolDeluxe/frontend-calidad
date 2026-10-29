@@ -47,6 +47,15 @@ export function DesktopHeader() {
         </div>
 
         <div className="flex items-center justify-end gap-2 sm:gap-4">
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            title="Recargar página"
+            className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
+          >
+            <Icon name="refresh" size="18px" className="text-slate-500" />
+            <span className="hidden sm:inline">Recargar</span>
+          </button>
           <UserMenu />
         </div>
       </div>

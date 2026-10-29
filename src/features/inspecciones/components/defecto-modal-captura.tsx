@@ -4,8 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Spinner } from '@/components/ui/spinner';
 import { toast } from '@/components/ui/toast';
+import { ApiError } from '@/lib/api/http-client';
 import { defectosApi } from '@/features/defectos/api/defectos-api';
+import { catalogoOfflineService } from '@/features/catalogo-offline/services/catalogo-offline.service';
 import { inspeccionesApi } from '../api/inspecciones-api';
+import {
+  inspeccionesOfflineService,
+  computeLocalRowId,
+} from '../services/inspecciones-offline.service';
 import type { Departamento } from '@/features/departamentos/types/departamentos.types';
 import type { LineaOperativa, ProduccionLote } from '../types/inspecciones.types';
 import type { Defecto } from '@/features/defectos/types/defectos.types';
@@ -38,7 +44,7 @@ export interface DefectoModalCapturaProps {
   onClose: () => void;
   onSuccess: (nuevosDetallesIds?: number[]) => void;
   departamentoAuditor: Departamento | null;
-  lineas: LineaOperativa[];
+  lineas?: LineaOperativa[];
   departamentos: Departamento[];
 }
 
@@ -47,17 +53,19 @@ export function DefectoModalCaptura({
   onClose,
   onSuccess,
   departamentoAuditor,
-  lineas,
   departamentos = [],
 }: DefectoModalCapturaProps) {
-  const { user } = useAuthSession();
+  const { user, isOfflineMode } = useAuthSession();
 
   // Fecha en formato dd/mm/aaaa
   const hoy = new Date();
   const fechaTexto = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
 
-  // Cantidad de líneas operativas en el departamento auditor
-  const totalLineasDepto = Math.max(1, departamentoAuditor?.numeroLineas || 1);
+  // Cantidad de líneas operativas en el departamento auditor (MONTADO cuenta con 2 líneas: L1 y L2)
+  const totalLineasDepto = Math.max(
+    1,
+    departamentoAuditor?.numeroLineas ?? (departamentoAuditor?.codigo === 'MONTADO' ? 2 : 1)
+  );
   const tieneMultiplesLineas = totalLineasDepto > 1;
 
   // LADO IZQUIERDO: Consulta de Lote y datos de producción
@@ -95,31 +103,60 @@ export function DefectoModalCaptura({
   const loteInputRef = useRef<HTMLInputElement>(null);
   const claveInputRef = useRef<HTMLInputElement>(null);
 
-  // Cargar catálogo de defectos del departamento auditor o activos
+  // Cargar catálogo de defectos del departamento auditor (con fallback automático a IndexedDB en modo offline)
+  const [avisoCatalogoOffline, setAvisoCatalogoOffline] = useState<string | null>(null);
   useEffect(() => {
     if (!isOpen) return;
 
     let cancelado = false;
     const cargarCatalogo = async () => {
+      setAvisoCatalogoOffline(null);
+      const etapaTargetId = departamentoAuditor?.id;
+
+      const cargarDesdeLocal = async () => {
+        const resLocal = await catalogoOfflineService.consultarDefectosLocales({
+          etapaId: etapaTargetId,
+          activo: true,
+          limit: 1000,
+        });
+        if (!cancelado) {
+          setCatalogoDefectos(resLocal.items);
+          if (resLocal.items.length === 0) {
+            setAvisoCatalogoOffline(
+              'No hay datos locales de defectos disponibles en este equipo porque no hay conexión con el servidor.',
+            );
+          }
+        }
+      };
+
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        await cargarDesdeLocal();
+        return;
+      }
+
       try {
         const resp = await defectosApi.getDefectos({
-          etapaId: departamentoAuditor?.id,
+          etapaId: etapaTargetId,
           activo: true,
           limit: 1000,
         });
         if (!cancelado && resp.items) {
           setCatalogoDefectos(resp.items);
+          setAvisoCatalogoOffline(null);
+          // Persistir oportunistamente en el catálogo local para garantizar disponibilidad inmediata si se apaga el backend
+          void catalogoOfflineService.guardarDefectosEnCacheLocal(resp.items, etapaTargetId);
         }
       } catch (err) {
-        console.error('Error cargando catálogo de defectos', err);
+        console.warn('[Offline] Usando catálogo local de defectos en IndexedDB:', err);
+        await cargarDesdeLocal();
       }
     };
 
-    cargarCatalogo();
+    void cargarCatalogo();
     return () => {
       cancelado = true;
     };
-  }, [isOpen, departamentoAuditor]);
+  }, [isOpen, departamentoAuditor, isOfflineMode]);
 
   // Resetear el formulario al abrir el modal (solamente cuando isOpen cambia de false a true)
   useEffect(() => {
@@ -142,7 +179,7 @@ export function DefectoModalCaptura({
     }
   }, [isOpen]);
 
-  // Búsqueda de Lote
+  // Búsqueda de Lote (con fallback a IndexedDB cat_lotes cuando no hay red)
   const handleBuscarLote = async (valorOverride?: string) => {
     const cod = (valorOverride !== undefined ? valorOverride : loteInput).trim();
     if (!cod) {
@@ -161,16 +198,63 @@ export function DefectoModalCaptura({
     setCargandoLote(true);
     setErrorLote(null);
 
+    const buscarEnIdb = async (): Promise<boolean> => {
+      const loteOffline = await catalogoOfflineService.getLoteLocal(cod);
+      if (loteOffline) {
+        setLoteActivo({
+          id: loteOffline.id,
+          listaLote: `${loteOffline.lista}-${loteOffline.lote}`,
+          lista: loteOffline.lista,
+          lote: loteOffline.lote,
+          idProducto: loteOffline.idProducto,
+          modelo: loteOffline.modelo,
+          cantidad: loteOffline.cantidad,
+          descripcion: null,
+          cliente: loteOffline.cliente,
+          horma: loteOffline.horma,
+          estado: 'ACTIVO',
+        });
+        setErrorLote(null);
+        setTimeout(() => {
+          claveInputRef.current?.focus();
+        }, 100);
+        return true;
+      }
+      return false;
+    };
+
     try {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        const hallado = await buscarEnIdb();
+        if (!hallado) {
+          setLoteActivo(null);
+          setErrorLote(`El lote '${cod}' no se encuentra en el catálogo local de lotes activos.`);
+        }
+        return;
+      }
+
       const lote = await inspeccionesApi.getLoteByCodigo(cod);
       setLoteActivo(lote);
       setErrorLote(null);
       setTimeout(() => {
         claveInputRef.current?.focus();
       }, 100);
-    } catch {
-      setLoteActivo(null);
-      setErrorLote(`El lote '${cod}' no existe o no está disponible`);
+    } catch (err: any) {
+      // Si fue un 404 explícito del servidor en línea, el lote no existe en MySQL
+      if (err instanceof ApiError && err.statusCode === 404) {
+        setLoteActivo(null);
+        setErrorLote(`El lote '${cod}' no existe o no está disponible`);
+        return;
+      }
+
+      // Fallo de red: intentar resolver desde IndexedDB
+      const halladoLocal = await buscarEnIdb();
+      if (!halladoLocal) {
+        setLoteActivo(null);
+        setErrorLote(
+          `Sin conexión al servidor y el lote '${cod}' no está en el catálogo local.`,
+        );
+      }
     } finally {
       setCargandoLote(false);
     }
@@ -188,27 +272,57 @@ export function DefectoModalCaptura({
     }
 
     const timer = setTimeout(() => {
-      handleBuscarLote(term);
+      void handleBuscarLote(term);
     }, 400);
 
     return () => clearTimeout(timer);
   }, [loteInput, isOpen]);
 
-  // Búsqueda de Defecto por Clave
-  const handleBuscarDefecto = async (claveManual?: string) => {
+  // Búsqueda de Defecto por Clave (con soporte local / IndexedDB)
+  const handleBuscarDefecto = async (claveManual?: string): Promise<Defecto | null> => {
     const valor = claveManual !== undefined ? claveManual : claveDefecto;
     const term = valor.trim();
     if (!term || term.length < 4) {
       setDefectoSeleccionado(null);
       setErrorDefecto(null);
-      return;
+      return null;
     }
 
     const num = parseInt(term, 10);
     if (isNaN(num) || num <= 0) {
       setDefectoSeleccionado(null);
       setErrorDefecto(null);
-      return;
+      return null;
+    }
+
+    // Buscar primero en el catálogo ya cargado para la etapa de la terminal
+    const enCatalogoLocal = catalogoDefectos.find((d) => d.clave === num);
+    if (enCatalogoLocal) {
+      setDefectoSeleccionado(enCatalogoLocal);
+      setErrorDefecto(null);
+      return enCatalogoLocal;
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      const resLocal = await catalogoOfflineService.consultarDefectosLocales({
+        clave: num,
+        etapaId: departamentoAuditor?.id,
+        activo: true,
+        limit: 1,
+      });
+      if (resLocal.items.length > 0) {
+        setDefectoSeleccionado(resLocal.items[0]);
+        setErrorDefecto(null);
+        return resLocal.items[0];
+      } else {
+        setDefectoSeleccionado(null);
+        setErrorDefecto(
+          catalogoDefectos.length === 0
+            ? 'Sin conexión al servidor y no hay catálogo de defectos guardado en este equipo.'
+            : `Defecto #${num} no encontrado o no permitido en esta etapa`,
+        );
+        return null;
+      }
     }
 
     setBuscandoDefecto(true);
@@ -217,6 +331,7 @@ export function DefectoModalCaptura({
     try {
       const resp = await defectosApi.getDefectos({
         clave: num,
+        etapaId: departamentoAuditor?.id,
         activo: true,
         limit: 1,
       });
@@ -225,13 +340,28 @@ export function DefectoModalCaptura({
         const d = resp.items[0];
         setDefectoSeleccionado(d);
         setErrorDefecto(null);
+        return d;
       } else {
         setDefectoSeleccionado(null);
-        setErrorDefecto(`Defecto #${num} no encontrado`);
+        setErrorDefecto(`Defecto #${num} no encontrado en esta etapa`);
+        return null;
       }
     } catch {
-      setDefectoSeleccionado(null);
-      setErrorDefecto('Error al consultar el catálogo de defectos');
+      const resLocal = await catalogoOfflineService.consultarDefectosLocales({
+        clave: num,
+        etapaId: departamentoAuditor?.id,
+        activo: true,
+        limit: 1,
+      });
+      if (resLocal.items.length > 0) {
+        setDefectoSeleccionado(resLocal.items[0]);
+        setErrorDefecto(null);
+        return resLocal.items[0];
+      } else {
+        setDefectoSeleccionado(null);
+        setErrorDefecto('Sin conexión para consultar el defecto y no se encontró en este equipo.');
+        return null;
+      }
     } finally {
       setBuscandoDefecto(false);
     }
@@ -249,7 +379,7 @@ export function DefectoModalCaptura({
     }
 
     const timer = setTimeout(() => {
-      handleBuscarDefecto(term);
+      void handleBuscarDefecto(term);
     }, 300);
 
     return () => clearTimeout(timer);
@@ -284,25 +414,30 @@ export function DefectoModalCaptura({
     setParesDefecto(num);
   };
 
-  const handleAgregarDefecto = () => {
+  const handleAgregarDefecto = (defectoPersonalizado?: Defecto) => {
+    const defectoAUsar = defectoPersonalizado || defectoSeleccionado;
+
     if (!loteActivo) {
       setErrorDefecto('Primero ingrese un lote válido');
-      toast.warning('Primero ingrese y valide un lote de producción', { title: 'Lote requerido' });
       return;
     }
 
-    if (!defectoSeleccionado) {
+    if (!defectoAUsar) {
       setErrorDefecto('Seleccione o ingrese un defecto válido');
-      toast.warning('Seleccione o teclee un defecto válido de la lista', { title: 'Defecto requerido' });
       return;
     }
 
-    const deptoId = defectoSeleccionado.departamento?.id || defectoSeleccionado.departamentoId || (departamentoAuditor ? departamentoAuditor.id : (departamentos[0]?.id || 1));
-    const deptoNom = defectoSeleccionado.departamento?.nombre || (departamentoAuditor ? departamentoAuditor.nombre : (departamentos[0]?.nombre || 'GENERAL'));
+    const deptoId =
+      defectoAUsar.departamento?.id ||
+      defectoAUsar.departamentoId ||
+      (departamentoAuditor ? departamentoAuditor.id : departamentos[0]?.id || 1);
+    const deptoNom =
+      defectoAUsar.departamento?.nombre ||
+      (departamentoAuditor ? departamentoAuditor.nombre : departamentos[0]?.nombre || 'GENERAL');
 
     setDefectosCapturados((prev) => {
       // Regla de acumulación MBC: si ya existe el mismo defecto capturado antes de guardar, acumular pares
-      const indexExistente = prev.findIndex((d) => d.defectoId === defectoSeleccionado.id);
+      const indexExistente = prev.findIndex((d) => d.defectoId === defectoAUsar.id);
 
       if (indexExistente >= 0) {
         const itemExistente = prev[indexExistente];
@@ -317,10 +452,10 @@ export function DefectoModalCaptura({
 
       const item: DefectoItemCapturado = {
         idTemporal: `def-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        defectoId: defectoSeleccionado.id,
-        clave: defectoSeleccionado.clave,
-        defecto: defectoSeleccionado.defecto,
-        clasificacion: defectoSeleccionado.clasificacion,
+        defectoId: defectoAUsar.id,
+        clave: defectoAUsar.clave,
+        defecto: defectoAUsar.defecto,
+        clasificacion: defectoAUsar.clasificacion,
         departamentoResponsableId: deptoId,
         departamentoResponsableNombre: deptoNom,
         pares: paresDefecto,
@@ -339,18 +474,10 @@ export function DefectoModalCaptura({
     setTimeout(() => {
       claveInputRef.current?.focus();
     }, 50);
-
-    toast.info(`Defecto #${defectoSeleccionado.clave} agregado a la lista (${paresDefecto} par${paresDefecto > 1 ? 'es' : ''})`);
   };
 
   const handleEliminarItem = (idTemporal: string) => {
-    setDefectosCapturados((prev) => {
-      const item = prev.find((d) => d.idTemporal === idTemporal);
-      if (item) {
-        toast.info(`Defecto #${item.clave} removido de la lista`);
-      }
-      return prev.filter((d) => d.idTemporal !== idTemporal);
-    });
+    setDefectosCapturados((prev) => prev.filter((d) => d.idTemporal !== idTemporal));
   };
 
   const handleGuardarInspeccion = async () => {
@@ -367,21 +494,70 @@ export function DefectoModalCaptura({
     setGuardando(true);
     setErrorGuardado(null);
 
-    try {
-      const lineaObj = lineas.find((l) => l.codigo === lineaCodigo || l.nombre === lineaCodigo);
+    // Si el departamento tiene múltiples líneas (ej. Montado con 2), se envía la seleccionada (L1, L2, L3...)
+    // Si solo tiene 1 línea (ej. Corte con 1), se envía por defecto "L1"
+    const sublineaEfectiva = tieneMultiplesLineas ? (lineaCodigo || 'L1') : 'L1';
 
-      const res = await inspeccionesApi.createInspeccion({
-        lote: loteActivo.lote,
-        lineaId: lineaObj?.id || null,
-        lineaTexto: lineaCodigo,
-        // El departamento de auditoría lo determina el servidor a partir de la terminal física validada
-        horma: loteActivo.horma,
-        detalles: defectosCapturados.map((d) => ({
-          defectoId: d.defectoId,
-          defDeptoId: d.departamentoResponsableId,
-          paresDefectuosos: d.pares,
-        })),
-      }, claveIdempotenciaRef.current);
+    const payloadCaptura = {
+      lote: loteActivo.lote,
+      lineaId: null,
+      lineaTexto: sublineaEfectiva,
+      horma: loteActivo.horma,
+      detalles: defectosCapturados.map((d) => ({
+        defectoId: d.defectoId,
+        defectoClave: d.clave,
+        defectoNombre: d.defecto,
+        clasificacion: d.clasificacion,
+        defDeptoId: d.departamentoResponsableId,
+        defDeptoNombre: d.departamentoResponsableNombre,
+        paresDefectuosos: d.pares,
+      })),
+    };
+
+    const guardarEnColaOffline = async () => {
+      if (!user) {
+        throw new Error('No hay sesión de inspector activa para encolar la captura.');
+      }
+
+      const itemCola = await inspeccionesOfflineService.encolarCaptura({
+        payload: payloadCaptura,
+        inspector: {
+          id: user.id,
+          usuario: user.usuario,
+          nombre: user.nombre,
+        },
+        esContingencia: false,
+        motivoContingencia: null,
+        idLocalClienteOpcional: claveIdempotenciaRef.current,
+      });
+
+      claveIdempotenciaRef.current = nuevaClaveIdempotencia();
+
+      const idsLocales = itemCola.payload.detalles.map((_, idx) =>
+        computeLocalRowId(itemCola.idLocalCliente, idx),
+      );
+
+      toast.info(
+        'La captura se guardó en este equipo y se enviará al recuperar la conexión.',
+        { title: 'Sin conexión' },
+      );
+
+      onSuccess(idsLocales);
+      onClose();
+    };
+
+    try {
+      const estaOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+
+      if (estaOffline) {
+        await guardarEnColaOffline();
+        return;
+      }
+
+      const res = await inspeccionesApi.createInspeccion(
+        payloadCaptura,
+        claveIdempotenciaRef.current,
+      );
 
       // Captura confirmada: la siguiente inspección usará una clave nueva
       claveIdempotenciaRef.current = nuevaClaveIdempotencia();
@@ -392,13 +568,35 @@ export function DefectoModalCaptura({
 
       toast.success(
         `Se registraron ${defectosCapturados.length} defectos del lote ${loteActivo.lote} exitosamente.`,
-        { title: 'Inspección Guardada' }
+        { title: 'Inspección Guardada' },
       );
 
       onSuccess(nuevosIds);
       onClose();
     } catch (err: any) {
-      const msg = err.message || 'Error al guardar la inspección en el servidor';
+      // Si el fallo es de red o un error 5xx del servidor, encolar en IndexedDB sin perder el trabajo del inspector
+      const esErrorDeClienteValidacion =
+        err instanceof ApiError && err.statusCode >= 400 && err.statusCode < 500;
+
+      if (!esErrorDeClienteValidacion && user) {
+        try {
+          await guardarEnColaOffline();
+          return;
+        } catch (offlineErr: any) {
+          const msgUsuario =
+            'No se pudo guardar la captura en este equipo. Verifique su sesión o intente nuevamente.';
+          const detalle =
+            offlineErr instanceof Error &&
+            !offlineErr.message.toLowerCase().includes('indexeddb')
+              ? offlineErr.message
+              : msgUsuario;
+          setErrorGuardado(detalle);
+          toast.error(msgUsuario, { title: 'La captura no se guardó' });
+          return;
+        }
+      }
+
+      const msg = err?.message || 'Error al guardar la inspección en el servidor';
       setErrorGuardado(msg);
       toast.error(msg, { title: 'Error al Guardar' });
     } finally {
@@ -425,11 +623,9 @@ export function DefectoModalCaptura({
 
       <ModalBody className="p-4 xl:p-6 flex-1 min-h-0 flex flex-col bg-app-surface overflow-hidden">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 xl:gap-6 items-stretch flex-1 min-h-0 overflow-hidden">
-          
           {/* LADO IZQUIERDO (COLUMNA 5 DE 12): FICHA TÉCNICA DEL LOTE */}
           <div className="lg:col-span-5 flex flex-col justify-between self-stretch bg-app-surface-muted/40 rounded-xl border border-border p-3 xl:p-5 gap-2.5 xl:gap-4 min-h-0 overflow-hidden">
             <div className="space-y-2 xl:space-y-4 flex-1 flex flex-col min-h-0 overflow-hidden">
-              
               {/* Fecha de Registro */}
               <div className="flex items-center justify-between border-b border-border-subtle pb-2 xl:pb-3 shrink-0">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
@@ -456,11 +652,7 @@ export function DefectoModalCaptura({
               />
 
               {/* FICHA TÉCNICA DEL LOTE: LOTE | LISTA | MODELO | PARES | HORMA | CLIENTE */}
-              <CapturaLoteFicha
-                lote={loteActivo}
-                error={errorLote}
-                cargando={cargandoLote}
-              />
+              <CapturaLoteFicha lote={loteActivo} error={errorLote} cargando={cargandoLote} />
             </div>
 
             {/* SELLO DE AUDITORÍA */}
@@ -476,7 +668,13 @@ export function DefectoModalCaptura({
 
           {/* LADO DERECHO (COLUMNA 7 DE 12): CAPTURA Y LISTA DE DEFECTOS */}
           <div className="lg:col-span-7 flex flex-col min-h-0 overflow-hidden bg-app-surface rounded-xl border border-border p-3 xl:p-5 gap-2.5 xl:gap-4">
-            
+            {avisoCatalogoOffline && (
+              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-800 flex items-center gap-2 shrink-0">
+                <Icon name="wifi_off" size="16px" className="text-amber-600 shrink-0" />
+                <span>{avisoCatalogoOffline}</span>
+              </div>
+            )}
+
             {/* Formulario de Captura de Defecto */}
             <CapturaDefectoForm
               loteActivo={!!loteActivo}
@@ -530,9 +728,7 @@ export function DefectoModalCaptura({
       {/* FOOTER DEL MODAL */}
       <ModalFooter className="flex items-center justify-between px-6 py-4 bg-app-surface-muted/60 border-t border-border-subtle">
         <span className="text-xs font-semibold text-text-secondary">
-          {loteActivo
-            ? ``
-            : 'Ingrese un lote de producción para habilitar el registro'}
+          {loteActivo ? `` : 'Ingrese un lote de producción para habilitar el registro'}
         </span>
 
         <div className="flex items-center gap-3">

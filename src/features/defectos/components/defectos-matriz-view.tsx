@@ -12,6 +12,10 @@ export interface DefectosMatrizViewProps {
   defectos: Defecto[];
   departamentos: Departamento[];
   loading: boolean;
+  error?: string | null;
+  sinConexion?: boolean;
+  mostrandoDatosLocales?: boolean;
+  onReintentar?: () => void;
   busqueda: string;
   setBusqueda: (val: string) => void;
   filtroClasificacion: string;
@@ -229,6 +233,10 @@ export function DefectosMatrizView({
   defectos,
   departamentos,
   loading,
+  error = null,
+  sinConexion = false,
+  mostrandoDatosLocales = false,
+  onReintentar,
   busqueda,
   setBusqueda,
   filtroClasificacion,
@@ -384,8 +392,60 @@ export function DefectosMatrizView({
               <TableRowsSkeleton columns={4 + etapasOrdenadas.length} rows={10} />
             ) : defectos.length === 0 ? (
               <tr>
-                <td colSpan={4 + etapasOrdenadas.length} className="py-12 text-center text-slate-400 italic">
-                  No se encontraron defectos registrados.
+                <td colSpan={4 + etapasOrdenadas.length} className="py-12 px-4 text-center">
+                  {sinConexion ? (
+                    <div className="flex flex-col items-center justify-center text-amber-900">
+                      <div className="h-11 w-11 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mb-2.5">
+                        <Icon name="wifi_off" size="22px" />
+                      </div>
+                      <p className="text-sm font-bold text-slate-900">
+                        Sin conexión con el servidor
+                      </p>
+                      <p className="text-xs text-slate-600 mt-1 max-w-md mx-auto">
+                        No se puede consultar el catálogo de defectos porque el servidor no responde y no hay datos locales guardados en este equipo.
+                      </p>
+                      {onReintentar && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={onReintentar}
+                          className="mt-3 text-xs font-semibold px-4 py-1.5 cursor-pointer"
+                        >
+                          <Icon name="refresh" size="14px" className="mr-1.5" />
+                          <span>Reintentar consulta</span>
+                        </Button>
+                      )}
+                    </div>
+                  ) : error ? (
+                    <div className="flex flex-col items-center justify-center text-rose-900">
+                      <div className="h-11 w-11 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center mb-2.5">
+                        <Icon name="error_outline" size="22px" />
+                      </div>
+                      <p className="text-sm font-bold text-slate-900">
+                        No se pudo consultar el catálogo de defectos
+                      </p>
+                      <p className="text-xs text-slate-600 mt-1 max-w-md mx-auto">
+                        {error}
+                      </p>
+                      {onReintentar && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={onReintentar}
+                          className="mt-3 text-xs font-semibold px-4 py-1.5 cursor-pointer"
+                        >
+                          <Icon name="refresh" size="14px" className="mr-1.5" />
+                          <span>Reintentar</span>
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-slate-400 italic">
+                      No se encontraron defectos registrados.
+                    </span>
+                  )}
                 </td>
               </tr>
             ) : (
@@ -512,8 +572,16 @@ export function DefectosMatrizView({
 
       {/* Footer con Ver Más y Contador */}
       <div className="p-3 border-t border-slate-200 bg-slate-50/60 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
-        <div>
-          Mostrando <strong>{defectos.length}</strong> de <strong>{totalItems}</strong> defectos
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span>
+            Mostrando <strong>{defectos.length}</strong> de <strong>{totalItems}</strong> defectos
+          </span>
+          {(sinConexion || mostrandoDatosLocales) && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium">
+              <Icon name="wifi_off" size="12px" />
+              <span>Mostrando catálogo guardado en este equipo</span>
+            </span>
+          )}
         </div>
 
         {puedeCargarMas && (

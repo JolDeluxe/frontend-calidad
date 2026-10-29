@@ -18,6 +18,10 @@ interface InspeccionesTablaProps {
   puedeCargarMas?: boolean;
   cargandoMas?: boolean;
   verEliminados?: boolean;
+  sinConexion?: boolean;
+  errorConsulta?: string | null;
+  mostrandoDatosLocales?: boolean;
+  onReintentar?: () => void;
   onCargarMas?: () => void;
   onVerDetalle?: (item: InspeccionFilaResponse) => void;
   onCancelar?: (item: InspeccionFilaResponse) => void;
@@ -121,7 +125,7 @@ function MenuAccionesInspeccion({
               </button>
             )}
 
-            {onCancelar && puedeEliminarPorAntiguedad && !verEliminados && (
+            {onCancelar && puedeEliminarPorAntiguedad && !verEliminados && !row.esLocalPendiente && (
               <>
                 <div className="border-t border-border my-1" />
                 <button
@@ -154,6 +158,10 @@ export function InspeccionesTabla({
   puedeCargarMas = false,
   cargandoMas = false,
   verEliminados = false,
+  sinConexion = false,
+  errorConsulta = null,
+  mostrandoDatosLocales = false,
+  onReintentar,
   onCargarMas,
   onVerDetalle,
   onCancelar,
@@ -201,13 +209,63 @@ export function InspeccionesTabla({
             </tr>
           </thead>
         </table>
-        <div className="flex flex-col items-center justify-center py-16 px-4 text-text-muted">
-          <Icon name="search_off" size="40px" className="mx-auto mb-2 opacity-50" />
-          <h4 className="text-sm font-semibold text-text-primary">No se encontraron defectos registrados</h4>
-          <p className="text-xs text-text-muted/80 mt-1 max-w-md mx-auto">
-            Intente con otro término de búsqueda o seleccione otro periodo (Hoy, Recientes o Histórico).
-          </p>
-        </div>
+        {sinConexion ? (
+          <div className="flex flex-col items-center justify-center py-14 px-4 text-center text-amber-800 bg-amber-50/40 rounded-b-xl">
+            <div className="h-12 w-12 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mb-3">
+              <Icon name="wifi_off" size="26px" />
+            </div>
+            <h4 className="text-sm font-bold text-slate-900">
+              Sin conexión con el servidor
+            </h4>
+            <p className="text-xs text-slate-600 mt-1 max-w-md mx-auto leading-relaxed">
+              No se pueden consultar los registros del servidor en este momento y no hay capturas locales guardadas en este equipo para los filtros seleccionados. Las nuevas capturas que registre se guardarán en este equipo.
+            </p>
+            {onReintentar && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onReintentar}
+                className="mt-4 text-xs font-semibold px-4 py-1.5 cursor-pointer"
+              >
+                <Icon name="refresh" size="15px" className="mr-1.5" />
+                <span>Reintentar consulta</span>
+              </Button>
+            )}
+          </div>
+        ) : errorConsulta ? (
+          <div className="flex flex-col items-center justify-center py-14 px-4 text-center text-rose-800 bg-rose-50/30 rounded-b-xl">
+            <div className="h-12 w-12 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center mb-3">
+              <Icon name="error_outline" size="26px" />
+            </div>
+            <h4 className="text-sm font-bold text-slate-900">
+              No se pudo completar la consulta
+            </h4>
+            <p className="text-xs text-slate-600 mt-1 max-w-md mx-auto leading-relaxed">
+              {errorConsulta}
+            </p>
+            {onReintentar && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onReintentar}
+                className="mt-4 text-xs font-semibold px-4 py-1.5 cursor-pointer"
+              >
+                <Icon name="refresh" size="15px" className="mr-1.5" />
+                <span>Reintentar</span>
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16 px-4 text-text-muted">
+            <Icon name="search_off" size="40px" className="mx-auto mb-2 opacity-50" />
+            <h4 className="text-sm font-semibold text-text-primary">No se encontraron defectos registrados</h4>
+            <p className="text-xs text-text-muted/80 mt-1 max-w-md mx-auto">
+              Intente con otro término de búsqueda o seleccione otro periodo (Hoy, Recientes o Histórico).
+            </p>
+          </div>
+        )}
       </div>
     );
   }
@@ -265,7 +323,33 @@ export function InspeccionesTabla({
                 >
                   {/* No */}
                   <td className="py-2 px-1 xl:px-2 text-center font-mono font-semibold text-slate-500">
-                    {idx + 1}
+                    {row.esLocalPendiente ? (
+                      <span
+                        className={`inline-flex items-center justify-center h-5 w-5 rounded-full ${
+                          row.estadoColaLocal === 'SINCRONIZANDO'
+                            ? 'bg-sky-100 text-sky-700'
+                            : row.estadoColaLocal === 'ERROR_REINTENTABLE'
+                            ? 'bg-orange-100 text-orange-700'
+                            : row.estadoColaLocal === 'REQUIERE_REVISION'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}
+                        title={
+                          row.estadoColaLocal === 'SINCRONIZANDO'
+                            ? 'Sincronizando con servidor...'
+                            : row.estadoColaLocal === 'ERROR_REINTENTABLE'
+                            ? `Reintento pendiente: ${row.ultimoErrorSync || 'Sin conexión al servidor'}`
+                            : 'Guardado localmente en esta estación (pendiente de sincronizar con MySQL)'
+                        }
+                      >
+                        <Icon
+                          name={row.estadoColaLocal === 'SINCRONIZANDO' ? 'sync' : 'cloud_upload'}
+                          size="12px"
+                        />
+                      </span>
+                    ) : (
+                      idx + 1
+                    )}
                   </td>
 
                   {/* Depto */}
@@ -376,10 +460,18 @@ export function InspeccionesTabla({
 
       {/* Footer: Contador y Botón "Ver más" */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-border bg-app-surface text-xs rounded-b-xl">
-        <span className="text-text-secondary">
-          Mostrando <strong className="text-text-primary font-bold">{items.length}</strong> de{' '}
-          <strong className="text-text-primary font-bold">{totalItems || items.length}</strong> defectos
-        </span>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="text-text-secondary">
+            Mostrando <strong className="text-text-primary font-bold">{items.length}</strong> de{' '}
+            <strong className="text-text-primary font-bold">{totalItems || items.length}</strong> defectos
+          </span>
+          {(sinConexion || mostrandoDatosLocales) && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium">
+              <Icon name="wifi_off" size="12px" />
+              <span>Mostrando datos guardados en este equipo</span>
+            </span>
+          )}
+        </div>
 
         {puedeCargarMas && onCargarMas && (
           <Button

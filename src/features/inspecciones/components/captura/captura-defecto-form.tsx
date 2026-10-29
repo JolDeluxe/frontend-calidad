@@ -13,7 +13,7 @@ export interface CapturaDefectoFormProps {
   setClaveDefecto: (val: string) => void;
   claveInputRef: RefObject<HTMLInputElement | null>;
   buscandoDefecto: boolean;
-  handleBuscarDefecto: (clave: string) => void;
+  handleBuscarDefecto: (clave: string) => Promise<Defecto | null>;
   defectoSeleccionado: Defecto | null;
   setDefectoSeleccionado: (d: Defecto | null) => void;
   catalogoDefectos: Defecto[];
@@ -26,7 +26,7 @@ export interface CapturaDefectoFormProps {
   handleModificarPares: (delta: number) => void;
   handleParesDirecto: (val: string) => void;
   maxParesPermitido: number;
-  handleAgregarDefecto: () => void;
+  handleAgregarDefecto: (defectoPersonalizado?: Defecto) => void;
   guardando: boolean;
   errorDefecto: string | null;
   setErrorDefecto: (err: string | null) => void;
@@ -85,10 +85,17 @@ export function CapturaDefectoForm({
                 setClaveDefecto(val);
                 setErrorDefecto(null);
               }}
-              onKeyDown={(e) => {
+              onKeyDown={async (e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
-                  handleBuscarDefecto(claveDefecto);
+                  if (defectoSeleccionado) {
+                    handleAgregarDefecto(defectoSeleccionado);
+                  } else {
+                    const encontrado = await handleBuscarDefecto(claveDefecto);
+                    if (encontrado) {
+                      handleAgregarDefecto(encontrado);
+                    }
+                  }
                 }
               }}
               disabled={guardando || !loteActivo}
@@ -146,86 +153,120 @@ export function CapturaDefectoForm({
                     placeholder="Buscar defecto o clave..."
                     value={filtroTextoDefecto}
                     onChange={(e) => setFiltroTextoDefecto(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const filtrados = catalogoDefectos
+                          .filter((d) => {
+                            if (!filtroTextoDefecto.trim()) return true;
+                            const q = filtroTextoDefecto.toLowerCase();
+                            return String(d.clave).includes(q) || d.defecto.toLowerCase().includes(q);
+                          })
+                          .sort((a, b) => {
+                            if (departamentoAuditorId) {
+                              const aEsMismo = a.departamentoId === departamentoAuditorId ? 1 : 0;
+                              const bEsMismo = b.departamentoId === departamentoAuditorId ? 1 : 0;
+                              if (aEsMismo !== bEsMismo) return bEsMismo - aEsMismo;
+                            }
+                            return a.clave - b.clave;
+                          });
+
+                        if (filtrados.length > 0) {
+                          const primerDefecto = filtrados[0];
+                          setDefectoSeleccionado(primerDefecto);
+                          setClaveDefecto(String(primerDefecto.clave));
+                          setSelectorAbierto(false);
+                          setFiltroTextoDefecto('');
+                          setErrorDefecto(null);
+                        }
+                      }
+                    }}
                     autoFocus
                     className="w-full h-11 pl-9 pr-3 text-sm border border-border rounded-xl bg-app-surface-muted text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
                   />
                 </div>
                 <div className="overflow-y-auto flex-1 divide-y divide-border-subtle custom-scrollbar">
-                  {catalogoDefectos
-                    .filter((d) => {
-                      if (!filtroTextoDefecto.trim()) return true;
-                      const q = filtroTextoDefecto.toLowerCase();
-                      return (
-                        String(d.clave).includes(q) ||
-                        d.defecto.toLowerCase().includes(q)
-                      );
-                    })
-                    .sort((a, b) => {
-                      // Priorizar primero los defectos que pertenecen al departamento auditor actual
-                      if (departamentoAuditorId) {
-                        const aEsMismoDepto = a.departamentoId === departamentoAuditorId ? 1 : 0;
-                        const bEsMismoDepto = b.departamentoId === departamentoAuditorId ? 1 : 0;
-                        if (aEsMismoDepto !== bEsMismoDepto) {
-                          return bEsMismoDepto - aEsMismoDepto;
+                  {catalogoDefectos.length === 0 ? (
+                    <div className="py-8 px-4 text-center text-xs text-text-muted">
+                      No hay catálogo local de defectos disponible en este equipo. Reconecte al servidor para descargarlo.
+                    </div>
+                  ) : (
+                    catalogoDefectos
+                      .filter((d) => {
+                        if (!filtroTextoDefecto.trim()) return true;
+                        const q = filtroTextoDefecto.toLowerCase();
+                        return (
+                          String(d.clave).includes(q) ||
+                          d.defecto.toLowerCase().includes(q)
+                        );
+                      })
+                      .sort((a, b) => {
+                        // Priorizar primero los defectos que pertenecen al departamento auditor actual
+                        if (departamentoAuditorId) {
+                          const aEsMismoDepto = a.departamentoId === departamentoAuditorId ? 1 : 0;
+                          const bEsMismoDepto = b.departamentoId === departamentoAuditorId ? 1 : 0;
+                          if (aEsMismoDepto !== bEsMismoDepto) {
+                            return bEsMismoDepto - aEsMismoDepto;
+                          }
                         }
-                      }
-                      return a.clave - b.clave;
-                    })
-                    .map((d) => {
-                      const esDeptoExterno =
-                        departamentoAuditorId && d.departamentoId && d.departamentoId !== departamentoAuditorId;
-                      const nombreDepto = d.departamento?.nombre || d.departamento?.codigo;
+                        return a.clave - b.clave;
+                      })
+                      .map((d) => {
+                        const esDeptoExterno =
+                          departamentoAuditorId && d.departamentoId && d.departamentoId !== departamentoAuditorId;
+                        const nombreDepto = d.departamento?.nombre || d.departamento?.codigo;
 
-                      return (
-                        <div key={d.id} className="group relative w-full">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDefectoSeleccionado(d);
-                              setClaveDefecto(String(d.clave));
-                              setSelectorAbierto(false);
-                              setFiltroTextoDefecto('');
-                              setErrorDefecto(null);
-                            }}
-                            className={`w-full min-h-[44px] p-2.5 text-left flex items-center justify-between gap-3 text-xs cursor-pointer touch-manipulation transition-colors rounded-lg ${
-                              esDeptoExterno
-                                ? 'bg-amber-50/70 dark:bg-amber-950/20 hover:bg-amber-100/70 dark:hover:bg-amber-900/30'
-                                : 'hover:bg-app-surface-muted active:bg-brand-primary/10'
-                            } ${defectoSeleccionado?.id === d.id ? 'ring-2 ring-brand-primary/30 font-bold' : ''}`}
-                          >
-                            <div className="flex items-center gap-1.5 truncate min-w-0 flex-1">
-                              <strong className="font-mono text-brand-primary shrink-0">{d.clave} —</strong>
-                              <span className="truncate text-text-primary">{d.defecto}</span>
-                            </div>
+                        return (
+                          <div key={d.id} className="group relative w-full">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDefectoSeleccionado(d);
+                                setClaveDefecto(String(d.clave));
+                                setSelectorAbierto(false);
+                                setFiltroTextoDefecto('');
+                                setErrorDefecto(null);
+                              }}
+                              className={`w-full min-h-[44px] p-2.5 text-left flex items-center justify-between gap-3 text-xs cursor-pointer touch-manipulation transition-colors rounded-lg ${
+                                esDeptoExterno
+                                  ? 'bg-amber-50/70 dark:bg-amber-950/20 hover:bg-amber-100/70 dark:hover:bg-amber-900/30'
+                                  : 'hover:bg-app-surface-muted active:bg-brand-primary/10'
+                              } ${defectoSeleccionado?.id === d.id ? 'ring-2 ring-brand-primary/30 font-bold' : ''}`}
+                            >
+                              <div className="flex items-center gap-1.5 truncate min-w-0 flex-1">
+                                <strong className="font-mono text-brand-primary shrink-0">{d.clave} —</strong>
+                                <span className="truncate text-text-primary">{d.defecto}</span>
+                              </div>
 
-                            {/* Columna / punto fijo a la derecha para el departamento cuando es externo */}
-                            <div className="shrink-0 w-24 text-right">
-                              {esDeptoExterno && nombreDepto ? (
-                                <span className="text-[11px] font-bold text-amber-800 dark:text-amber-300 truncate block">
-                                  {nombreDepto}
-                                </span>
-                              ) : (
-                                <span className="text-[11px] text-text-muted/40 font-mono block">
-                                  —
-                                </span>
-                              )}
-                            </div>
-                          </button>
+                              {/* Columna / punto fijo a la derecha para el departamento cuando es externo */}
+                              <div className="shrink-0 w-24 text-right">
+                                {esDeptoExterno && nombreDepto ? (
+                                  <span className="text-[11px] font-bold text-amber-800 dark:text-amber-300 truncate block">
+                                    {nombreDepto}
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px] text-text-muted/40 font-mono block">
+                                    —
+                                  </span>
+                                )}
+                              </div>
+                            </button>
 
-                          {/* Tooltip flotante enriquecido con retardo de 4s para no interferir con la navegación */}
-                          <div className="absolute left-2 bottom-full mb-1 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 delay-[2000ms] flex flex-col z-50">
-                            <div className="bg-slate-900/95 text-white text-[11px] font-medium py-1 px-2.5 rounded-lg shadow-xl max-w-sm whitespace-normal leading-tight backdrop-blur-xs">
-                              <span className="font-mono text-brand-secondary font-bold mr-1">{d.clave}</span>
-                              {d.defecto}
-                              {esDeptoExterno && nombreDepto && (
-                                <span className="text-amber-300 ml-1 font-semibold">({nombreDepto})</span>
-                              )}
+                            {/* Tooltip flotante enriquecido con retardo de 4s para no interferir con la navegación */}
+                            <div className="absolute left-2 bottom-full mb-1 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 delay-[2000ms] flex flex-col z-50">
+                              <div className="bg-slate-900/95 text-white text-[11px] font-medium py-1 px-2.5 rounded-lg shadow-xl max-w-sm whitespace-normal leading-tight backdrop-blur-xs">
+                                <span className="font-mono text-brand-secondary font-bold mr-1">{d.clave}</span>
+                                {d.defecto}
+                                {esDeptoExterno && nombreDepto && (
+                                  <span className="text-amber-300 ml-1 font-semibold">({nombreDepto})</span>
+                                )}
+                              </div>
+                              <div className="w-2 h-1 bg-slate-900/95 rotate-45 ml-4 -mt-0.5" />
                             </div>
-                            <div className="w-2 h-1 bg-slate-900/95 rotate-45 ml-4 -mt-0.5" />
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })
+                  )}
                 </div>
               </div>
             )}
@@ -281,7 +322,7 @@ export function CapturaDefectoForm({
           </Label>
           <button
             type="button"
-            onClick={handleAgregarDefecto}
+            onClick={() => handleAgregarDefecto()}
             disabled={guardando || !defectoSeleccionado || !loteActivo}
             className="w-10 xl:w-12 h-10 xl:h-12 flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl shadow-md font-bold text-xl xl:text-2xl transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation select-none ring-2 ring-emerald-600/20"
             title="Agregar defecto a la lista"

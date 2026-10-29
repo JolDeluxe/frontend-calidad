@@ -52,6 +52,20 @@ export const inspeccionesApi = {
   },
 
   /**
+   * Obtiene las métricas generales del Dashboard de Inicio para todos los usuarios.
+   */
+  getDashboardMetricas: async (): Promise<{
+    contadoresDeptoHoy: Record<number, { pares: number; incidencias: number }>;
+    topSemanal: Record<string, Array<{ clave: number; defecto: string; defectos: number }>>;
+  }> => {
+    const res = await httpClient.get<ApiResponse<{
+      contadoresDeptoHoy: Record<number, { pares: number; incidencias: number }>;
+      topSemanal: Record<string, Array<{ clave: number; defecto: string; defectos: number }>>;
+    }>>('/inspecciones/dashboard-metricas');
+    return res.data || { contadoresDeptoHoy: {}, topSemanal: {} };
+  },
+
+  /**
    * Consulta el listado de filas de defectos de inspección del departamento (HOY, ULTIMOS, TODOS).
    */
   getFilasInspeccion: async (params?: {
@@ -66,6 +80,8 @@ export const inspeccionesApi = {
     inspectorId?: number;
     mes?: number;
     anio?: number;
+    fechaDesde?: string;
+    fechaHasta?: string;
     soloEliminados?: boolean;
     page?: number;
     limit?: number;
@@ -82,6 +98,8 @@ export const inspeccionesApi = {
     if (params?.inspectorId) query.set('inspectorId', params.inspectorId.toString());
     if (params?.mes) query.set('mes', params.mes.toString());
     if (params?.anio) query.set('anio', params.anio.toString());
+    if (params?.fechaDesde) query.set('fechaDesde', params.fechaDesde);
+    if (params?.fechaHasta) query.set('fechaHasta', params.fechaHasta);
     if (params?.soloEliminados !== undefined) query.set('soloEliminados', String(params.soloEliminados));
     if (params?.page) query.set('page', params.page.toString());
     if (params?.limit) query.set('limit', params.limit.toString());

@@ -99,6 +99,15 @@ export function EstructuraOrganizacionalTree({
                           d.lineasAsociadas?.some((asoc) => asoc.lineaId === linea.id && asoc.activo)
                         );
 
+                        const esLineaProtegida = ['BOTA', 'ACCESORIOS'].includes((linea.codigo || '').toUpperCase());
+                        const tieneDeptos = deptosLinea.length > 0;
+                        const puedeEliminar = !esLineaProtegida && !tieneDeptos;
+                        const motivoNoEliminar = esLineaProtegida
+                          ? 'Línea base maestra protegida del sistema'
+                          : tieneDeptos
+                          ? `No se puede eliminar: tiene ${deptosLinea.length} departamento(s) asignado(s)`
+                          : 'Eliminar línea';
+
                         return (
                           <div
                             key={linea.id}
@@ -122,9 +131,14 @@ export function EstructuraOrganizacionalTree({
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => onDeleteLinea(linea)}
-                                  title="Eliminar línea"
-                                  className="p-1.5 rounded-md text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                  onClick={() => puedeEliminar && onDeleteLinea(linea)}
+                                  disabled={!puedeEliminar}
+                                  title={motivoNoEliminar}
+                                  className={`p-1.5 rounded-md transition-colors ${
+                                    puedeEliminar
+                                      ? 'text-rose-600 hover:bg-rose-50 cursor-pointer'
+                                      : 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-50'
+                                  }`}
                                 >
                                   <Icon name="delete" size="15px" />
                                 </button>

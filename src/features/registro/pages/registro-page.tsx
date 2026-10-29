@@ -154,7 +154,7 @@ export function RegistroPage() {
         const resp = await inspeccionesApi.getFilasInspeccion({
           periodo,
           busqueda: busquedaParam || undefined,
-          departamentoId: deptoSeleccionado ? deptoSeleccionado.id : undefined,
+          departamentoResponsableId: deptoSeleccionado ? deptoSeleccionado.id : undefined,
           lineaTexto: lineaParam || undefined,
           inspectorId: inspectorParam ? Number(inspectorParam) : undefined,
           mes: periodo === 'todos' && mesParam ? Number(mesParam) : undefined,
@@ -280,7 +280,7 @@ export function RegistroPage() {
     const res = await inspeccionesApi.getFilasInspeccion({
       periodo: cfg.periodo === 'hoy' ? 'hoy' : 'todos',
       busqueda: busquedaParam || undefined,
-      departamentoId: cfg.departamentoId || undefined,
+      departamentoResponsableId: cfg.departamentoId || undefined,
       lineaTexto: cfg.lineaTexto || undefined,
       inspectorId: cfg.inspectorId || undefined,
       mes: cfg.periodo === 'mes' ? Number(cfg.mes) : undefined,
