@@ -51,14 +51,14 @@ export function CapturaLoteSelector({
                 onClick={onAbrirTeclado}
                 title={tecladoActivo ? 'Ocultar teclado táctil' : 'Abrir teclado táctil'}
                 className={cn(
-                  'px-2 py-0.5 rounded-md text-[11px] font-bold flex items-center gap-1 border transition-colors cursor-pointer',
+                  'px-3 py-1 rounded-lg text-xs font-black flex items-center gap-1.5 border shadow-sm transition-all cursor-pointer active:scale-95',
                   tecladoActivo
-                    ? 'bg-marca-primario text-white border-marca-primario shadow-2xs'
-                    : 'bg-app-surface text-slate-500 border-slate-300 hover:text-marca-primario hover:border-marca-primario'
+                    ? 'bg-marca-primario text-white border-marca-primario ring-2 ring-marca-primario/30'
+                    : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 hover:border-amber-400'
                 )}
               >
-                <Icon name="dialpad" size="14px" />
-                <span>Teclado</span>
+                <Icon name="dialpad" size="16px" className={tecladoActivo ? 'text-white' : 'text-amber-700'} />
+                <span>Teclado Touch</span>
               </button>
             )}
           </div>

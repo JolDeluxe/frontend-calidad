@@ -72,7 +72,7 @@ export function CapturaDefectoForm({
     >
       <div className="flex items-end gap-2 xl:gap-3 w-full">
         {/* 1. CLAVE DEFECTO */}
-        <div className="w-18 xl:w-24 shrink-0">
+        <div className="w-20 xl:w-28 shrink-0">
           <div className="flex items-center justify-between mb-1.5">
             <Label className="block text-xs font-bold uppercase text-text-secondary truncate">
               Clave *
@@ -81,15 +81,16 @@ export function CapturaDefectoForm({
               <button
                 type="button"
                 onClick={onAbrirTeclado}
-                title={tecladoActivo ? 'Ocultar teclado' : 'Abrir teclado táctil'}
+                title={tecladoActivo ? 'Ocultar teclado táctil' : 'Abrir teclado táctil'}
                 className={cn(
-                  'p-0.5 rounded text-[10px] border transition-colors cursor-pointer',
+                  'px-2 py-0.5 rounded-md text-[11px] font-black border shadow-2xs transition-all cursor-pointer active:scale-95 flex items-center gap-1',
                   tecladoActivo
-                    ? 'bg-marca-primario text-white border-marca-primario shadow-2xs'
-                    : 'bg-app-surface text-slate-500 border-slate-300 hover:text-marca-primario'
+                    ? 'bg-marca-primario text-white border-marca-primario ring-2 ring-marca-primario/30'
+                    : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 hover:border-amber-400'
                 )}
               >
-                <Icon name="dialpad" size="13px" />
+                <Icon name="dialpad" size="14px" className={tecladoActivo ? 'text-white' : 'text-amber-700'} />
+                <span className="hidden sm:inline">Touch</span>
               </button>
             )}
           </div>

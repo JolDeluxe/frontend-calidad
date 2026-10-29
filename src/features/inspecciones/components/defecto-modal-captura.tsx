@@ -233,6 +233,9 @@ export function DefectoModalCaptura({
         if (!hallado) {
           setLoteActivo(null);
           setErrorLote(`El lote '${cod}' no se encuentra en el catálogo local de lotes activos.`);
+        } else {
+          // Si lo encuentra y el teclado estaba en modo lote, cerrarlo automáticamente
+          setTecladoTarget((prev) => (prev === 'lote' ? null : prev));
         }
         return;
       }
@@ -240,6 +243,8 @@ export function DefectoModalCaptura({
       const lote = await inspeccionesApi.getLoteByCodigo(cod);
       setLoteActivo(lote);
       setErrorLote(null);
+      // Cerrar teclado numérico automáticamente si encontró el lote
+      setTecladoTarget((prev) => (prev === 'lote' ? null : prev));
       setTimeout(() => {
         claveInputRef.current?.focus();
       }, 100);
@@ -258,6 +263,9 @@ export function DefectoModalCaptura({
         setErrorLote(
           `Sin conexión al servidor y el lote '${cod}' no está en el catálogo local.`,
         );
+      } else {
+        // Encontrado localmente: cerrar teclado
+        setTecladoTarget((prev) => (prev === 'lote' ? null : prev));
       }
     } finally {
       setCargandoLote(false);
@@ -474,6 +482,9 @@ export function DefectoModalCaptura({
     setDefectoSeleccionado(null);
     setParesDefecto(1);
     setErrorDefecto(null);
+
+    // Si se agregó con éxito el defecto, cerrar el teclado numérico de clave
+    setTecladoTarget((prev) => (prev === 'clave' ? null : prev));
 
     setTimeout(() => {
       claveInputRef.current?.focus();
