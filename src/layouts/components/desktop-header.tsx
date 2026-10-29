@@ -47,7 +47,7 @@ export function DesktopHeader() {
         </div>
 
         <div className="flex items-center justify-end gap-2 sm:gap-3">
-          <button
+          {/* <button
             type="button"
             onClick={() => window.open('/proyeccion', '_blank', 'noopener,noreferrer')}
             title="Abrir Modo Proyección (Kiosco / TV) en pestaña dedicada"
@@ -55,7 +55,7 @@ export function DesktopHeader() {
           >
             <Icon name="tv" size="18px" className="text-slate-950" />
             <span className="hidden md:inline">Proyectar</span>
-          </button>
+          </button> */}
 
           <button
             type="button"
