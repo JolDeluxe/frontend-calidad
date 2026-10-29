@@ -9,123 +9,155 @@ export const ProyeccionResumenGeneral: React.FC<ProyeccionResumenGeneralProps> =
   const { semana, anio, totales, departamentos } = data;
 
   return (
-    <div className="flex flex-col h-full w-full p-6 sm:p-10 select-none animate-fade-in justify-between">
-      {/* 1. HEADER SUPERIOR */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-5 mb-6">
-        <div>
-          <div className="flex items-center gap-3">
-            <span className="px-3 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/40 font-mono text-sm uppercase tracking-widest font-black rounded-md">
-              Kiosco de Planta
-            </span>
-            <span className="text-slate-400 font-mono text-sm tracking-wider">
-              Semana {semana} • {anio}
-            </span>
+    <div className="flex flex-col h-full w-full p-4 sm:p-6 lg:p-8 select-none justify-between gap-5 font-sans">
+      {/* 1. HEADER INSTITUCIONAL CUADRA */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-md border border-slate-200 shadow-xs">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-marca-primario/10 rounded-sm text-marca-primario">
+            <span className="material-symbols-rounded text-3xl">tv</span>
           </div>
-          <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-white mt-1">
-            RESUMEN GENERAL DE CALIDAD
-          </h1>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-codigo text-xs bg-marca-acento text-white px-2 py-0.5 rounded-sm font-bold uppercase tracking-wider">
+                Modo Proyección
+              </span>
+              <span className="text-xs font-bold text-slate-500 font-codigo uppercase tracking-wider">
+                Semana {semana} • {anio}
+              </span>
+            </div>
+            <h1 className="fuente-titulos text-3xl sm:text-4xl text-marca-primario tracking-wide uppercase mt-0.5">
+              Resumen General de Calidad
+            </h1>
+          </div>
         </div>
-        <div className="text-right flex flex-col items-end">
+
+        <div className="flex items-center gap-4 justify-self-end">
           <img
             src="/img/01_Cuadra.webp"
             alt="Cuadra"
-            className="h-10 sm:h-12 w-auto object-contain brightness-0 invert opacity-90 mb-1"
+            className="h-10 sm:h-12 w-auto object-contain"
           />
-          <span className="text-xs font-mono text-slate-500 uppercase tracking-widest">
-            Actualización en vivo
-          </span>
         </div>
       </div>
 
-      {/* 2. TARJETAS DE KPIS GLOBALES */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
-        <div className="bg-slate-900/80 border border-slate-800 p-6 rounded-2xl flex flex-col shadow-lg">
-          <span className="text-xs uppercase font-bold text-slate-400 tracking-wider">
-            Total Pares con Defecto
-          </span>
-          <span className="text-4xl sm:text-6xl font-black font-mono text-rose-500 mt-2">
-            {totales.paresDefecto.toLocaleString()}
-          </span>
-          <span className="text-xs text-slate-500 mt-1">
-            Detectados en toda la planta
-          </span>
+      {/* 2. TARJETAS DE KPIS GLOBALES CON IDENTIDAD CUADRA */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        {/* Pares con Defecto */}
+        <div className="bg-white border border-slate-200 rounded-md p-5 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs uppercase font-bold tracking-wider text-slate-500">
+              Total Pares con Defecto
+            </span>
+            <div className="p-1.5 bg-rose-50 rounded-sm text-rose-600">
+              <span className="material-symbols-rounded text-xl">deployed_code_alert</span>
+            </div>
+          </div>
+          <div className="mt-3">
+            <span className="font-codigo text-4xl sm:text-5xl font-black text-rose-600">
+              {totales.paresDefecto.toLocaleString()}
+            </span>
+            <p className="text-xs text-slate-400 mt-1">
+              Incidencias detectadas en la planta
+            </p>
+          </div>
         </div>
 
-        <div className="bg-slate-900/80 border border-slate-800 p-6 rounded-2xl flex flex-col shadow-lg">
-          <span className="text-xs uppercase font-bold text-slate-400 tracking-wider">
-            Producción Lograda Acumulada
-          </span>
-          <span className="text-4xl sm:text-6xl font-black font-mono text-blue-400 mt-2">
-            {totales.produccionLograda.toLocaleString()}
-          </span>
-          <span className="text-xs text-slate-500 mt-1">
-            Pares procesados en la semana
-          </span>
+        {/* Producción Lograda */}
+        <div className="bg-white border border-slate-200 rounded-md p-5 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs uppercase font-bold tracking-wider text-slate-500">
+              Producción Lograda Acumulada
+            </span>
+            <div className="p-1.5 bg-sky-50 rounded-sm text-sky-700">
+              <span className="material-symbols-rounded text-xl">precision_manufacturing</span>
+            </div>
+          </div>
+          <div className="mt-3">
+            <span className="font-codigo text-4xl sm:text-5xl font-black text-marca-primario">
+              {totales.produccionLograda.toLocaleString()}
+            </span>
+            <p className="text-xs text-slate-400 mt-1">
+              Pares inspeccionados en la semana
+            </p>
+          </div>
         </div>
 
-        <div className="bg-slate-900/80 border border-slate-800 p-6 rounded-2xl flex flex-col shadow-lg">
-          <span className="text-xs uppercase font-bold text-slate-400 tracking-wider">
-            Índice de Defectos Planta
-          </span>
-          <span
-            className={`text-4xl sm:text-6xl font-black font-mono mt-2 ${
-              totales.porcentajeDefecto > 5 ? 'text-amber-400' : 'text-emerald-400'
-            }`}
-          >
-            {totales.porcentajeDefecto}%
-          </span>
-          <span className="text-xs text-slate-500 mt-1">
-            Tasa global de defectos
-          </span>
+        {/* Índice de Defectos Global */}
+        <div className="bg-white border border-slate-200 rounded-md p-5 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs uppercase font-bold tracking-wider text-slate-500">
+              Índice Global de Defectos
+            </span>
+            <div className="p-1.5 bg-amber-50 rounded-sm text-amber-700">
+              <span className="material-symbols-rounded text-xl">analytics</span>
+            </div>
+          </div>
+          <div className="mt-3">
+            <span
+              className={`font-codigo text-4xl sm:text-5xl font-black ${
+                totales.porcentajeDefecto > 5 ? 'text-amber-600' : 'text-emerald-600'
+              }`}
+            >
+              {totales.porcentajeDefecto}%
+            </span>
+            <p className="text-xs text-slate-400 mt-1">
+              Tasa porcentual de incidencia
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* 3. TABLA CONSOLIDADA DE DEPARTAMENTOS */}
-      <div className="flex-1 bg-slate-900/70 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
-        <div className="overflow-x-auto flex-1">
-          <table className="w-full h-full text-left border-collapse">
+      {/* 3. TABLA CONSOLIDADA IDÉNTICA A INSPECCIONES / REGISTRO */}
+      <div className="flex-1 bg-white border border-slate-200 rounded-md shadow-xs overflow-hidden flex flex-col min-h-0">
+        <div className="overflow-x-auto flex-1 custom-scrollbar">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-slate-800 bg-slate-950/70 text-slate-400 text-xs uppercase tracking-wider font-bold">
-                <th className="py-4 px-6">Departamento</th>
-                <th className="py-4 px-6 text-right">Pares con Defecto</th>
-                <th className="py-4 px-6 text-right">Producción Lograda</th>
-                <th className="py-4 px-6 text-right">Índice (%)</th>
-                <th className="py-4 px-6 w-1/3">Impacto Visual</th>
+              <tr className="bg-slate-100 border-b border-slate-200 text-slate-600 uppercase tracking-wider font-semibold text-xs select-none">
+                <th className="py-3 px-5">Departamento</th>
+                <th className="py-3 px-5 text-right">Pares con Defecto</th>
+                <th className="py-3 px-5 text-right">Producción Lograda</th>
+                <th className="py-3 px-5 text-right">Índice (%)</th>
+                <th className="py-3 px-6 w-1/3">Impacto en Calidad</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 font-mono text-sm sm:text-base">
-              {departamentos.map((dept) => {
+            <tbody className="divide-y divide-slate-100 font-codigo text-sm sm:text-base">
+              {departamentos.map((dept, idx) => {
                 const maxDef = Math.max(...departamentos.map((d) => d.paresDefecto), 1);
                 const barWidth = Math.min(100, (dept.paresDefecto / maxDef) * 100);
 
                 return (
-                  <tr key={dept.id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3.5 px-6 font-sans font-bold text-white text-base sm:text-lg">
+                  <tr
+                    key={dept.id}
+                    className={`transition-colors ${
+                      idx % 2 === 0 ? 'bg-white' : 'bg-cuadra-arena/30'
+                    } hover:bg-cuadra-arena/60`}
+                  >
+                    <td className="py-3 px-5 font-sans font-bold text-marca-primario text-base sm:text-lg">
                       {dept.nombre}
                     </td>
-                    <td className="py-3.5 px-6 text-right font-black text-rose-400 text-lg">
+                    <td className="py-3 px-5 text-right font-black text-rose-600 text-lg">
                       {dept.paresDefecto.toLocaleString()}
                     </td>
-                    <td className="py-3.5 px-6 text-right text-slate-300">
+                    <td className="py-3 px-5 text-right text-slate-700">
                       {dept.produccionLograda.toLocaleString()}
                     </td>
-                    <td className="py-3.5 px-6 text-right font-black">
+                    <td className="py-3 px-5 text-right font-black">
                       <span
                         className={
                           dept.porcentajeDefecto > 5
-                            ? 'text-amber-400'
+                            ? 'text-amber-600'
                             : dept.porcentajeDefecto > 0
-                            ? 'text-emerald-400'
-                            : 'text-slate-500'
+                            ? 'text-emerald-600'
+                            : 'text-slate-400'
                         }
                       >
                         {dept.porcentajeDefecto}%
                       </span>
                     </td>
-                    <td className="py-3.5 px-6">
-                      <div className="w-full bg-slate-800/80 rounded-full h-3.5 overflow-hidden p-0.5">
+                    <td className="py-3 px-6">
+                      <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden p-0.5">
                         <div
-                          className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500 transition-all duration-500"
+                          className="h-full rounded-full bg-marca-primario transition-all duration-500"
                           style={{ width: `${barWidth}%` }}
                         />
                       </div>
