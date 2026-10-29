@@ -387,9 +387,11 @@ export function InspeccionesPage() {
       const perfilLocal = terminal ?? (await terminalStorage.getProfileFromIdb());
       const deptoFiltroId = deptoAuditor?.id ?? perfilLocal?.departamentoId;
 
-      const persisted = leerCacheFilasServidor(deptoFiltroId, verEliminados);
-      if (persisted.length > 0) {
-        cachedServerItemsRef.current = persisted;
+      if (!append) {
+        const persisted = leerCacheFilasServidor(deptoFiltroId, verEliminados);
+        if (persisted.length > 0) {
+          cachedServerItemsRef.current = persisted;
+        }
       }
 
       const filasLocales = await inspeccionesOfflineService.obtenerFilasEnColaLocal({
