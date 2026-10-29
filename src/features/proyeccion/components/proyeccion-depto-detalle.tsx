@@ -16,15 +16,16 @@ interface ProyeccionDeptoDetalleProps {
   totalDepartamentos: number;
 }
 
-// Paleta institucional Cuadra para áreas auditoras
+// Paleta visual contrastada y accesible para distinguir claramente los departamentos auditores
 const PALETA_AREAS = [
-  '#482b2c', // marca-primario
-  '#846768', // marca-secundario
-  '#66494a', // marca-acento
-  '#0284c7', // sky-600
-  '#d97706', // amber-600
-  '#059669', // emerald-600
-  '#7c3aed', // purple-600
+  '#2563eb', // Azul brillante (Blue-600)
+  '#16a34a', // Verde esmeralda (Green-600)
+  '#ea580c', // Naranja encendido (Orange-600)
+  '#9333ea', // Morado vívido (Purple-600)
+  '#0891b2', // Cian profundo (Cyan-600)
+  '#e11d48', // Carmesí / Rosa fuerte (Rose-600)
+  '#d97706', // Ámbar / Dorado (Amber-600)
+  '#4f46e5', // Índigo vibrante (Indigo-600)
 ];
 
 export const ProyeccionDeptoDetalle: React.FC<ProyeccionDeptoDetalleProps> = ({
@@ -232,15 +233,15 @@ export const ProyeccionDeptoDetalle: React.FC<ProyeccionDeptoDetalleProps> = ({
                       type="category"
                       axisLine={false}
                       tickLine={false}
-                      tick={{ fill: '#482b2c', fontSize: 11, fontFamily: 'monospace', fontWeight: 600 }}
+                      tick={{ fill: '#334155', fontSize: 11, fontFamily: 'monospace', fontWeight: 600 }}
                       width={170}
                     />
                     <Tooltip
                       contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: 4, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                       labelStyle={{ color: '#482b2c', fontWeight: 'bold' }}
                     />
-                    <Bar dataKey="pares" fill="#846768" radius={[0, 4, 4, 0]}>
-                      <LabelList dataKey="pares" position="right" fill="#482b2c" fontSize={11} fontWeight="bold" />
+                    <Bar dataKey="pares" fill="#0284c7" radius={[0, 4, 4, 0]}>
+                      <LabelList dataKey="pares" position="right" fill="#0369a1" fontSize={12} fontWeight="bold" />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -284,7 +285,7 @@ export const ProyeccionDeptoDetalle: React.FC<ProyeccionDeptoDetalleProps> = ({
                       type="category"
                       axisLine={false}
                       tickLine={false}
-                      tick={{ fill: '#482b2c', fontSize: 11, fontFamily: 'monospace', fontWeight: 600 }}
+                      tick={{ fill: '#334155', fontSize: 11, fontFamily: 'monospace', fontWeight: 600 }}
                       width={170}
                     />
                     <Tooltip
