@@ -21,6 +21,7 @@ import {
   CapturaLoteFicha,
   CapturaDefectoForm,
   CapturaDefectosTabla,
+  FloatingNumpad,
 } from './captura';
 
 /** Clave única por intento de captura; el backend la usa para no duplicar inspecciones en reintentos. */
@@ -102,6 +103,9 @@ export function DefectoModalCaptura({
 
   const loteInputRef = useRef<HTMLInputElement>(null);
   const claveInputRef = useRef<HTMLInputElement>(null);
+
+  // Control del teclado numérico flotante para pantallas táctiles
+  const [tecladoTarget, setTecladoTarget] = useState<'lote' | 'clave' | null>(null);
 
   // Cargar catálogo de defectos del departamento auditor (con fallback automático a IndexedDB en modo offline)
   const [avisoCatalogoOffline, setAvisoCatalogoOffline] = useState<string | null>(null);
@@ -649,6 +653,10 @@ export function DefectoModalCaptura({
                 totalLineasDepto={totalLineasDepto}
                 lineaCodigo={lineaCodigo}
                 setLineaCodigo={setLineaCodigo}
+                onAbrirTeclado={() =>
+                  setTecladoTarget((prev) => (prev === 'lote' ? null : 'lote'))
+                }
+                tecladoActivo={tecladoTarget === 'lote'}
               />
 
               {/* FICHA TÉCNICA DEL LOTE: LOTE | LISTA | MODELO | PARES | HORMA | CLIENTE */}
@@ -700,6 +708,10 @@ export function DefectoModalCaptura({
               guardando={guardando}
               errorDefecto={errorDefecto}
               setErrorDefecto={setErrorDefecto}
+              onAbrirTeclado={() =>
+                setTecladoTarget((prev) => (prev === 'clave' ? null : 'clave'))
+              }
+              tecladoActivo={tecladoTarget === 'clave'}
             />
 
             {/* Tabla de Defectos Capturados */}
@@ -765,6 +777,60 @@ export function DefectoModalCaptura({
           </Button>
         </div>
       </ModalFooter>
+
+      {/* TECLADO NUMÉRICO FLOTANTE Y ARRASTRABLE PARA PANTALLAS TÁCTILES */}
+      <FloatingNumpad
+        isOpen={Boolean(tecladoTarget)}
+        onClose={() => setTecladoTarget(null)}
+        title={tecladoTarget === 'lote' ? 'Teclado: Número de Lote' : 'Teclado: Clave de Defecto'}
+        targetInputName={
+          tecladoTarget === 'lote'
+            ? `Lote actual: [ ${loteInput || 'vacío'} ]`
+            : `Clave actual: [ ${claveDefecto || 'vacío'} ]`
+        }
+        submitLabel={tecladoTarget === 'lote' ? 'Buscar Lote' : 'Agregar Defecto'}
+        onDigit={(digito) => {
+          if (tecladoTarget === 'lote') {
+            if (loteInput.length < 10) {
+              setLoteInput(loteInput + digito);
+              setErrorLote(null);
+            }
+          } else if (tecladoTarget === 'clave') {
+            if (claveDefecto.length < 6) {
+              setClaveDefecto(claveDefecto + digito);
+              setErrorDefecto(null);
+            }
+          }
+        }}
+        onBackspace={() => {
+          if (tecladoTarget === 'lote') {
+            setLoteInput(loteInput.slice(0, -1));
+          } else if (tecladoTarget === 'clave') {
+            setClaveDefecto(claveDefecto.slice(0, -1));
+          }
+        }}
+        onClear={() => {
+          if (tecladoTarget === 'lote') {
+            setLoteInput('');
+          } else if (tecladoTarget === 'clave') {
+            setClaveDefecto('');
+          }
+        }}
+        onSubmit={async () => {
+          if (tecladoTarget === 'lote') {
+            handleBuscarLote();
+          } else if (tecladoTarget === 'clave') {
+            if (defectoSeleccionado) {
+              handleAgregarDefecto(defectoSeleccionado);
+            } else {
+              const encontrado = await handleBuscarDefecto(claveDefecto);
+              if (encontrado) {
+                handleAgregarDefecto(encontrado);
+              }
+            }
+          }
+        }}
+      />
     </Modal>
   );
 }

@@ -30,6 +30,8 @@ export interface CapturaDefectoFormProps {
   guardando: boolean;
   errorDefecto: string | null;
   setErrorDefecto: (err: string | null) => void;
+  onAbrirTeclado?: () => void;
+  tecladoActivo?: boolean;
 }
 
 export function CapturaDefectoForm({
@@ -56,6 +58,8 @@ export function CapturaDefectoForm({
   guardando,
   errorDefecto,
   setErrorDefecto,
+  onAbrirTeclado,
+  tecladoActivo,
 }: CapturaDefectoFormProps) {
   return (
     <div
@@ -68,10 +72,27 @@ export function CapturaDefectoForm({
     >
       <div className="flex items-end gap-2 xl:gap-3 w-full">
         {/* 1. CLAVE DEFECTO */}
-        <div className="w-16 xl:w-20 shrink-0">
-          <Label className="block text-xs font-bold uppercase mb-1.5 text-text-secondary truncate">
-            Clave *
-          </Label>
+        <div className="w-18 xl:w-24 shrink-0">
+          <div className="flex items-center justify-between mb-1.5">
+            <Label className="block text-xs font-bold uppercase text-text-secondary truncate">
+              Clave *
+            </Label>
+            {onAbrirTeclado && loteActivo && (
+              <button
+                type="button"
+                onClick={onAbrirTeclado}
+                title={tecladoActivo ? 'Ocultar teclado' : 'Abrir teclado táctil'}
+                className={cn(
+                  'p-0.5 rounded text-[10px] border transition-colors cursor-pointer',
+                  tecladoActivo
+                    ? 'bg-marca-primario text-white border-marca-primario shadow-2xs'
+                    : 'bg-app-surface text-slate-500 border-slate-300 hover:text-marca-primario'
+                )}
+              >
+                <Icon name="dialpad" size="13px" />
+              </button>
+            )}
+          </div>
           <div className="relative">
             <Input
               ref={claveInputRef}

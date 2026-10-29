@@ -2,6 +2,7 @@ import { type RefObject } from 'react';
 import { cn } from '@/lib/utils/cn';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Icon } from '@/components/ui/icon';
 import { Spinner } from '@/components/ui/spinner';
 
 export interface CapturaLoteSelectorProps {
@@ -16,6 +17,8 @@ export interface CapturaLoteSelectorProps {
   totalLineasDepto: number;
   lineaCodigo: string;
   setLineaCodigo: (val: string) => void;
+  onAbrirTeclado?: () => void;
+  tecladoActivo?: boolean;
 }
 
 export function CapturaLoteSelector({
@@ -30,15 +33,35 @@ export function CapturaLoteSelector({
   totalLineasDepto,
   lineaCodigo,
   setLineaCodigo,
+  onAbrirTeclado,
+  tecladoActivo,
 }: CapturaLoteSelectorProps) {
   return (
     <div className="shrink-0">
       <div className="flex items-end gap-2.5 xl:gap-3 w-full">
         {/* Si solo hay 1 línea (ej. CORTE), el input de lote ocupa todo el ancho flex-1 */}
         <div className={tieneMultiplesLineas ? 'flex-1 min-w-[110px]' : 'w-full'}>
-          <Label className="block text-xs font-bold uppercase tracking-wider mb-1.5 text-text-primary">
-            Número de Lote *
-          </Label>
+          <div className="flex items-center justify-between mb-1.5">
+            <Label className="block text-xs font-bold uppercase tracking-wider text-text-primary">
+              Número de Lote *
+            </Label>
+            {onAbrirTeclado && (
+              <button
+                type="button"
+                onClick={onAbrirTeclado}
+                title={tecladoActivo ? 'Ocultar teclado táctil' : 'Abrir teclado táctil'}
+                className={cn(
+                  'px-2 py-0.5 rounded-md text-[11px] font-bold flex items-center gap-1 border transition-colors cursor-pointer',
+                  tecladoActivo
+                    ? 'bg-marca-primario text-white border-marca-primario shadow-2xs'
+                    : 'bg-app-surface text-slate-500 border-slate-300 hover:text-marca-primario hover:border-marca-primario'
+                )}
+              >
+                <Icon name="dialpad" size="14px" />
+                <span>Teclado</span>
+              </button>
+            )}
+          </div>
           <div className="relative">
             <Input
               ref={loteInputRef}
