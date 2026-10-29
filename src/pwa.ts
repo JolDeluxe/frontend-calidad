@@ -99,10 +99,10 @@ export function registerPwaServiceWorker(): void {
     onRegisteredSW(_swUrl, registration) {
       if (!registration) return;
 
-      // 1. Chequeo periódico cada 30 minutos
+      // 1. Chequeo periódico cada 60 segundos (para detectar nuevos despliegues de inmediato sin F5)
       setInterval(() => {
         void registration.update();
-      }, 30 * 60 * 1000);
+      }, 60 * 1000);
 
       // 2. Chequeo automático cuando la ventana recupera el foco o la pestaña se vuelve visible
       window.addEventListener('focus', () => {
