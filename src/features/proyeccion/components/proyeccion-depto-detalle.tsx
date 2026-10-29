@@ -41,7 +41,7 @@ export const ProyeccionDeptoDetalle: React.FC<ProyeccionDeptoDetalleProps> = ({
 
   const dataApilada = topDefectosApilados.map((item) => {
     return {
-      nombreClave: `${item.clave} - ${item.defecto.slice(0, 22)}`,
+      nombreClave: `${item.clave} - ${item.defecto}`,
       ...item.desglosePorArea,
       totalPares: item.totalPares,
     };
@@ -222,10 +222,10 @@ export const ProyeccionDeptoDetalle: React.FC<ProyeccionDeptoDetalleProps> = ({
                   <BarChart
                     layout="vertical"
                     data={topDefectos.map((d) => ({
-                      nombreClave: `${d.clave} - ${d.defecto.slice(0, 26)}`,
+                      nombreClave: `${d.clave} - ${d.defecto}`,
                       pares: d.totalPares,
                     }))}
-                    margin={{ top: 5, right: 35, left: 15, bottom: 5 }}
+                    margin={{ top: 5, right: 40, left: 10, bottom: 5 }}
                   >
                     <XAxis type="number" hide />
                     <YAxis
@@ -233,12 +233,12 @@ export const ProyeccionDeptoDetalle: React.FC<ProyeccionDeptoDetalleProps> = ({
                       type="category"
                       axisLine={false}
                       tickLine={false}
-                      tick={{ fill: '#334155', fontSize: 11, fontFamily: 'monospace', fontWeight: 600 }}
-                      width={170}
+                      tick={{ fill: '#1e293b', fontSize: 12, fontFamily: 'inherit', fontWeight: 600 }}
+                      width={220}
                     />
                     <Tooltip
-                      contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: 4, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                      labelStyle={{ color: '#482b2c', fontWeight: 'bold' }}
+                      contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: 6, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      labelStyle={{ color: '#0f172a', fontWeight: 'bold' }}
                     />
                     <Bar dataKey="pares" fill="#0284c7" radius={[0, 4, 4, 0]}>
                       <LabelList dataKey="pares" position="right" fill="#0369a1" fontSize={12} fontWeight="bold" />
@@ -277,7 +277,7 @@ export const ProyeccionDeptoDetalle: React.FC<ProyeccionDeptoDetalleProps> = ({
                   <BarChart
                     layout="vertical"
                     data={dataApilada}
-                    margin={{ top: 5, right: 35, left: 15, bottom: 5 }}
+                    margin={{ top: 5, right: 40, left: 10, bottom: 5 }}
                   >
                     <XAxis type="number" hide />
                     <YAxis
@@ -285,12 +285,12 @@ export const ProyeccionDeptoDetalle: React.FC<ProyeccionDeptoDetalleProps> = ({
                       type="category"
                       axisLine={false}
                       tickLine={false}
-                      tick={{ fill: '#334155', fontSize: 11, fontFamily: 'monospace', fontWeight: 600 }}
-                      width={170}
+                      tick={{ fill: '#1e293b', fontSize: 12, fontFamily: 'inherit', fontWeight: 600 }}
+                      width={220}
                     />
                     <Tooltip
-                      contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: 4, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                      labelStyle={{ color: '#482b2c', fontWeight: 'bold' }}
+                      contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: 6, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      labelStyle={{ color: '#0f172a', fontWeight: 'bold' }}
                     />
                     {areasAuditoras.map((area, idx) => (
                       <Bar
