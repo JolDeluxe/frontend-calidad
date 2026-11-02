@@ -12,8 +12,8 @@ import { registerSW } from 'virtual:pwa-register';
  * 4. Verificación periódica cada 30 minutos y ante reactivación de ventana/pestaña (focus/visibilitychange).
  */
 
-/** Determina si hay algún formulario con datos capturados en el DOM activo */
-function hasActiveUnsavedForm(): boolean {
+/** Determina si el usuario está realizando una interacción u operación activa en pantalla */
+function isUserActivelyInteracting(): boolean {
   if (typeof document === 'undefined') return false;
 
   // 1. Verificar si hay un elemento activo enfocado que sea input, textarea o select con valor no vacío
@@ -28,19 +28,49 @@ function hasActiveUnsavedForm(): boolean {
     }
   }
 
-  // 2. Verificar si hay modales con formularios abiertos con campos llenos
+  // 2. Verificar si hay modales o diálogos abiertos en el DOM (role="dialog" o aria-modal="true")
+  const openModals = document.querySelectorAll('[role="dialog"], [aria-modal="true"]');
+  if (openModals.length > 0) {
+    return true;
+  }
+
+  // 3. Verificar si el teclado numérico flotante está activo en pantalla
+  if (document.querySelector('.numpad-drag-handle')) {
+    return true;
+  }
+
+  // 4. Verificar si hay algún formulario con inputs modificados visibles
   const openForms = document.querySelectorAll('form');
   for (const form of openForms) {
-    // Si el formulario contiene campos de texto modificados
     const inputs = form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea');
     for (const input of inputs) {
       if (input.type !== 'hidden' && input.type !== 'submit' && input.value && input.value.trim().length > 0) {
-        // Verificar si está visible en el árbol
         if (input.offsetParent !== null) {
           return true;
         }
       }
     }
+  }
+
+  // 5. Verificar si hay borradores activos de captura en localStorage
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key && key.startsWith('calidad_captura_borrador_')) {
+        const item = window.localStorage.getItem(key);
+        if (item) {
+          const parsed = JSON.parse(item);
+          if (
+            (parsed.loteInput && parsed.loteInput.trim().length > 0) ||
+            (Array.isArray(parsed.defectosCapturados) && parsed.defectosCapturados.length > 0)
+          ) {
+            return true;
+          }
+        }
+      }
+    }
+  } catch {
+    // Continuar si falla lectura de localStorage
   }
 
   return false;
@@ -58,26 +88,36 @@ export function registerPwaServiceWorker(): void {
   const performReload = () => {
     if (isRefreshing || isPendingReload) return;
 
-    if (hasActiveUnsavedForm()) {
+    if (isUserActivelyInteracting()) {
       console.warn(
-        '[PWA] Nueva versión lista, pero se detectó un formulario abierto con datos. Pospone la recarga automática hasta que el usuario complete o cierre la interacción.',
+        '[PWA] Nueva versión lista, pero se detectó una operación activa en curso (modal, formulario o lote). Pospone la recarga automática hasta que el usuario termine su captura.',
       );
       isPendingReload = true;
 
-      // Escuchar el submit o reset de formularios para recargar inmediatamente después
-      const onFormAction = () => {
-        window.removeEventListener('submit', onFormAction, true);
-        window.removeEventListener('reset', onFormAction, true);
+      // Escuchar eventos clave de finalización o cierre para ejecutar la recarga pospuesta
+      const onInteractionComplete = () => {
+        // Verificar nuevamente si ya no hay interacción activa
         setTimeout(() => {
-          if (!isRefreshing) {
+          if (!isUserActivelyInteracting() && !isRefreshing) {
             isRefreshing = true;
             window.location.reload();
           }
-        }, 800);
+        }, 1200);
       };
 
-      window.addEventListener('submit', onFormAction, { capture: true, once: true });
-      window.addEventListener('reset', onFormAction, { capture: true, once: true });
+      window.addEventListener('submit', onInteractionComplete, { capture: true });
+      window.addEventListener('reset', onInteractionComplete, { capture: true });
+
+      // Observador de cambios en el DOM para cuando se cierre el modal de captura o el teclado flotante
+      const observer = new MutationObserver(() => {
+        if (!isUserActivelyInteracting() && !isRefreshing) {
+          observer.disconnect();
+          isRefreshing = true;
+          window.location.reload();
+        }
+      });
+
+      observer.observe(document.body, { childList: true, subtree: true });
       return;
     }
 
