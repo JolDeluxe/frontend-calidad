@@ -29,6 +29,69 @@ function nuevaClaveIdempotencia(): string {
   return `cap-${crypto.randomUUID()}`;
 }
 
+const DRAFT_STORAGE_KEY_PREFIX = 'calidad_captura_borrador_';
+
+export interface BorradorCaptura {
+  loteInput: string;
+  loteActivo: ProduccionLote | null;
+  lineaCodigo: string;
+  defectosCapturados: DefectoItemCapturado[];
+  departamentoId?: number;
+  actualizadoEn: number;
+}
+
+function getDraftKey(deptoId?: number): string {
+  return `${DRAFT_STORAGE_KEY_PREFIX}${deptoId ?? 'general'}`;
+}
+
+function guardarBorradorEnStorage(
+  deptoId: number | undefined,
+  data: {
+    loteInput: string;
+    loteActivo: ProduccionLote | null;
+    lineaCodigo: string;
+    defectosCapturados: DefectoItemCapturado[];
+  }
+) {
+  if (typeof window === 'undefined') return;
+  try {
+    const key = getDraftKey(deptoId);
+    if (!data.loteActivo && data.defectosCapturados.length === 0 && !data.loteInput.trim()) {
+      window.localStorage.removeItem(key);
+      return;
+    }
+    const borrador: BorradorCaptura = {
+      ...data,
+      departamentoId: deptoId,
+      actualizadoEn: Date.now(),
+    };
+    window.localStorage.setItem(key, JSON.stringify(borrador));
+  } catch {
+    // Ignorar errores de cuota en almacenamiento local
+  }
+}
+
+function obtenerBorradorDeStorage(deptoId?: number): BorradorCaptura | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const key = getDraftKey(deptoId);
+    const item = window.localStorage.getItem(key);
+    if (!item) return null;
+    return JSON.parse(item) as BorradorCaptura;
+  } catch {
+    return null;
+  }
+}
+
+function eliminarBorradorDeStorage(deptoId?: number) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(getDraftKey(deptoId));
+  } catch {
+    // Ignorar errores
+  }
+}
+
 export interface DefectoItemCapturado {
   idTemporal: string;
   defectoId: number;
@@ -162,33 +225,127 @@ export function DefectoModalCaptura({
     };
   }, [isOpen, departamentoAuditor, isOfflineMode]);
 
-  // Resetear el formulario al abrir el modal (solamente cuando isOpen cambia de false a true)
+  // Estado para modal de confirmación antes de descartar y cerrar (previene cierre accidental)
+  const [confirmarDescarteAbierto, setConfirmarDescarteAbierto] = useState(false);
+
+  // Inicializar o restaurar borrador cuando isOpen cambia de false a true
   useEffect(() => {
     if (isOpen) {
-      setLoteInput('');
-      setLoteActivo(null);
-      setErrorLote(null);
-      setLineaCodigo('L1');
-      setClaveDefecto('');
-      setFiltroTextoDefecto('');
-      setSelectorAbierto(false);
-      setDefectoSeleccionado(null);
-      setErrorDefecto(null);
-      setParesDefecto(1);
-      setDefectosCapturados([]);
-      setErrorGuardado(null);
-      setTimeout(() => {
-        loteInputRef.current?.focus();
-      }, 150);
+      setConfirmarDescarteAbierto(false);
+      const borrador = obtenerBorradorDeStorage(departamentoAuditor?.id);
+      if (
+        borrador &&
+        (borrador.loteActivo || (borrador.defectosCapturados && borrador.defectosCapturados.length > 0))
+      ) {
+        setLoteInput(borrador.loteInput || '');
+        setLoteActivo(borrador.loteActivo);
+        setLineaCodigo(borrador.lineaCodigo || 'L1');
+        setDefectosCapturados(borrador.defectosCapturados || []);
+        setErrorLote(null);
+        setErrorDefecto(null);
+        setErrorGuardado(null);
+        toast.info(
+          `Se restauró la captura pendiente del lote ${borrador.loteActivo?.lote || borrador.loteInput} (${borrador.defectosCapturados?.length || 0} defectos).`,
+          { title: 'Borrador Recuperado' }
+        );
+      } else {
+        setLoteInput('');
+        setLoteActivo(null);
+        setErrorLote(null);
+        setLineaCodigo('L1');
+        setClaveDefecto('');
+        setFiltroTextoDefecto('');
+        setSelectorAbierto(false);
+        setDefectoSeleccionado(null);
+        setErrorDefecto(null);
+        setParesDefecto(1);
+        setDefectosCapturados([]);
+        setErrorGuardado(null);
+        setTimeout(() => {
+          loteInputRef.current?.focus();
+        }, 150);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, departamentoAuditor?.id]);
+
+  // Persistir en localStorage mientras el modal esté abierto
+  useEffect(() => {
+    if (!isOpen) return;
+    guardarBorradorEnStorage(departamentoAuditor?.id, {
+      loteInput,
+      loteActivo,
+      lineaCodigo,
+      defectosCapturados,
+    });
+  }, [isOpen, loteInput, loteActivo, lineaCodigo, defectosCapturados, departamentoAuditor?.id]);
+
+  // Borrar el lote y en consecuencia borrar también todos los defectos registrados
+  const handleLimpiarLote = () => {
+    setLoteInput('');
+    setLoteActivo(null);
+    setErrorLote(null);
+    setDefectosCapturados([]);
+    setClaveDefecto('');
+    setFiltroTextoDefecto('');
+    setSelectorAbierto(false);
+    setDefectoSeleccionado(null);
+    setErrorDefecto(null);
+    setParesDefecto(1);
+    setTecladoTarget((prev) => (prev === 'lote' ? null : prev));
+    eliminarBorradorDeStorage(departamentoAuditor?.id);
+    setTimeout(() => {
+      loteInputRef.current?.focus();
+    }, 50);
+  };
+
+  // Prevenir cierre accidental: si hay información capturada, pedir confirmación antes de descartar y salir
+  const handleIntentarCerrar = () => {
+    // 1. Si el teclado numérico está abierto, cerrarlo primero
+    if (tecladoTarget) {
+      setTecladoTarget(null);
+      return;
+    }
+
+    // 2. Si el selector de defectos está desplegado, cerrarlo
+    if (selectorAbierto) {
+      setSelectorAbierto(false);
+      return;
+    }
+
+    // 3. Prevenir cierre accidental: si hay defectos o lote activo cargado, pedir confirmación
+    if (defectosCapturados.length > 0 || loteActivo) {
+      setConfirmarDescarteAbierto(true);
+      return;
+    }
+
+    // 4. Si no hay datos registrados, cerrar inmediatamente
+    handleDescartarYSalir();
+  };
+
+  // Si confirma descartar (o si da en cancelar / tachita sin datos), limpiar y cerrar
+  const handleDescartarYSalir = () => {
+    setConfirmarDescarteAbierto(false);
+    eliminarBorradorDeStorage(departamentoAuditor?.id);
+    setLoteInput('');
+    setLoteActivo(null);
+    setErrorLote(null);
+    setDefectosCapturados([]);
+    setClaveDefecto('');
+    setFiltroTextoDefecto('');
+    setSelectorAbierto(false);
+    setDefectoSeleccionado(null);
+    setErrorDefecto(null);
+    setParesDefecto(1);
+    setErrorGuardado(null);
+    setTecladoTarget(null);
+    onClose();
+  };
 
   // Búsqueda de Lote (con fallback a IndexedDB cat_lotes cuando no hay red)
   const handleBuscarLote = async (valorOverride?: string) => {
     const cod = (valorOverride !== undefined ? valorOverride : loteInput).trim();
     if (!cod) {
-      setLoteActivo(null);
-      setErrorLote(null);
+      handleLimpiarLote();
       return;
     }
 
@@ -205,6 +362,9 @@ export function DefectoModalCaptura({
     const buscarEnIdb = async (): Promise<boolean> => {
       const loteOffline = await catalogoOfflineService.getLoteLocal(cod);
       if (loteOffline) {
+        if (loteActivo && loteActivo.lote !== loteOffline.lote) {
+          setDefectosCapturados([]);
+        }
         setLoteActivo({
           id: loteOffline.id,
           listaLote: `${loteOffline.lista}-${loteOffline.lote}`,
@@ -241,6 +401,9 @@ export function DefectoModalCaptura({
       }
 
       const lote = await inspeccionesApi.getLoteByCodigo(cod);
+      if (loteActivo && loteActivo.lote !== lote.lote) {
+        setDefectosCapturados([]);
+      }
       setLoteActivo(lote);
       setErrorLote(null);
       // Cerrar teclado numérico automáticamente si encontró el lote
@@ -277,7 +440,17 @@ export function DefectoModalCaptura({
     if (!isOpen) return;
 
     const term = loteInput.trim();
-    if (!term || term.length < 4) {
+    if (!term) {
+      setLoteActivo(null);
+      setErrorLote(null);
+      if (defectosCapturados.length > 0) {
+        setDefectosCapturados([]);
+        eliminarBorradorDeStorage(departamentoAuditor?.id);
+      }
+      return;
+    }
+
+    if (term.length < 4) {
       setLoteActivo(null);
       setErrorLote(null);
       return;
@@ -557,6 +730,10 @@ export function DefectoModalCaptura({
         { title: 'Sin conexión' },
       );
 
+      eliminarBorradorDeStorage(departamentoAuditor?.id);
+      setLoteInput('');
+      setLoteActivo(null);
+      setDefectosCapturados([]);
       onSuccess(idsLocales);
       onClose();
     };
@@ -586,6 +763,10 @@ export function DefectoModalCaptura({
         { title: 'Inspección Guardada' },
       );
 
+      eliminarBorradorDeStorage(departamentoAuditor?.id);
+      setLoteInput('');
+      setLoteActivo(null);
+      setDefectosCapturados([]);
       onSuccess(nuevosIds);
       onClose();
     } catch (err: any) {
@@ -624,224 +805,296 @@ export function DefectoModalCaptura({
   const deptoNombre = (departamentoAuditor?.nombre || 'MONTADO').toUpperCase();
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      size="screen"
-      className="w-full h-[96vh] max-h-[96vh] border-border shadow-2xl bg-app-surface"
-    >
-      <ModalHeader
-        title={`Captura de Defectos — ${departamentoAuditor?.nombre || 'Calidad'}`}
-        onClose={onClose}
-        className="px-6 py-4"
-      />
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={handleIntentarCerrar}
+        size="screen"
+        className="w-full h-[96vh] max-h-[96vh] border-border shadow-2xl bg-app-surface"
+      >
+        <ModalHeader
+          title={`Captura de Defectos — ${departamentoAuditor?.nombre || 'Calidad'}`}
+          onClose={handleIntentarCerrar}
+          className="px-6 py-4"
+        />
 
-      <ModalBody className="p-4 xl:p-6 flex-1 min-h-0 flex flex-col bg-app-surface overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 xl:gap-6 items-stretch flex-1 min-h-0 overflow-hidden">
-          {/* LADO IZQUIERDO (COLUMNA 5 DE 12): FICHA TÉCNICA DEL LOTE */}
-          <div className="lg:col-span-5 flex flex-col justify-between self-stretch bg-app-surface-muted/40 rounded-xl border border-border p-3 xl:p-5 gap-2.5 xl:gap-4 min-h-0 overflow-hidden">
-            <div className="space-y-2 xl:space-y-4 flex-1 flex flex-col min-h-0 overflow-hidden">
-              {/* Fecha de Registro */}
-              <div className="flex items-center justify-between border-b border-border-subtle pb-2 xl:pb-3 shrink-0">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
-                  Fecha de Registro
-                </span>
-                <span className="text-xs xl:text-sm font-bold text-text-primary font-mono">
-                  {fechaTexto}
-                </span>
+        <ModalBody className="p-4 xl:p-6 flex-1 min-h-0 flex flex-col bg-app-surface overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 xl:gap-6 items-stretch flex-1 min-h-0 overflow-hidden">
+            {/* LADO IZQUIERDO (COLUMNA 5 DE 12): FICHA TÉCNICA DEL LOTE */}
+            <div className="lg:col-span-5 flex flex-col justify-between self-stretch bg-app-surface-muted/40 rounded-xl border border-border p-3 xl:p-5 gap-2.5 xl:gap-4 min-h-0 overflow-hidden">
+              <div className="space-y-2 xl:space-y-4 flex-1 flex flex-col min-h-0 overflow-hidden">
+                {/* Fecha de Registro */}
+                <div className="flex items-center justify-between border-b border-border-subtle pb-2 xl:pb-3 shrink-0">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
+                    Fecha de Registro
+                  </span>
+                  <span className="text-xs xl:text-sm font-bold text-text-primary font-mono">
+                    {fechaTexto}
+                  </span>
+                </div>
+
+                {/* LOTE + SELECTOR DE LÍNEA */}
+                <CapturaLoteSelector
+                  loteInput={loteInput}
+                  setLoteInput={setLoteInput}
+                  setErrorLote={setErrorLote}
+                  handleBuscarLote={handleBuscarLote}
+                  loteInputRef={loteInputRef}
+                  cargandoLote={cargandoLote}
+                  guardando={guardando}
+                  tieneMultiplesLineas={tieneMultiplesLineas}
+                  totalLineasDepto={totalLineasDepto}
+                  lineaCodigo={lineaCodigo}
+                  setLineaCodigo={setLineaCodigo}
+                  onAbrirTeclado={() =>
+                    setTecladoTarget((prev) => (prev === 'lote' ? null : 'lote'))
+                  }
+                  tecladoActivo={tecladoTarget === 'lote'}
+                  onLimpiarLote={handleLimpiarLote}
+                />
+
+                {/* FICHA TÉCNICA DEL LOTE: LOTE | LISTA | MODELO | PARES | HORMA | CLIENTE */}
+                <CapturaLoteFicha lote={loteActivo} error={errorLote} cargando={cargandoLote} />
               </div>
 
-              {/* LOTE + SELECTOR DE LÍNEA */}
-              <CapturaLoteSelector
-                loteInput={loteInput}
-                setLoteInput={setLoteInput}
-                setErrorLote={setErrorLote}
-                handleBuscarLote={handleBuscarLote}
-                loteInputRef={loteInputRef}
-                cargandoLote={cargandoLote}
+              {/* SELLO DE AUDITORÍA */}
+              <div className="shrink-0 pt-2 border-t border-border-subtle flex items-center justify-between text-[10px] xl:text-xs text-text-muted opacity-75">
+                <span className="font-semibold uppercase tracking-wider truncate mr-2" title={deptoNombre}>
+                  {deptoNombre}
+                </span>
+                <span className="font-mono truncate" title={inspectorNombre}>
+                  {inspectorNombre}
+                </span>
+              </div>
+            </div>
+
+            {/* LADO DERECHO (COLUMNA 7 DE 12): CAPTURA Y LISTA DE DEFECTOS */}
+            <div className="lg:col-span-7 flex flex-col min-h-0 overflow-hidden bg-app-surface rounded-xl border border-border p-3 xl:p-5 gap-2.5 xl:gap-4">
+              {avisoCatalogoOffline && (
+                <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-800 flex items-center gap-2 shrink-0">
+                  <Icon name="wifi_off" size="16px" className="text-amber-600 shrink-0" />
+                  <span>{avisoCatalogoOffline}</span>
+                </div>
+              )}
+
+              {/* Formulario de Captura de Defecto */}
+              <CapturaDefectoForm
+                loteActivo={!!loteActivo}
+                departamentoAuditorId={departamentoAuditor?.id}
+                claveDefecto={claveDefecto}
+                setClaveDefecto={setClaveDefecto}
+                claveInputRef={claveInputRef}
+                buscandoDefecto={buscandoDefecto}
+                handleBuscarDefecto={handleBuscarDefecto}
+                defectoSeleccionado={defectoSeleccionado}
+                setDefectoSeleccionado={setDefectoSeleccionado}
+                catalogoDefectos={catalogoDefectos}
+                selectorAbierto={selectorAbierto}
+                setSelectorAbierto={setSelectorAbierto}
+                selectorRef={selectorRef}
+                filtroTextoDefecto={filtroTextoDefecto}
+                setFiltroTextoDefecto={setFiltroTextoDefecto}
+                paresDefecto={paresDefecto}
+                handleModificarPares={handleModificarPares}
+                handleParesDirecto={handleParesDirecto}
+                maxParesPermitido={maxParesPermitido}
+                handleAgregarDefecto={handleAgregarDefecto}
                 guardando={guardando}
-                tieneMultiplesLineas={tieneMultiplesLineas}
-                totalLineasDepto={totalLineasDepto}
-                lineaCodigo={lineaCodigo}
-                setLineaCodigo={setLineaCodigo}
+                errorDefecto={errorDefecto}
+                setErrorDefecto={setErrorDefecto}
                 onAbrirTeclado={() =>
-                  setTecladoTarget((prev) => (prev === 'lote' ? null : 'lote'))
+                  setTecladoTarget((prev) => (prev === 'clave' ? null : 'clave'))
                 }
-                tecladoActivo={tecladoTarget === 'lote'}
+                tecladoActivo={tecladoTarget === 'clave'}
               />
 
-              {/* FICHA TÉCNICA DEL LOTE: LOTE | LISTA | MODELO | PARES | HORMA | CLIENTE */}
-              <CapturaLoteFicha lote={loteActivo} error={errorLote} cargando={cargandoLote} />
-            </div>
+              {/* Tabla de Defectos Capturados */}
+              <CapturaDefectosTabla
+                defectosCapturados={defectosCapturados}
+                totalParesFalla={totalParesFalla}
+                departamentoAuditorId={departamentoAuditor?.id}
+                catalogoDefectos={catalogoDefectos}
+                setClaveDefecto={setClaveDefecto}
+                setDefectoSeleccionado={setDefectoSeleccionado}
+                setParesDefecto={setParesDefecto}
+                handleEliminarItem={handleEliminarItem}
+                guardando={guardando}
+              />
 
-            {/* SELLO DE AUDITORÍA */}
-            <div className="shrink-0 pt-2 border-t border-border-subtle flex items-center justify-between text-[10px] xl:text-xs text-text-muted opacity-75">
-              <span className="font-semibold uppercase tracking-wider truncate mr-2" title={deptoNombre}>
-                {deptoNombre}
-              </span>
-              <span className="font-mono truncate" title={inspectorNombre}>
-                {inspectorNombre}
-              </span>
+              {errorGuardado && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-bold text-red-700 flex items-center gap-1.5">
+                  <Icon name="error" size="16px" />
+                  <span>{errorGuardado}</span>
+                </div>
+              )}
             </div>
           </div>
+        </ModalBody>
 
-          {/* LADO DERECHO (COLUMNA 7 DE 12): CAPTURA Y LISTA DE DEFECTOS */}
-          <div className="lg:col-span-7 flex flex-col min-h-0 overflow-hidden bg-app-surface rounded-xl border border-border p-3 xl:p-5 gap-2.5 xl:gap-4">
-            {avisoCatalogoOffline && (
-              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-800 flex items-center gap-2 shrink-0">
-                <Icon name="wifi_off" size="16px" className="text-amber-600 shrink-0" />
-                <span>{avisoCatalogoOffline}</span>
-              </div>
-            )}
+        {/* FOOTER DEL MODAL */}
+        <ModalFooter className="flex items-center justify-between px-6 py-4 bg-app-surface-muted/60 border-t border-border-subtle">
+          <span className="text-xs font-semibold text-text-secondary">
+            {loteActivo ? `` : 'Ingrese un lote de producción para habilitar el registro'}
+          </span>
 
-            {/* Formulario de Captura de Defecto */}
-            <CapturaDefectoForm
-              loteActivo={!!loteActivo}
-              departamentoAuditorId={departamentoAuditor?.id}
-              claveDefecto={claveDefecto}
-              setClaveDefecto={setClaveDefecto}
-              claveInputRef={claveInputRef}
-              buscandoDefecto={buscandoDefecto}
-              handleBuscarDefecto={handleBuscarDefecto}
-              defectoSeleccionado={defectoSeleccionado}
-              setDefectoSeleccionado={setDefectoSeleccionado}
-              catalogoDefectos={catalogoDefectos}
-              selectorAbierto={selectorAbierto}
-              setSelectorAbierto={setSelectorAbierto}
-              selectorRef={selectorRef}
-              filtroTextoDefecto={filtroTextoDefecto}
-              setFiltroTextoDefecto={setFiltroTextoDefecto}
-              paresDefecto={paresDefecto}
-              handleModificarPares={handleModificarPares}
-              handleParesDirecto={handleParesDirecto}
-              maxParesPermitido={maxParesPermitido}
-              handleAgregarDefecto={handleAgregarDefecto}
-              guardando={guardando}
-              errorDefecto={errorDefecto}
-              setErrorDefecto={setErrorDefecto}
-              onAbrirTeclado={() =>
-                setTecladoTarget((prev) => (prev === 'clave' ? null : 'clave'))
+          <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleIntentarCerrar}
+              disabled={guardando}
+              className="cursor-pointer"
+            >
+              Cancelar
+            </Button>
+
+            <Button
+              type="button"
+              variant="guardar"
+              size="md"
+              onClick={handleGuardarInspeccion}
+              disabled={guardando || !loteActivo || defectosCapturados.length === 0}
+              className="px-6 font-bold uppercase tracking-wider text-xs gap-2 cursor-pointer shadow-sm touch-manipulation"
+            >
+              {guardando ? (
+                <div className="flex items-center gap-2">
+                  <Spinner size="14px" />
+                  <span>Guardando...</span>
+                </div>
+              ) : (
+                <>
+                  <Icon name="save" size="18px" />
+                  <span>Guardar</span>
+                </>
+              )}
+            </Button>
+          </div>
+        </ModalFooter>
+
+        {/* TECLADO NUMÉRICO FLOTANTE Y ARRASTRABLE PARA PANTALLAS TÁCTILES */}
+        <FloatingNumpad
+          isOpen={Boolean(tecladoTarget)}
+          onClose={() => setTecladoTarget(null)}
+          anchorElement={tecladoTarget === 'lote' ? loteInputRef.current : claveInputRef.current}
+          preferredSide={tecladoTarget === 'clave' ? 'left' : 'right'}
+          title={tecladoTarget === 'lote' ? 'Número de Lote' : 'Clave de Defecto'}
+          targetInputName={
+            tecladoTarget === 'lote'
+              ? `Lote: ${loteInput || '—'}`
+              : `Clave: ${claveDefecto || '—'}`
+          }
+          submitLabel={tecladoTarget === 'lote' ? 'Buscar Lote' : 'Agregar Defecto'}
+          onDigit={(digito) => {
+            if (tecladoTarget === 'lote') {
+              if (loteInput.length < 10) {
+                setLoteInput(loteInput + digito);
+                setErrorLote(null);
               }
-              tecladoActivo={tecladoTarget === 'clave'}
-            />
+            } else if (tecladoTarget === 'clave') {
+              if (claveDefecto.length < 6) {
+                setClaveDefecto(claveDefecto + digito);
+                setErrorDefecto(null);
+              }
+            }
+          }}
+          onBackspace={() => {
+            if (tecladoTarget === 'lote') {
+              const nuevo = loteInput.slice(0, -1);
+              setLoteInput(nuevo);
+              if (!nuevo.trim()) {
+                handleLimpiarLote();
+              }
+            } else if (tecladoTarget === 'clave') {
+              setClaveDefecto(claveDefecto.slice(0, -1));
+            }
+          }}
+          onClear={() => {
+            if (tecladoTarget === 'lote') {
+              handleLimpiarLote();
+            } else if (tecladoTarget === 'clave') {
+              setClaveDefecto('');
+            }
+          }}
+          onSubmit={async () => {
+            if (tecladoTarget === 'lote') {
+              handleBuscarLote();
+            } else if (tecladoTarget === 'clave') {
+              if (defectoSeleccionado) {
+                handleAgregarDefecto(defectoSeleccionado);
+              } else {
+                const encontrado = await handleBuscarDefecto(claveDefecto);
+                if (encontrado) {
+                  handleAgregarDefecto(encontrado);
+                }
+              }
+            }
+          }}
+        />
+      </Modal>
 
-            {/* Tabla de Defectos Capturados */}
-            <CapturaDefectosTabla
-              defectosCapturados={defectosCapturados}
-              totalParesFalla={totalParesFalla}
-              departamentoAuditorId={departamentoAuditor?.id}
-              catalogoDefectos={catalogoDefectos}
-              setClaveDefecto={setClaveDefecto}
-              setDefectoSeleccionado={setDefectoSeleccionado}
-              setParesDefecto={setParesDefecto}
-              handleEliminarItem={handleEliminarItem}
-              guardando={guardando}
-            />
-
-            {errorGuardado && (
-              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-bold text-red-700 flex items-center gap-1.5">
-                <Icon name="error" size="16px" />
-                <span>{errorGuardado}</span>
+      {/* MODAL DE CONFIRMACIÓN PARA PREVENIR CIERRE ACCIDENTAL Y PÉRDIDA DE DATOS */}
+      {confirmarDescarteAbierto && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+          role="alertdialog"
+          aria-modal="true"
+        >
+          <div className="bg-app-surface rounded-2xl border border-border shadow-2xl max-w-md w-full p-6 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 text-amber-600">
+              <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-950/50 flex items-center justify-center shrink-0">
+                <Icon name="warning" size="24px" className="text-amber-600 dark:text-amber-400" />
               </div>
-            )}
+              <div>
+                <h3 className="text-base font-bold text-text-primary">¿Descartar captura actual?</h3>
+                <p className="text-xs text-text-secondary mt-0.5">
+                  Tienes información registrada que se perderá si sales.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-app-surface-muted rounded-xl border border-border-subtle text-xs space-y-1.5 text-text-secondary">
+              {loteActivo && (
+                <p>
+                  <span className="font-semibold text-text-primary">Lote:</span>{' '}
+                  <span className="font-mono font-bold text-brand-primary">{loteActivo.lote}</span>
+                  {loteActivo.modelo && ` (${loteActivo.modelo})`}
+                </p>
+              )}
+              <p>
+                <span className="font-semibold text-text-primary">Defectos registrados:</span>{' '}
+                <span className="font-bold text-brand-primary">{defectosCapturados.length}</span>{' '}
+                {defectosCapturados.length === 1 ? 'defecto' : 'defectos'} ({totalParesFalla} pares)
+              </p>
+              <p className="text-[11px] text-text-muted pt-1">
+                Si confirmas salir, se borrarán el lote y los defectos capturados.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmarDescarteAbierto(false)}
+                className="cursor-pointer font-medium"
+              >
+                Continuar captura
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                size="sm"
+                onClick={handleDescartarYSalir}
+                className="cursor-pointer font-bold gap-1.5"
+              >
+                <Icon name="delete_forever" size="16px" />
+                <span>Descartar y salir</span>
+              </Button>
+            </div>
           </div>
         </div>
-      </ModalBody>
-
-      {/* FOOTER DEL MODAL */}
-      <ModalFooter className="flex items-center justify-between px-6 py-4 bg-app-surface-muted/60 border-t border-border-subtle">
-        <span className="text-xs font-semibold text-text-secondary">
-          {loteActivo ? `` : 'Ingrese un lote de producción para habilitar el registro'}
-        </span>
-
-        <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onClose}
-            disabled={guardando}
-            className="cursor-pointer"
-          >
-            Cancelar
-          </Button>
-
-          <Button
-            type="button"
-            variant="guardar"
-            size="md"
-            onClick={handleGuardarInspeccion}
-            disabled={guardando || !loteActivo || defectosCapturados.length === 0}
-            className="px-6 font-bold uppercase tracking-wider text-xs gap-2 cursor-pointer shadow-sm touch-manipulation"
-          >
-            {guardando ? (
-              <div className="flex items-center gap-2">
-                <Spinner size="14px" />
-                <span>Guardando...</span>
-              </div>
-            ) : (
-              <>
-                <Icon name="save" size="18px" />
-                <span>Guardar</span>
-              </>
-            )}
-          </Button>
-        </div>
-      </ModalFooter>
-
-      {/* TECLADO NUMÉRICO FLOTANTE Y ARRASTRABLE PARA PANTALLAS TÁCTILES */}
-      <FloatingNumpad
-        isOpen={Boolean(tecladoTarget)}
-        onClose={() => setTecladoTarget(null)}
-        title={tecladoTarget === 'lote' ? 'Número de Lote' : 'Clave de Defecto'}
-        targetInputName={
-          tecladoTarget === 'lote'
-            ? `Lote: ${loteInput || '—'}`
-            : `Clave: ${claveDefecto || '—'}`
-        }
-        submitLabel={tecladoTarget === 'lote' ? 'Buscar Lote' : 'Agregar Defecto'}
-        onDigit={(digito) => {
-          if (tecladoTarget === 'lote') {
-            if (loteInput.length < 10) {
-              setLoteInput(loteInput + digito);
-              setErrorLote(null);
-            }
-          } else if (tecladoTarget === 'clave') {
-            if (claveDefecto.length < 6) {
-              setClaveDefecto(claveDefecto + digito);
-              setErrorDefecto(null);
-            }
-          }
-        }}
-        onBackspace={() => {
-          if (tecladoTarget === 'lote') {
-            setLoteInput(loteInput.slice(0, -1));
-          } else if (tecladoTarget === 'clave') {
-            setClaveDefecto(claveDefecto.slice(0, -1));
-          }
-        }}
-        onClear={() => {
-          if (tecladoTarget === 'lote') {
-            setLoteInput('');
-          } else if (tecladoTarget === 'clave') {
-            setClaveDefecto('');
-          }
-        }}
-        onSubmit={async () => {
-          if (tecladoTarget === 'lote') {
-            handleBuscarLote();
-          } else if (tecladoTarget === 'clave') {
-            if (defectoSeleccionado) {
-              handleAgregarDefecto(defectoSeleccionado);
-            } else {
-              const encontrado = await handleBuscarDefecto(claveDefecto);
-              if (encontrado) {
-                handleAgregarDefecto(encontrado);
-              }
-            }
-          }
-        }}
-      />
-    </Modal>
+      )}
+    </>
   );
 }

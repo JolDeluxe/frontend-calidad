@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/utils/cn';
 
@@ -12,7 +13,12 @@ export interface FloatingNumpadProps {
   onClear: () => void;
   onSubmit: () => void;
   submitLabel?: string;
+  anchorElement?: HTMLElement | null;
+  preferredSide?: 'left' | 'right' | 'auto';
 }
+
+const NUMPAD_WIDTH = 290;
+const NUMPAD_HEIGHT = 410;
 
 export function FloatingNumpad({
   isOpen,
@@ -24,33 +30,109 @@ export function FloatingNumpad({
   onClear,
   onSubmit,
   submitLabel = 'Aceptar',
+  anchorElement,
+  preferredSide = 'auto',
 }: FloatingNumpadProps) {
-  // Posición inicial flotante en la esquina inferior derecha para no tapar los inputs
-  const [pos, setPos] = useState<{ x: number; y: number }>(() => {
-    if (typeof window !== 'undefined') {
-      return {
-        x: Math.max(20, window.innerWidth - 300),
-        y: Math.max(80, window.innerHeight - 440),
-      };
-    }
-    return { x: 50, y: 100 };
-  });
+  // Función para calcular la posición óptima justo al lado del input
+  const calcularPosicion = useCallback(
+    (anchor: HTMLElement | null, side: 'left' | 'right' | 'auto') => {
+      if (typeof window === 'undefined') return { x: 50, y: 100 };
+
+      if (!anchor) {
+        return {
+          x: Math.max(10, window.innerWidth - NUMPAD_WIDTH - 20),
+          y: Math.max(20, window.innerHeight - NUMPAD_HEIGHT - 20),
+        };
+      }
+
+      const rect = anchor.getBoundingClientRect();
+      const espaciado = 12;
+
+      const posDerechaX = rect.right + espaciado;
+      const cabeDerecha = posDerechaX + NUMPAD_WIDTH <= window.innerWidth - 10;
+
+      const posIzquierdaX = rect.left - espaciado - NUMPAD_WIDTH;
+      const cabeIzquierda = posIzquierdaX >= 10;
+
+      let x: number;
+      let y = rect.top;
+
+      if (side === 'left') {
+        if (cabeIzquierda) {
+          x = posIzquierdaX;
+        } else if (cabeDerecha) {
+          x = posDerechaX;
+        } else {
+          x = Math.max(10, Math.min(window.innerWidth - NUMPAD_WIDTH - 10, rect.left));
+          y = rect.bottom + espaciado;
+        }
+      } else if (side === 'right') {
+        if (cabeDerecha) {
+          x = posDerechaX;
+        } else if (cabeIzquierda) {
+          x = posIzquierdaX;
+        } else {
+          x = Math.max(10, Math.min(window.innerWidth - NUMPAD_WIDTH - 10, rect.left));
+          y = rect.bottom + espaciado;
+        }
+      } else {
+        // Modo auto: priorizar el lado que tenga más espacio disponible
+        if (cabeDerecha) {
+          x = posDerechaX;
+        } else if (cabeIzquierda) {
+          x = posIzquierdaX;
+        } else {
+          x = Math.max(10, Math.min(window.innerWidth - NUMPAD_WIDTH - 10, rect.left));
+          y = rect.bottom + espaciado;
+        }
+      }
+
+      // Asegurar que el teclado no quede fuera de los límites de la pantalla verticalmente
+      const maxY = Math.max(10, window.innerHeight - NUMPAD_HEIGHT - 10);
+      y = Math.max(10, Math.min(maxY, y));
+
+      return { x, y };
+    },
+    []
+  );
+
+  const [pos, setPos] = useState<{ x: number; y: number }>(() =>
+    calcularPosicion(anchorElement ?? null, preferredSide)
+  );
 
   const [isDragging, setIsDragging] = useState(false);
   const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Reubicar si cambia el tamaño de pantalla
+  // Actualizar la posición automáticamente cuando se abre o cuando cambia el input objetivo
   useEffect(() => {
-    const handleResize = () => {
-      setPos((prev) => ({
-        x: Math.min(prev.x, Math.max(10, window.innerWidth - 290)),
-        y: Math.min(prev.y, Math.max(10, window.innerHeight - 420)),
-      }));
+    if (isOpen) {
+      setPos(calcularPosicion(anchorElement ?? null, preferredSide));
+    }
+  }, [isOpen, anchorElement, preferredSide, calcularPosicion]);
+
+  // Reubicar dinámicamente si cambia el tamaño de la ventana o se realiza scroll
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleUpdatePos = () => {
+      if (!isDragging && anchorElement) {
+        setPos(calcularPosicion(anchorElement, preferredSide));
+      } else {
+        setPos((prev) => ({
+          x: Math.min(prev.x, Math.max(10, window.innerWidth - NUMPAD_WIDTH)),
+          y: Math.min(prev.y, Math.max(10, window.innerHeight - NUMPAD_HEIGHT)),
+        }));
+      }
     };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+
+    window.addEventListener('resize', handleUpdatePos);
+    window.addEventListener('scroll', handleUpdatePos, true);
+    return () => {
+      window.removeEventListener('resize', handleUpdatePos);
+      window.removeEventListener('scroll', handleUpdatePos, true);
+    };
+  }, [isOpen, isDragging, anchorElement, preferredSide, calcularPosicion]);
 
   // Control de arrastre con Mouse y Touch
   const handleStartDrag = (clientX: number, clientY: number) => {
@@ -62,7 +144,6 @@ export function FloatingNumpad({
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    // Solo arrastrar desde la barra superior de título
     if ((e.target as HTMLElement).closest('.numpad-drag-handle')) {
       handleStartDrag(e.clientX, e.clientY);
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -104,7 +185,7 @@ export function FloatingNumpad({
     ['1', '2', '3'],
   ];
 
-  return (
+  const content = (
     <div
       ref={panelRef}
       onPointerDown={handlePointerDown}
@@ -112,7 +193,7 @@ export function FloatingNumpad({
         transform: `translate3d(${pos.x}px, ${pos.y}px, 0)`,
       }}
       className={cn(
-        'fixed left-0 top-0 z-[120] w-[290px] bg-white border border-slate-300 shadow-2xl rounded-2xl p-3 flex flex-col gap-2.5 select-none touch-manipulation transition-shadow',
+        'fixed left-0 top-0 z-[160] w-[290px] bg-white border border-slate-300 shadow-2xl rounded-2xl p-3 flex flex-col gap-2.5 select-none touch-manipulation transition-shadow',
         isDragging ? 'shadow-marca-primario/20 ring-2 ring-marca-primario cursor-grabbing' : 'shadow-2xl'
       )}
     >
@@ -196,4 +277,6 @@ export function FloatingNumpad({
       </button>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : null;
 }

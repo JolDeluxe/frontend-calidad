@@ -104,28 +104,50 @@ export function CapturaDefectoForm({
               }}
               disabled={guardando || !loteActivo}
               placeholder={!loteActivo ? '—' : ''}
-              className="h-10 xl:h-12 text-xs xl:text-sm font-mono font-bold text-center pr-8 rounded-xl"
+              className={cn(
+                'h-10 xl:h-12 text-xs xl:text-sm font-mono font-bold text-center rounded-xl',
+                claveDefecto.length > 0 && loteActivo ? 'pr-14' : 'pr-8'
+              )}
             />
-            <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center">
+            <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
               {buscandoDefecto ? (
                 <div className="text-brand-primary">
                   <Spinner size="14px" />
                 </div>
-              ) : onAbrirTeclado && loteActivo ? (
-                <button
-                  type="button"
-                  onClick={onAbrirTeclado}
-                  title={tecladoActivo ? 'Cerrar teclado numérico' : 'Abrir teclado numérico'}
-                  className={cn(
-                    'h-6 w-6 rounded-md flex items-center justify-center transition-all cursor-pointer',
-                    tecladoActivo
-                      ? 'bg-marca-primario text-white shadow-xs'
-                      : 'text-slate-400 hover:text-marca-primario hover:bg-slate-100'
+              ) : (
+                <>
+                  {claveDefecto.length > 0 && loteActivo && !guardando && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClaveDefecto('');
+                        setDefectoSeleccionado(null);
+                        setErrorDefecto(null);
+                        claveInputRef.current?.focus();
+                      }}
+                      title="Borrar clave"
+                      className="h-6 w-6 rounded-md flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                    >
+                      <Icon name="close" size="14px" />
+                    </button>
                   )}
-                >
-                  <Icon name="dialpad" size="15px" />
-                </button>
-              ) : null}
+                  {onAbrirTeclado && loteActivo && (
+                    <button
+                      type="button"
+                      onClick={onAbrirTeclado}
+                      title={tecladoActivo ? 'Cerrar teclado numérico' : 'Abrir teclado numérico'}
+                      className={cn(
+                        'h-6 w-6 rounded-md flex items-center justify-center transition-all cursor-pointer',
+                        tecladoActivo
+                          ? 'bg-marca-primario text-white shadow-xs'
+                          : 'text-slate-400 hover:text-marca-primario hover:bg-slate-100'
+                      )}
+                    >
+                      <Icon name="dialpad" size="15px" />
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>

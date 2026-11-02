@@ -19,6 +19,7 @@ export interface CapturaLoteSelectorProps {
   setLineaCodigo: (val: string) => void;
   onAbrirTeclado?: () => void;
   tecladoActivo?: boolean;
+  onLimpiarLote?: () => void;
 }
 
 export function CapturaLoteSelector({
@@ -35,6 +36,7 @@ export function CapturaLoteSelector({
   setLineaCodigo,
   onAbrirTeclado,
   tecladoActivo,
+  onLimpiarLote,
 }: CapturaLoteSelectorProps) {
   return (
     <div className="shrink-0">
@@ -56,6 +58,9 @@ export function CapturaLoteSelector({
                 const val = e.target.value.replace(/\D/g, '').slice(0, 10);
                 setLoteInput(val);
                 setErrorLote(null);
+                if (!val.trim()) {
+                  onLimpiarLote?.();
+                }
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -64,28 +69,42 @@ export function CapturaLoteSelector({
                 }
               }}
               disabled={guardando}
-              className="h-10 xl:h-12 font-mono font-bold text-base xl:text-lg text-brand-primary tracking-wider pr-14 rounded-xl"
+              className="h-10 xl:h-12 font-mono font-bold text-base xl:text-lg text-brand-primary tracking-wider pr-18 xl:pr-20 rounded-xl"
             />
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
               {cargandoLote ? (
                 <div className="text-brand-primary mr-1">
                   <Spinner size="18px" />
                 </div>
-              ) : onAbrirTeclado ? (
-                <button
-                  type="button"
-                  onClick={onAbrirTeclado}
-                  title={tecladoActivo ? 'Cerrar teclado numérico' : 'Abrir teclado numérico'}
-                  className={cn(
-                    'h-7 w-7 rounded-lg flex items-center justify-center transition-all cursor-pointer',
-                    tecladoActivo
-                      ? 'bg-marca-primario text-white shadow-xs'
-                      : 'text-slate-400 hover:text-marca-primario hover:bg-slate-100'
+              ) : (
+                <>
+                  {loteInput.length > 0 && !guardando && onLimpiarLote && (
+                    <button
+                      type="button"
+                      onClick={onLimpiarLote}
+                      title="Borrar lote y defectos"
+                      className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                    >
+                      <Icon name="close" size="18px" />
+                    </button>
                   )}
-                >
-                  <Icon name="dialpad" size="18px" />
-                </button>
-              ) : null}
+                  {onAbrirTeclado && (
+                    <button
+                      type="button"
+                      onClick={onAbrirTeclado}
+                      title={tecladoActivo ? 'Cerrar teclado numérico' : 'Abrir teclado numérico'}
+                      className={cn(
+                        'h-7 w-7 rounded-lg flex items-center justify-center transition-all cursor-pointer',
+                        tecladoActivo
+                          ? 'bg-marca-primario text-white shadow-xs'
+                          : 'text-slate-400 hover:text-marca-primario hover:bg-slate-100'
+                      )}
+                    >
+                      <Icon name="dialpad" size="18px" />
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>
