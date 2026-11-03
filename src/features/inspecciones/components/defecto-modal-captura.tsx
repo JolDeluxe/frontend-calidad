@@ -71,18 +71,6 @@ function guardarBorradorEnStorage(
   }
 }
 
-function obtenerBorradorDeStorage(deptoId?: number): BorradorCaptura | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const key = getDraftKey(deptoId);
-    const item = window.localStorage.getItem(key);
-    if (!item) return null;
-    return JSON.parse(item) as BorradorCaptura;
-  } catch {
-    return null;
-  }
-}
-
 function eliminarBorradorDeStorage(deptoId?: number) {
   if (typeof window === 'undefined') return;
   try {
@@ -225,52 +213,35 @@ export function DefectoModalCaptura({
     };
   }, [isOpen, departamentoAuditor, isOfflineMode]);
 
-  // Estado para modal de confirmación antes de descartar y cerrar (previene cierre accidental)
-  const [confirmarDescarteAbierto, setConfirmarDescarteAbierto] = useState(false);
-
-  // Inicializar o restaurar borrador cuando isOpen cambia de false a true
+  // Limpiar campos cada vez que se abre el modal
   useEffect(() => {
     if (isOpen) {
-      setConfirmarDescarteAbierto(false);
-      const borrador = obtenerBorradorDeStorage(departamentoAuditor?.id);
-      if (
-        borrador &&
-        (borrador.loteActivo || (borrador.defectosCapturados && borrador.defectosCapturados.length > 0))
-      ) {
-        setLoteInput(borrador.loteInput || '');
-        setLoteActivo(borrador.loteActivo);
-        setLineaCodigo(borrador.lineaCodigo || 'L1');
-        setDefectosCapturados(borrador.defectosCapturados || []);
-        setErrorLote(null);
-        setErrorDefecto(null);
-        setErrorGuardado(null);
-        toast.info(
-          `Se restauró la captura pendiente del lote ${borrador.loteActivo?.lote || borrador.loteInput} (${borrador.defectosCapturados?.length || 0} defectos).`,
-          { title: 'Borrador Recuperado' }
-        );
-      } else {
-        setLoteInput('');
-        setLoteActivo(null);
-        setErrorLote(null);
-        setLineaCodigo('L1');
-        setClaveDefecto('');
-        setFiltroTextoDefecto('');
-        setSelectorAbierto(false);
-        setDefectoSeleccionado(null);
-        setErrorDefecto(null);
-        setParesDefecto(1);
-        setDefectosCapturados([]);
-        setErrorGuardado(null);
-        setTimeout(() => {
-          loteInputRef.current?.focus();
-        }, 150);
-      }
+      eliminarBorradorDeStorage(departamentoAuditor?.id);
+      setLoteInput('');
+      setLoteActivo(null);
+      setErrorLote(null);
+      setLineaCodigo('L1');
+      setClaveDefecto('');
+      setFiltroTextoDefecto('');
+      setSelectorAbierto(false);
+      setDefectoSeleccionado(null);
+      setErrorDefecto(null);
+      setParesDefecto(1);
+      setDefectosCapturados([]);
+      setErrorGuardado(null);
+      setTimeout(() => {
+        loteInputRef.current?.focus();
+      }, 150);
     }
   }, [isOpen, departamentoAuditor?.id]);
 
-  // Persistir en localStorage mientras el modal esté abierto
+  // Persistir en localStorage mientras el modal esté abierto únicamente si hay datos activos
   useEffect(() => {
     if (!isOpen) return;
+    if (!loteActivo && defectosCapturados.length === 0 && !loteInput.trim()) {
+      eliminarBorradorDeStorage(departamentoAuditor?.id);
+      return;
+    }
     guardarBorradorEnStorage(departamentoAuditor?.id, {
       loteInput,
       loteActivo,
@@ -298,33 +269,17 @@ export function DefectoModalCaptura({
     }, 50);
   };
 
-  // Prevenir cierre accidental: si hay información capturada, pedir confirmación antes de descartar y salir
-  const handleIntentarCerrar = () => {
-    // 1. Si el teclado numérico está abierto, cerrarlo primero
+  // Cerrar directamente al presionar la tachita o Cancelar sin confirmaciones ni persistencias no deseadas
+  const handleCerrarDirecto = () => {
+    // 1. Si el teclado numérico está abierto, cerrarlo
     if (tecladoTarget) {
       setTecladoTarget(null);
-      return;
     }
-
     // 2. Si el selector de defectos está desplegado, cerrarlo
     if (selectorAbierto) {
       setSelectorAbierto(false);
-      return;
     }
-
-    // 3. Prevenir cierre accidental: si hay defectos o lote activo cargado, pedir confirmación
-    if (defectosCapturados.length > 0 || loteActivo) {
-      setConfirmarDescarteAbierto(true);
-      return;
-    }
-
-    // 4. Si no hay datos registrados, cerrar inmediatamente
-    handleDescartarYSalir();
-  };
-
-  // Si confirma descartar (o si da en cancelar / tachita sin datos), limpiar y cerrar
-  const handleDescartarYSalir = () => {
-    setConfirmarDescarteAbierto(false);
+    // 3. Limpiar estado, eliminar cualquier borrador en localStorage y cerrar
     eliminarBorradorDeStorage(departamentoAuditor?.id);
     setLoteInput('');
     setLoteActivo(null);
@@ -332,7 +287,6 @@ export function DefectoModalCaptura({
     setDefectosCapturados([]);
     setClaveDefecto('');
     setFiltroTextoDefecto('');
-    setSelectorAbierto(false);
     setDefectoSeleccionado(null);
     setErrorDefecto(null);
     setParesDefecto(1);
@@ -808,13 +762,13 @@ export function DefectoModalCaptura({
     <>
       <Modal
         isOpen={isOpen}
-        onClose={handleIntentarCerrar}
+        onClose={handleCerrarDirecto}
         size="screen"
         className="w-full h-[96vh] max-h-[96vh] border-border shadow-2xl bg-app-surface"
       >
         <ModalHeader
           title={`Captura de Defectos — ${departamentoAuditor?.nombre || 'Calidad'}`}
-          onClose={handleIntentarCerrar}
+          onClose={handleCerrarDirecto}
           className="px-6 py-4"
         />
 
@@ -933,21 +887,21 @@ export function DefectoModalCaptura({
 
         {/* FOOTER DEL MODAL */}
         <ModalFooter className="flex items-center justify-between px-6 py-4 bg-app-surface-muted/60 border-t border-border-subtle">
-          <span className="text-xs font-semibold text-text-secondary">
-            {loteActivo ? `` : 'Ingrese un lote de producción para habilitar el registro'}
-          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="md"
+            onClick={handleCerrarDirecto}
+            disabled={guardando}
+            className="cursor-pointer font-medium px-5"
+          >
+            Cancelar
+          </Button>
 
-          <div className="flex items-center gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleIntentarCerrar}
-              disabled={guardando}
-              className="cursor-pointer"
-            >
-              Cancelar
-            </Button>
+          <div className="flex items-center gap-4">
+            <span className="text-xs font-semibold text-text-secondary hidden sm:inline">
+              {loteActivo ? `` : 'Ingrese un lote de producción para habilitar el registro'}
+            </span>
 
             <Button
               type="button"
@@ -955,7 +909,7 @@ export function DefectoModalCaptura({
               size="md"
               onClick={handleGuardarInspeccion}
               disabled={guardando || !loteActivo || defectosCapturados.length === 0}
-              className="px-6 font-bold uppercase tracking-wider text-xs gap-2 cursor-pointer shadow-sm touch-manipulation"
+              className="px-7 font-bold uppercase tracking-wider text-xs gap-2 cursor-pointer shadow-sm touch-manipulation"
             >
               {guardando ? (
                 <div className="flex items-center gap-2">
@@ -1032,69 +986,6 @@ export function DefectoModalCaptura({
           }}
         />
       </Modal>
-
-      {/* MODAL DE CONFIRMACIÓN PARA PREVENIR CIERRE ACCIDENTAL Y PÉRDIDA DE DATOS */}
-      {confirmarDescarteAbierto && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-150"
-          role="alertdialog"
-          aria-modal="true"
-        >
-          <div className="bg-app-surface rounded-2xl border border-border shadow-2xl max-w-md w-full p-6 space-y-4 animate-in zoom-in-95 duration-150">
-            <div className="flex items-center gap-3 text-amber-600">
-              <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-950/50 flex items-center justify-center shrink-0">
-                <Icon name="warning" size="24px" className="text-amber-600 dark:text-amber-400" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-text-primary">¿Descartar captura actual?</h3>
-                <p className="text-xs text-text-secondary mt-0.5">
-                  Tienes información registrada que se perderá si sales.
-                </p>
-              </div>
-            </div>
-
-            <div className="p-3.5 bg-app-surface-muted rounded-xl border border-border-subtle text-xs space-y-1.5 text-text-secondary">
-              {loteActivo && (
-                <p>
-                  <span className="font-semibold text-text-primary">Lote:</span>{' '}
-                  <span className="font-mono font-bold text-brand-primary">{loteActivo.lote}</span>
-                  {loteActivo.modelo && ` (${loteActivo.modelo})`}
-                </p>
-              )}
-              <p>
-                <span className="font-semibold text-text-primary">Defectos registrados:</span>{' '}
-                <span className="font-bold text-brand-primary">{defectosCapturados.length}</span>{' '}
-                {defectosCapturados.length === 1 ? 'defecto' : 'defectos'} ({totalParesFalla} pares)
-              </p>
-              <p className="text-[11px] text-text-muted pt-1">
-                Si confirmas salir, se borrarán el lote y los defectos capturados.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setConfirmarDescarteAbierto(false)}
-                className="cursor-pointer font-medium"
-              >
-                Continuar captura
-              </Button>
-              <Button
-                type="button"
-                variant="danger"
-                size="sm"
-                onClick={handleDescartarYSalir}
-                className="cursor-pointer font-bold gap-1.5"
-              >
-                <Icon name="delete_forever" size="16px" />
-                <span>Descartar y salir</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
