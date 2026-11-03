@@ -54,7 +54,7 @@ export function MobileSidebar() {
               MBC CUADRA
             </p>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-marca-acento">
-              10_proyecto_calidad
+              Registro de Defectos
             </p>
           </div>
           <button

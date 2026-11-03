@@ -1,14 +1,29 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { LoginForm } from '../components/login-form';
 import { useAuthSession } from '@/providers/auth-provider';
 import { getDefaultRouteForUser } from '@/app/router/route-guards';
 
+const FONDOS_LOGIN = [
+  '/loginEscritorio/1.webp',
+  '/loginEscritorio/2.webp',
+  '/loginEscritorio/3.webp',
+];
+
 export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
+  const [fondoIndex, setFondoIndex] = useState(0);
   const { login } = useAuthSession();
   const navigate = useNavigate();
+
+  // Rotación suave del carrusel de fondo cada 7 segundos
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setFondoIndex((prev) => (prev + 1) % FONDOS_LOGIN.length);
+    }, 7000);
+    return () => clearInterval(timer);
+  }, []);
 
   const handleLogin = async (usuario: string, password: string) => {
     setLoading(true);
@@ -31,14 +46,36 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-cuadra-arena px-4">
-      <div className="w-full max-w-md bg-white border border-slate-200 rounded-sm shadow-md p-8">
+    <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden bg-slate-950 px-4 select-none">
+      {/* Carrusel de imágenes de fondo cinematográficas con overlay */}
+      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+        {FONDOS_LOGIN.map((fondo, idx) => (
+          <div
+            key={fondo}
+            className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out scale-105 transform ${
+              idx === fondoIndex ? 'opacity-40' : 'opacity-0'
+            }`}
+            style={{ backgroundImage: `url('${fondo}')` }}
+          />
+        ))}
+        {/* Capas de gradientes para elegancia y legibilidad */}
+        <div className="absolute inset-0 bg-radial from-transparent via-slate-950/60 to-slate-950/90" />
+        <div className="absolute inset-0 backdrop-blur-[2px]" />
+      </div>
+
+      {/* Contenedor flotante del Login */}
+      <div className="relative z-10 w-full max-w-md bg-white/95 backdrop-blur-md border border-white/20 rounded-xl shadow-2xl p-7 sm:p-9 animate-in fade-in zoom-in-95 duration-300">
         <div className="text-center mb-6">
-          <h1 className="fuente-titulos text-3xl font-bold text-marca-primario">
-            MBC CUADRA
+          <img
+            src="/img/01_Cuadra.webp"
+            alt="MBC Cuadra"
+            className="mx-auto h-12 w-auto object-contain mb-3 drop-shadow-sm"
+          />
+          <h1 className="fuente-titulos text-2xl font-bold uppercase tracking-wider text-marca-primario">
+            Registro de Defectos
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Inicio de Sesión — 10_proyecto_calidad
+          <p className="text-xs font-semibold uppercase tracking-widest text-marca-acento mt-0.5">
+            Sistema de Calidad
           </p>
         </div>
 
@@ -48,6 +85,12 @@ export function LoginPage() {
           onSubmit={handleLogin}
           onClearError={() => setBackendError(null)}
         />
+
+        <div className="mt-6 pt-4 border-t border-slate-200/80 text-center">
+          <p className="text-[11px] font-medium text-slate-500">
+            MBC Cuadra &bull; Procesos Tecnológicos
+          </p>
+        </div>
       </div>
     </div>
   );

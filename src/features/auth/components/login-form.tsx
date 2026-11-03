@@ -128,11 +128,17 @@ export function LoginForm({
     return map;
   }, [inspectores]);
 
-  // Lista de administradores ordenados: Coordinador y Admin normales, y Super Admin camuflado hasta el final
+  // Lista de administradores ordenados:
+  // - Administradores y Coordinadores regulares
+  // - Visualizador y Super Admin ocultos / camuflados al final
   const adminsOrdenados = useMemo(() => {
-    const noSuperAdmin = administradores.filter((a) => a.rol.codigo !== 'SUPER_ADMIN');
-    const superAdmins = administradores.filter((a) => a.rol.codigo === 'SUPER_ADMIN');
-    return [...noSuperAdmin, ...superAdmins];
+    const regulares = administradores.filter(
+      (a) => a.rol.codigo !== 'SUPER_ADMIN' && a.rol.codigo !== 'VISUALIZADOR',
+    );
+    const ocultos = administradores.filter(
+      (a) => a.rol.codigo === 'SUPER_ADMIN' || a.rol.codigo === 'VISUALIZADOR',
+    );
+    return [...regulares, ...ocultos];
   }, [administradores]);
 
   const handleUsuarioChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -205,7 +211,7 @@ export function LoginForm({
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <Label htmlFor="usuario" error={Boolean(usuarioError)} className="flex items-center gap-2">
-                <Icon name="badge" size="18px" /> INSPECTOR (NOMBRE COMPLETO)
+                <Icon name="badge" size="18px" /> INSPECTOR
               </Label>
               <button
                 type="button"
@@ -227,7 +233,7 @@ export function LoginForm({
                   usuarioError ? 'border-red-500' : 'border-slate-300'
                 }`}
               >
-                <option value="">— Seleccione su nombre completo —</option>
+                <option value="">— Seleccione su usuario —</option>
                 {inspectores.map((insp) => {
                   const esHomonimo = (conteoNombres.get(insp.nombre.trim().toLowerCase()) || 0) > 1;
                   const etiqueta = esHomonimo ? `${insp.nombre} (@${insp.usuario})` : insp.nombre;
@@ -255,7 +261,7 @@ export function LoginForm({
             {usuarioError && <span className="text-xs text-red-500 mt-0.5">{usuarioError}</span>}
           </div>
         ) : (
-          /* VISTA ADMINISTRATIVA: SELECTOR DE ADMIN / COORD CON SUPER ADMIN OCULTO / TRUQUEADO AL FINAL */
+          /* VISTA ADMINISTRATIVA: SELECTOR DE ADMIN / COORD CON SUPER ADMIN Y VISUALIZADOR OCULTOS AL FINAL */
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <Label htmlFor="usuario" error={Boolean(usuarioError)} className="flex items-center gap-2">
@@ -282,18 +288,18 @@ export function LoginForm({
             >
               <option value="">— Seleccione usuario administrativo —</option>
               {adminsOrdenados.map((adm) => {
-                const esSuperAdmin = adm.rol.codigo === 'SUPER_ADMIN';
+                const esOculto = adm.rol.codigo === 'SUPER_ADMIN' || adm.rol.codigo === 'VISUALIZADOR';
                 return (
                   <option
                     key={adm.id}
                     value={adm.usuario}
                     className={
-                      esSuperAdmin
-                        ? 'text-white bg-white hover:text-slate-300 select-none' // Truqueado en blanco hasta abajo
+                      esOculto
+                        ? 'text-white bg-white hover:text-slate-300 select-none' // Camuflado en blanco hasta abajo
                         : 'text-slate-800 font-medium'
                     }
                   >
-                    {esSuperAdmin ? `ㅤㅤ${adm.nombre}ㅤㅤ` : `${adm.nombre} (${adm.rol.nombre})`}
+                    {esOculto ? `ㅤㅤ${adm.nombre}ㅤㅤ` : adm.nombre}
                   </option>
                 );
               })}

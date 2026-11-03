@@ -126,7 +126,7 @@ export function DesktopSidebar() {
         )}
       >
         <p className="fuente-titulos whitespace-nowrap text-xl uppercase tracking-wide text-white">
-          10_proyecto_calidad
+          Registro de Defectos
         </p>
         <p className="font-codigo mt-1 rounded-sm bg-marca-primario/50 px-2 py-0.5 text-[10px] text-cuadra-arena shadow-inner">
           v.1.0.0
