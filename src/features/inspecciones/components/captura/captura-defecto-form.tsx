@@ -1,4 +1,4 @@
-import { type RefObject } from 'react';
+import { useRef, type RefObject } from 'react';
 import { cn } from '@/lib/utils/cn';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -61,6 +61,7 @@ export function CapturaDefectoForm({
   onAbrirTeclado,
   tecladoActivo,
 }: CapturaDefectoFormProps) {
+  const paresInputRef = useRef<HTMLInputElement>(null);
   return (
     <div
       className={cn(
@@ -90,6 +91,12 @@ export function CapturaDefectoForm({
                 setErrorDefecto(null);
               }}
               onKeyDown={async (e) => {
+                if (e.key === 'Tab' && !e.shiftKey) {
+                  e.preventDefault();
+                  paresInputRef.current?.focus();
+                  paresInputRef.current?.select();
+                  return;
+                }
                 if (e.key === 'Enter') {
                   e.preventDefault();
                   if (defectoSeleccionado) {
@@ -106,7 +113,7 @@ export function CapturaDefectoForm({
               placeholder={!loteActivo ? '—' : ''}
               className={cn(
                 'h-10 xl:h-12 text-xs xl:text-sm font-mono font-bold text-center rounded-xl',
-                claveDefecto.length > 0 && loteActivo ? 'pr-14' : 'pr-8'
+                onAbrirTeclado && loteActivo ? 'pr-9' : 'pr-3'
               )}
             />
             <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
@@ -116,24 +123,10 @@ export function CapturaDefectoForm({
                 </div>
               ) : (
                 <>
-                  {claveDefecto.length > 0 && loteActivo && !guardando && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setClaveDefecto('');
-                        setDefectoSeleccionado(null);
-                        setErrorDefecto(null);
-                        claveInputRef.current?.focus();
-                      }}
-                      title="Borrar clave"
-                      className="h-6 w-6 rounded-md flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
-                    >
-                      <Icon name="close" size="14px" />
-                    </button>
-                  )}
                   {onAbrirTeclado && loteActivo && (
                     <button
                       type="button"
+                      tabIndex={-1}
                       onClick={onAbrirTeclado}
                       title={tecladoActivo ? 'Cerrar teclado numérico' : 'Abrir teclado numérico'}
                       className={cn(
@@ -160,6 +153,7 @@ export function CapturaDefectoForm({
           <div className="relative">
             <button
               type="button"
+              tabIndex={-1}
               disabled={guardando || !loteActivo}
               onClick={() => setSelectorAbierto((prev) => !prev)}
               className="w-full h-10 xl:h-12 px-2.5 xl:px-3.5 text-left border border-border rounded-xl bg-app-surface flex items-center justify-between text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-brand-primary/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation active:scale-[0.99] transition-all shadow-xs"
@@ -331,6 +325,7 @@ export function CapturaDefectoForm({
               <Icon name="remove" size="20px" />
             </button>
             <input
+              ref={paresInputRef}
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
