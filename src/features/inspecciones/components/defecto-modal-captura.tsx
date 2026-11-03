@@ -887,21 +887,21 @@ export function DefectoModalCaptura({
 
         {/* FOOTER DEL MODAL */}
         <ModalFooter className="flex items-center justify-between px-6 py-4 bg-app-surface-muted/60 border-t border-border-subtle">
-          <Button
-            type="button"
-            variant="outline"
-            size="md"
-            onClick={handleCerrarDirecto}
-            disabled={guardando}
-            className="cursor-pointer font-medium px-5"
-          >
-            Cancelar
-          </Button>
+          <span className="text-xs font-semibold text-text-secondary">
+            {loteActivo ? `` : 'Ingrese un lote de producción para habilitar el registro'}
+          </span>
 
-          <div className="flex items-center gap-4">
-            <span className="text-xs font-semibold text-text-secondary hidden sm:inline">
-              {loteActivo ? `` : 'Ingrese un lote de producción para habilitar el registro'}
-            </span>
+          <div className="flex items-center gap-6">
+            <Button
+              type="button"
+              variant="outline"
+              size="md"
+              onClick={handleCerrarDirecto}
+              disabled={guardando}
+              className="cursor-pointer font-medium px-5 border-border hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              Cancelar
+            </Button>
 
             <Button
               type="button"
