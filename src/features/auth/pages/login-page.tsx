@@ -46,25 +46,22 @@ export function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden bg-slate-950 px-4 select-none">
-      {/* Carrusel de imágenes de fondo cinematográficas con overlay */}
+    <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden bg-slate-900 px-4 select-none">
+      {/* Carrusel de imágenes de fondo natural sin filtros */}
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
         {FONDOS_LOGIN.map((fondo, idx) => (
           <div
             key={fondo}
-            className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out scale-105 transform ${
-              idx === fondoIndex ? 'opacity-40' : 'opacity-0'
+            className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out ${
+              idx === fondoIndex ? 'opacity-100' : 'opacity-0'
             }`}
             style={{ backgroundImage: `url('${fondo}')` }}
           />
         ))}
-        {/* Capas de gradientes para elegancia y legibilidad */}
-        <div className="absolute inset-0 bg-radial from-transparent via-slate-950/60 to-slate-950/90" />
-        <div className="absolute inset-0 backdrop-blur-[2px]" />
       </div>
 
       {/* Contenedor flotante del Login */}
-      <div className="relative z-10 w-full max-w-md bg-white/95 backdrop-blur-md border border-white/20 rounded-xl shadow-2xl p-7 sm:p-9 animate-in fade-in zoom-in-95 duration-300">
+      <div className="relative z-10 w-full max-w-md bg-white border border-slate-200 rounded-xl shadow-2xl p-7 sm:p-9 animate-in fade-in zoom-in-95 duration-300">
         <div className="text-center mb-6">
           <img
             src="/img/01_Cuadra.webp"
