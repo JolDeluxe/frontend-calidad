@@ -449,122 +449,147 @@ export function DefectosMatrizView({
                 </td>
               </tr>
             ) : (
-              defectos.map((def) => {
-                // Mapa real de etapas permitidas/bloqueadas provenientes de la API
-                const mapEtapasPermitidas = new Map<number, boolean>();
-                const mapEtapasCodigo = new Map<string, boolean>();
-                def.etapas?.forEach((e) => {
-                  mapEtapasPermitidas.set(e.departamentoId, e.permitido);
-                  if (e.departamento?.codigo) {
-                    mapEtapasCodigo.set(e.departamento.codigo, e.permitido);
+              (() => {
+                let ultimoDeptoId: number | null | undefined = undefined;
+                return defectos.map((def) => {
+                  const deptoActualId = def.departamentoId ?? 0;
+                  const deptoNombre = def.departamento?.nombre || 'SIN DEPARTAMENTO';
+                  const esNuevoGrupo = deptoActualId !== ultimoDeptoId;
+                  if (esNuevoGrupo) {
+                    ultimoDeptoId = deptoActualId;
                   }
-                });
 
-                const isEliminado = Boolean(def.eliminadoEn);
+                  // Mapa real de etapas permitidas/bloqueadas provenientes de la API
+                  const mapEtapasPermitidas = new Map<number, boolean>();
+                  const mapEtapasCodigo = new Map<string, boolean>();
+                  def.etapas?.forEach((e) => {
+                    mapEtapasPermitidas.set(e.departamentoId, e.permitido);
+                    if (e.departamento?.codigo) {
+                      mapEtapasCodigo.set(e.departamento.codigo, e.permitido);
+                    }
+                  });
 
-                return (
-                  <tr
-                    key={def.id}
-                    className={`transition-colors hover:bg-slate-50/80 ${
-                      isEliminado ? 'bg-rose-50/30' : ''
-                    }`}
-                  >
-                    {/* Clave Sticky */}
-                    <td className="py-2 px-3 font-mono font-bold text-center text-lg text-brand-primary sticky left-0 z-10 bg-white border-r border-slate-200 whitespace-nowrap">
-                      {def.clave}
-                    </td>
+                  const isEliminado = Boolean(def.eliminadoEn);
 
-                    {/* Descripción Sticky con Ojito y 3 Puntos */}
-                    <td className="py-2 px-4 font-medium text-slate-900 sticky left-16 z-10 bg-white border-r border-slate-200 shadow-2xs">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="leading-snug truncate" title={def.defecto}>
-                          {def.defecto}
-                        </span>
-                        <div className="flex items-center gap-1 shrink-0">
-                          {/* Ojito para ver detalle */}
-                          <button
-                            type="button"
-                            onClick={() => onVerDetalle(def)}
-                            className="p-1 text-slate-400 hover:text-brand-primary hover:bg-slate-100 rounded transition-colors cursor-pointer"
-                            title="Ver detalles"
+                  return (
+                    <>
+                      {esNuevoGrupo && (
+                        <tr key={`depto-matriz-${deptoActualId}`} className="bg-slate-100/90 border-y-2 border-slate-300">
+                          <td
+                            colSpan={4 + etapasOrdenadas.length}
+                            className="py-2 px-4 sticky left-0 z-20 font-black text-xs uppercase tracking-wider text-slate-800 bg-slate-100/95"
                           >
-                            <Icon name="visibility" size="16px" />
-                          </button>
+                            <div className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-marca-primario" />
+                              <span>{deptoNombre}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      <tr
+                        key={def.id}
+                        className={`transition-colors hover:bg-slate-50/80 ${
+                          isEliminado ? 'bg-rose-50/30' : ''
+                        }`}
+                      >
+                      {/* Clave Sticky */}
+                      <td className="py-2 px-3 font-mono font-bold text-center text-lg text-brand-primary sticky left-0 z-10 bg-white border-r border-slate-200 whitespace-nowrap">
+                        {def.clave}
+                      </td>
 
-                          {/* 3 puntos para más opciones (Editar / Eliminar) */}
-                          <AccionesMenuMatriz
-                            def={def}
-                            onVerDetalle={onVerDetalle}
-                            onOpenEdit={onOpenEdit}
-                            onOpenDelete={onOpenDelete}
-                            onReactivar={onReactivar}
-                          />
+                      {/* Descripción Sticky con Ojito y 3 Puntos */}
+                      <td className="py-2 px-4 font-medium text-slate-900 sticky left-16 z-10 bg-white border-r border-slate-200 shadow-2xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="leading-snug truncate" title={def.defecto}>
+                            {def.defecto}
+                          </span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {/* Ojito para ver detalle */}
+                            <button
+                              type="button"
+                              onClick={() => onVerDetalle(def)}
+                              className="p-1 text-slate-400 hover:text-brand-primary hover:bg-slate-100 rounded transition-colors cursor-pointer"
+                              title="Ver detalles"
+                            >
+                              <Icon name="visibility" size="16px" />
+                            </button>
+
+                            {/* 3 puntos para más opciones (Editar / Eliminar) */}
+                            <AccionesMenuMatriz
+                              def={def}
+                              onVerDetalle={onVerDetalle}
+                              onOpenEdit={onOpenEdit}
+                              onOpenDelete={onOpenDelete}
+                              onReactivar={onReactivar}
+                            />
+                          </div>
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Departamento Propietario */}
-                    <td className="py-2 px-3 text-center border-r border-slate-200 whitespace-nowrap">
-                      <span className="text-sm text-gray-800">
-                        {def.departamento?.nombre || '—'}
-                      </span>
-                    </td>
+                      {/* Departamento Propietario */}
+                      <td className="py-2 px-3 text-center border-r border-slate-200 whitespace-nowrap">
+                        <span className="text-sm font-semibold text-gray-800">
+                          {def.departamento?.nombre || '—'}
+                        </span>
+                      </td>
 
-                    {/* Clasificación */}
-                    <td className="py-2 px-3 text-center border-r border-slate-200 whitespace-nowrap">
-                      <div className="flex justify-center">
-                        <DefectoClasificacionIndicator clasificacion={def.clasificacion} />
-                      </div>
-                    </td>
+                      {/* Clasificación */}
+                      <td className="py-2 px-3 text-center border-r border-slate-200 whitespace-nowrap">
+                        <div className="flex justify-center">
+                          <DefectoClasificacionIndicator clasificacion={def.clasificacion} />
+                        </div>
+                      </td>
 
-                    {/* Celdas de Departamentos de Detección: Palomita (Permitido) / Tachita (Bloqueado) interactivo */}
-                    {etapasOrdenadas.map((etapa) => {
-                      const permitido = etapa.id > 0
-                        ? mapEtapasPermitidas.get(etapa.id)
-                        : mapEtapasCodigo.get(etapa.codigo);
+                      {/* Celdas de Departamentos de Detección: Palomita (Permitido) / Tachita (Bloqueado) interactivo */}
+                      {etapasOrdenadas.map((etapa) => {
+                        const permitido = etapa.id > 0
+                          ? mapEtapasPermitidas.get(etapa.id)
+                          : mapEtapasCodigo.get(etapa.codigo);
 
-                      const isPermitido = permitido === true;
-                      const cellKey = `${def.id}-${etapa.id}`;
-                      const isUpdating = updatingCellKey === cellKey;
+                        const isPermitido = permitido === true;
+                        const cellKey = `${def.id}-${etapa.id}`;
+                        const isUpdating = updatingCellKey === cellKey;
 
-                      return (
-                        <td
-                          key={etapa.codigo}
-                          className="py-2 px-2 text-center border-r border-slate-200 last:border-r-0"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => handleCellClick(def, etapa, isPermitido)}
-                            disabled={Boolean(def.eliminadoEn) || !onToggleEtapa || isUpdating}
-                            className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-all duration-150 ${
-                              def.eliminadoEn
-                                ? 'opacity-40 cursor-not-allowed'
-                                : 'cursor-pointer hover:scale-110 active:scale-95'
-                            } ${
-                              isPermitido
-                                ? 'bg-emerald-50 text-emerald-600 border border-emerald-300 hover:bg-emerald-100'
-                                : 'bg-slate-50 text-slate-300 border border-slate-200 hover:bg-slate-100 hover:text-slate-400'
-                            }`}
-                            title={
-                              def.eliminadoEn
-                                ? 'Defecto inactivo'
-                                : `${isPermitido ? 'Permitido' : 'Bloqueado'} en ${etapa.nombre}. Haz clic para cambiar estado.`
-                            }
+                        return (
+                          <td
+                            key={etapa.codigo}
+                            className="py-2 px-2 text-center border-r border-slate-200 last:border-r-0"
                           >
-                            {isUpdating ? (
-                              <Spinner size="xs" />
-                            ) : isPermitido ? (
-                              <Icon name="check" size="16px" weight={700} />
-                            ) : (
-                              <Icon name="close" size="14px" weight={400} />
-                            )}
-                          </button>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })
+                            <button
+                              type="button"
+                              onClick={() => handleCellClick(def, etapa, isPermitido)}
+                              disabled={Boolean(def.eliminadoEn) || !onToggleEtapa || isUpdating}
+                              className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-all duration-150 ${
+                                def.eliminadoEn
+                                  ? 'opacity-40 cursor-not-allowed'
+                                  : 'cursor-pointer hover:scale-110 active:scale-95'
+                              } ${
+                                isPermitido
+                                  ? 'bg-emerald-50 text-emerald-600 border border-emerald-300 hover:bg-emerald-100'
+                                  : 'bg-slate-50 text-slate-300 border border-slate-200 hover:bg-slate-100 hover:text-slate-400'
+                              }`}
+                              title={
+                                def.eliminadoEn
+                                  ? 'Defecto inactivo'
+                                  : `${isPermitido ? 'Permitido' : 'Bloqueado'} en ${etapa.nombre}. Haz clic para cambiar estado.`
+                              }
+                            >
+                              {isUpdating ? (
+                                <Spinner size="xs" />
+                              ) : isPermitido ? (
+                                <Icon name="check" size="16px" weight={700} />
+                              ) : (
+                                <Icon name="close" size="14px" weight={400} />
+                              )}
+                            </button>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    </>
+                  );
+                });
+              })()
             )}
           </tbody>
         </table>

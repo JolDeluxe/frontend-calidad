@@ -519,97 +519,122 @@ export function DefectosTabla({
                 {loading ? (
                   <TableRowsSkeleton columns={mostrarColumnaLinea ? 7 : 6} rows={10} />
                 ) : (
-                  defectos.map((def) => {
-                    const isEliminado = Boolean(def.eliminadoEn);
-                    const deptosPermitidosCount = def.etapas?.filter((e) => e.permitido).length || 0;
-                    const totalDeptosCount = def.etapas?.length || 8;
+                  (() => {
+                    let ultimoDeptoId: number | null | undefined = undefined;
+                    return defectos.map((def) => {
+                      const deptoActualId = def.departamentoId ?? 0;
+                      const deptoNombre = def.departamento?.nombre || 'SIN DEPARTAMENTO';
+                      const esNuevoGrupo = deptoActualId !== ultimoDeptoId;
+                      if (esNuevoGrupo) {
+                        ultimoDeptoId = deptoActualId;
+                      }
 
-                    return (
-                      <tr
-                        key={def.id}
-                        className={`hover:bg-app-surface-muted/50 transition-colors ${
-                          isEliminado ? 'opacity-60 bg-red-50/20' : ''
-                        }`}
-                      >
-                        <td className="py-3.5 px-4 font-mono font-bold text-brand-primary text-lg">
-                          {def.clave}
-                        </td>
-                        <td className="py-3.5 px-4 font-medium text-text-primary">
-                          <button
-                            type="button"
-                            onClick={() => onVerDetalle(def)}
-                            className="hover:underline text-left cursor-pointer font-semibold"
+                      const isEliminado = Boolean(def.eliminadoEn);
+                      const deptosPermitidosCount = def.etapas?.filter((e) => e.permitido).length || 0;
+                      const totalDeptosCount = def.etapas?.length || 8;
+
+                      return (
+                        <>
+                          {esNuevoGrupo && (
+                            <tr key={`depto-tabla-${deptoActualId}`} className="bg-app-surface-muted/90 border-y border-border">
+                              <td
+                                colSpan={mostrarColumnaLinea ? 7 : 6}
+                                className="py-2.5 px-4 font-black text-xs uppercase tracking-wider text-text-primary bg-app-surface-muted"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-marca-primario" />
+                                  <span>{deptoNombre}</span>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                          <tr
+                            key={def.id}
+                            className={`hover:bg-app-surface-muted/50 transition-colors ${
+                              isEliminado ? 'opacity-60 bg-red-50/20' : ''
+                            }`}
                           >
-                            {def.defecto}
-                          </button>
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span className="text-sm text-gray-800">
-                            {def.departamento?.nombre || '—'}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <DefectoClasificacionIndicator clasificacion={def.clasificacion} />
-                        </td>
-                        {mostrarColumnaLinea && (
-                          <td className="py-3.5 px-4">
-                            {(() => {
-                              const lineasSet = new Set<string>();
-                              def.departamentos?.forEach((d) => {
-                                if (d.activo) {
-                                  d.departamento.lineasAsociadas?.forEach((l) => {
-                                    if (l.activo && l.linea) {
-                                      lineasSet.add(l.linea.nombre);
+                            <td className="py-3.5 px-4 font-mono font-bold text-brand-primary text-lg">
+                              {def.clave}
+                            </td>
+                            <td className="py-3.5 px-4 font-medium text-text-primary">
+                              <button
+                                type="button"
+                                onClick={() => onVerDetalle(def)}
+                                className="hover:underline text-left cursor-pointer font-semibold"
+                              >
+                                {def.defecto}
+                              </button>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className="text-sm font-semibold text-gray-800">
+                                {def.departamento?.nombre || '—'}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <DefectoClasificacionIndicator clasificacion={def.clasificacion} />
+                            </td>
+                            {mostrarColumnaLinea && (
+                              <td className="py-3.5 px-4">
+                                {(() => {
+                                  const lineasSet = new Set<string>();
+                                  def.departamentos?.forEach((d) => {
+                                    if (d.activo) {
+                                      d.departamento.lineasAsociadas?.forEach((l) => {
+                                        if (l.activo && l.linea) {
+                                          lineasSet.add(l.linea.nombre);
+                                        }
+                                      });
                                     }
                                   });
-                                }
-                              });
-                              const lineasArr = Array.from(lineasSet);
-                              if (lineasArr.length === 0) return <span className="text-text-muted text-sm">—</span>;
-                              return (
-                                <div className="flex flex-col gap-1">
-                                  {lineasArr.map((lin) => (
-                                    <div key={lin} className="flex items-center gap-1.5 text-sm text-gray-700">
-                                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full shrink-0" aria-hidden="true" />
-                                      <span>{lin}</span>
+                                  const lineasArr = Array.from(lineasSet);
+                                  if (lineasArr.length === 0) return <span className="text-text-muted text-sm">—</span>;
+                                  return (
+                                    <div className="flex flex-col gap-1">
+                                      {lineasArr.map((lin) => (
+                                        <div key={lin} className="flex items-center gap-1.5 text-sm text-gray-700">
+                                          <span className="w-1.5 h-1.5 bg-gray-400 rounded-full shrink-0" aria-hidden="true" />
+                                          <span>{lin}</span>
+                                        </div>
+                                      ))}
                                     </div>
-                                  ))}
-                                </div>
-                              );
-                            })()}
-                          </td>
-                        )}
-                        <td className="py-3.5 px-4">
-                          {!isEliminado ? (
-                            <button
-                              type="button"
-                              onClick={() => onOpenDeptos(def)}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-app-surface-muted hover:bg-border/60 text-text-primary border border-border transition-colors cursor-pointer"
-                              title="Ver o consultar departamentos de detección permitidos"
-                            >
-                              <Icon name="verified" size="14px" className="text-emerald-600" />
-                              <span>
-                                {deptosPermitidosCount} / {totalDeptosCount} deptos
-                              </span>
-                            </button>
-                          ) : (
-                            <span className="text-xs text-text-muted italic">Inactivo</span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 text-center">
-                          <MenuAccionesDefecto
-                            def={def}
-                            isEliminado={isEliminado}
-                            onVerDetalle={onVerDetalle}
-                            onOpenEdit={onOpenEdit}
-                            onOpenDeptos={onOpenDeptos}
-                            onOpenDelete={onOpenDelete}
-                            onReactivar={onReactivar}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })
+                                  );
+                                })()}
+                              </td>
+                            )}
+                            <td className="py-3.5 px-4">
+                              {!isEliminado ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenDeptos(def)}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-app-surface-muted hover:bg-border/60 text-text-primary border border-border transition-colors cursor-pointer"
+                                  title="Ver o consultar departamentos de detección permitidos"
+                                >
+                                  <Icon name="verified" size="14px" className="text-emerald-600" />
+                                  <span>
+                                    {deptosPermitidosCount} / {totalDeptosCount} deptos
+                                  </span>
+                                </button>
+                              ) : (
+                                <span className="text-xs text-text-muted italic">Inactivo</span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              <MenuAccionesDefecto
+                                def={def}
+                                isEliminado={isEliminado}
+                                onVerDetalle={onVerDetalle}
+                                onOpenEdit={onOpenEdit}
+                                onOpenDeptos={onOpenDeptos}
+                                onOpenDelete={onOpenDelete}
+                                onReactivar={onReactivar}
+                              />
+                            </td>
+                          </tr>
+                        </>
+                      );
+                    });
+                  })()
                 )}
               </tbody>
             </table>
