@@ -21,6 +21,7 @@ interface InspeccionesTablaProps {
   sinConexion?: boolean;
   errorConsulta?: string | null;
   mostrandoDatosLocales?: boolean;
+  mostrarColumnaLinea?: boolean;
   onReintentar?: () => void;
   onCargarMas?: () => void;
   onVerDetalle?: (item: InspeccionFilaResponse) => void;
@@ -161,6 +162,7 @@ export function InspeccionesTabla({
   sinConexion = false,
   errorConsulta = null,
   mostrandoDatosLocales = false,
+  mostrarColumnaLinea = true,
   onReintentar,
   onCargarMas,
   onVerDetalle,
@@ -186,7 +188,7 @@ export function InspeccionesTabla({
           <thead className="sticky top-0 z-30 shadow-xs">
             {toolbar && (
               <tr className="bg-white border-b border-border/80">
-                <th colSpan={14} className="p-2.5 xl:p-3 font-normal text-left bg-white rounded-t-xl">
+                <th colSpan={mostrarColumnaLinea ? 14 : 13} className="p-2.5 xl:p-3 font-normal text-left bg-white rounded-t-xl">
                   {toolbar}
                 </th>
               </tr>
@@ -197,11 +199,13 @@ export function InspeccionesTabla({
               <th className="py-2 px-1.5 xl:px-2.5 w-[8%] truncate">Fecha</th>
               <th className="py-2 px-1.5 xl:px-2.5 w-[6%] truncate">Lista</th>
               <th className="py-2 px-1.5 xl:px-2.5 w-[6%] truncate">Lote</th>
-              <th className="py-2 px-1.5 xl:px-2.5 w-[5%] text-center">Línea</th>
+              {mostrarColumnaLinea && (
+                <th className="py-2 px-1.5 xl:px-2.5 w-[5%] text-center">Línea</th>
+              )}
               <th className="py-2 px-1.5 xl:px-2.5 w-[7%] truncate">Modelo</th>
-              <th className="py-2 px-1.5 xl:px-2.5 w-[18%]">Descripción</th>
+              <th className={`py-2 px-1.5 xl:px-2.5 ${mostrarColumnaLinea ? 'w-[18%]' : 'w-[20%]'}`}>Descripción</th>
               <th className="py-2 px-1.5 xl:px-2.5 w-[5%] text-center font-mono">Clave</th>
-              <th className="py-2 px-1.5 xl:px-2.5 w-[16%]">Defecto</th>
+              <th className={`py-2 px-1.5 xl:px-2.5 ${mostrarColumnaLinea ? 'w-[16%]' : 'w-[19%]'}`}>Defecto</th>
               <th className="py-2 px-1.5 xl:px-2.5 w-[6%]">Clasif.</th>
               <th className="py-2 px-1.5 xl:px-2.5 w-[4%] text-center">Prs</th>
               <th className="py-2 px-1.5 xl:px-2.5 w-[6%] truncate">Inspector</th>
@@ -278,7 +282,7 @@ export function InspeccionesTabla({
           {/* Fila 1: Filtros Integrados (Cero cálculo top-14, irrompible) */}
           {toolbar && (
             <tr className="bg-white border-b border-border/80">
-              <th colSpan={14} className="p-2.5 xl:p-3 font-normal text-left bg-white rounded-t-xl">
+              <th colSpan={mostrarColumnaLinea ? 14 : 13} className="p-2.5 xl:p-3 font-normal text-left bg-white rounded-t-xl">
                 {toolbar}
               </th>
             </tr>
@@ -291,11 +295,13 @@ export function InspeccionesTabla({
             <th className="py-2 px-1.5 xl:px-2.5 w-[8%] truncate">Fecha</th>
             <th className="py-2 px-1.5 xl:px-2.5 w-[6%] truncate">Lista</th>
             <th className="py-2 px-1.5 xl:px-2.5 w-[6%] truncate">Lote</th>
-            <th className="py-2 px-1.5 xl:px-2.5 w-[5%] text-center">Línea</th>
+            {mostrarColumnaLinea && (
+              <th className="py-2 px-1.5 xl:px-2.5 w-[5%] text-center">Línea</th>
+            )}
             <th className="py-2 px-1.5 xl:px-2.5 w-[7%] truncate">Modelo</th>
-            <th className="py-2 px-1.5 xl:px-2.5 w-[18%]">Descripción</th>
+            <th className={`py-2 px-1.5 xl:px-2.5 ${mostrarColumnaLinea ? 'w-[18%]' : 'w-[20%]'}`}>Descripción</th>
             <th className="py-2 px-1.5 xl:px-2.5 w-[5%] text-center font-mono">Clave</th>
-            <th className="py-2 px-1.5 xl:px-2.5 w-[16%]">Defecto</th>
+            <th className={`py-2 px-1.5 xl:px-2.5 ${mostrarColumnaLinea ? 'w-[16%]' : 'w-[19%]'}`}>Defecto</th>
             <th className="py-2 px-1.5 xl:px-2.5 w-[6%]">Clasif.</th>
             <th className="py-2 px-1.5 xl:px-2.5 w-[4%] text-center">Prs</th>
             <th className="py-2 px-1.5 xl:px-2.5 w-[6%] truncate">Inspector</th>
@@ -304,7 +310,7 @@ export function InspeccionesTabla({
         </thead>
         <tbody className="divide-y divide-border/60">
           {isLoading ? (
-            <TableRowsSkeleton columns={14} rows={10} />
+            <TableRowsSkeleton columns={mostrarColumnaLinea ? 14 : 13} rows={10} />
           ) : (
             items.map((row, idx) => {
               // Resaltar si el departamento de origen/responsable es diferente del auditado
@@ -395,11 +401,13 @@ export function InspeccionesTabla({
                   </td>
 
                   {/* Línea */}
-                  <td className="py-2 px-1 text-center">
-                    <span className="inline-block px-1 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 truncate">
-                      {row.linea}
-                    </span>
-                  </td>
+                  {mostrarColumnaLinea && (
+                    <td className="py-2 px-1 text-center">
+                      <span className="inline-block px-1 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 truncate">
+                        {row.linea}
+                      </span>
+                    </td>
+                  )}
 
                   {/* Modelo */}
                   <td className="py-2 px-1.5 xl:px-2 font-semibold text-slate-900 truncate" title={row.modelo}>

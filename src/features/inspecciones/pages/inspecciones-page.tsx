@@ -860,6 +860,7 @@ export function InspeccionesPage() {
         sinConexion={estaSinConexionBackend}
         errorConsulta={errorConsulta}
         mostrandoDatosLocales={mostrandoDatosLocales}
+        mostrarColumnaLinea={(deptoAuditor?.numeroLineas ?? 1) > 1}
         onReintentar={async () => {
           setIsLoading(true);
           try {
