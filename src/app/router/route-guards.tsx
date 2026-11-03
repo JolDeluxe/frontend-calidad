@@ -18,6 +18,25 @@ export function RequireAuth({ children }: { children?: ReactNode }) {
   return children ? <>{children}</> : <Outlet />;
 }
 
+/**
+ * Determina el destino por defecto según el rol del usuario.
+ * Si el usuario NO es SUPER_ADMIN, no tiene permitido acceder a ROOT ('/'),
+ * dirigiéndose a su módulo operativo principal (INSPECCIONES o REGISTRO).
+ */
+export function getDefaultRouteForUser(rolCodigo?: string): string {
+  const rol = rolCodigo?.toUpperCase();
+  if (rol === 'SUPER_ADMIN') {
+    return ROUTES.ROOT;
+  }
+  if (rol === 'INSPECTOR') {
+    return ROUTES.INSPECCIONES;
+  }
+  if (rol === 'COORD' || rol === 'ADMIN' || rol === 'VISUALIZADOR') {
+    return ROUTES.REGISTRO;
+  }
+  return ROUTES.INSPECCIONES;
+}
+
 export function RequireRole({
   roles,
   children,
@@ -37,7 +56,7 @@ export function RequireRole({
 
   const userRole = user?.rol?.codigo;
   if (!userRole || !roles.includes(userRole)) {
-    const destinoFallback = userRole?.toUpperCase() === 'INSPECTOR' ? ROUTES.INSPECCIONES : ROUTES.ROOT;
+    const destinoFallback = getDefaultRouteForUser(userRole);
     return <Navigate to={destinoFallback} replace />;
   }
 
@@ -52,8 +71,7 @@ export function RedirectIfAuthenticated({ children }: { children?: ReactNode }) 
   }
 
   if (isAuthenticated && sessionState !== 'revoked') {
-    const esInspector = user?.rol?.codigo?.toUpperCase() === 'INSPECTOR';
-    const destino = esInspector ? ROUTES.INSPECCIONES : ROUTES.ROOT;
+    const destino = getDefaultRouteForUser(user?.rol?.codigo);
     return <Navigate to={destino} replace />;
   }
 

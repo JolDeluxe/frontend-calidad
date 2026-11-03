@@ -95,7 +95,11 @@ export const routes: RouteObject[] = [
         children: [
           {
             path: ROUTES.ROOT,
-            element: withSuspense(<HomePage />),
+            element: (
+              <RequireRole roles={['SUPER_ADMIN']}>
+                {withSuspense(<HomePage />)}
+              </RequireRole>
+            ),
           },
           // Catálogos Administrativos
           {

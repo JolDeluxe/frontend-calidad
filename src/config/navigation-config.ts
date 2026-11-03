@@ -13,7 +13,7 @@ export const NAVIGATION_CONFIG: NavItem[] = [
     name: 'Inicio',
     icon: 'home',
     route: '/',
-    allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'INSPECTOR', 'COORD', 'VISUALIZADOR'],
+    allowedRoles: ['SUPER_ADMIN'],
   },
   {
     id: 'inspecciones',
