@@ -1,16 +1,19 @@
 import type { ClasificacionDefecto } from '../types/defectos.types';
 
-/** Fila editable de la tabla de carga masiva (estado local; el backend asigna las claves). */
+/** Fila editable de la tabla de carga masiva. */
 export interface FilaLoteEditable {
   id: string;
+  clave: string;
   descripcion: string;
   clasificacion: ClasificacionDefecto | '';
 }
 
+const ENCABEZADOS_CLAVE = new Set(['clave', 'codigo', 'cve', '#']);
 const ENCABEZADOS_DESCRIPCION = new Set([
   'descripcion',
   'descripcion del defecto',
   'defecto',
+  'nombre',
 ]);
 
 function sinAcentos(valor: string): string {
@@ -77,15 +80,17 @@ export function normalizarClasificacion(valor: string): ClasificacionDefecto | '
   return '';
 }
 
-export function crearFilaVacia(id: string, clasificacion: ClasificacionDefecto | ''): FilaLoteEditable {
-  return { id, descripcion: '', clasificacion };
+export function crearFilaVacia(id: string, clasificacion: ClasificacionDefecto | '', clave = ''): FilaLoteEditable {
+  return { id, clave, descripcion: '', clasificacion };
 }
 
 /**
  * Aplica un bloque pegado (matriz de celdas) a partir de la celda (filaInicio, colInicio).
- * Columna 0 = Descripción, columna 1 = Clasificación. Las columnas sobrantes se ignoran.
- * Extiende la tabla con filas nuevas cuando el bloque excede las filas existentes.
- * Si la primera fila pegada es un encabezado ("Descripción"), se omite.
+ * Mapeo de columnas según colInicio:
+ * Si colInicio === 0:
+ *   - Si la primera celda es un número o texto numérico y hay >= 2 columnas: Col 0 = Clave, Col 1 = Descripción, Col 2 = Clasificación
+ *   - Si el pegado trae 2 columnas y col 0 no es número: se asume Descripción (Col 1) y Clasificación (Col 2), o Clave y Descripción según contexto.
+ *   - Si coincide con encabezados típicos ("Clave", "Descripción"), se salta la primera fila.
  */
 export function aplicarPegado(
   filas: ReadonlyArray<FilaLoteEditable>,
@@ -96,7 +101,16 @@ export function aplicarPegado(
   generarId: () => string,
 ): FilaLoteEditable[] {
   let bloque = matriz.filter((f) => f.some((c) => c.trim() !== ''));
-  if (colInicio === 0 && bloque.length > 0 && ENCABEZADOS_DESCRIPCION.has(sinAcentos(bloque[0][0] ?? ''))) {
+  if (bloque.length === 0) return filas.map((f) => ({ ...f }));
+
+  // Detectar si la primera fila es encabezado
+  const primerCeldaNorm = sinAcentos(bloque[0][0] ?? '');
+  const segundaCeldaNorm = sinAcentos(bloque[0][1] ?? '');
+  if (
+    ENCABEZADOS_CLAVE.has(primerCeldaNorm) ||
+    ENCABEZADOS_DESCRIPCION.has(primerCeldaNorm) ||
+    ENCABEZADOS_DESCRIPCION.has(segundaCeldaNorm)
+  ) {
     bloque = bloque.slice(1);
   }
 
@@ -108,13 +122,31 @@ export function aplicarPegado(
       resultado.push(crearFilaVacia(generarId(), clasificacionPorDefecto));
     }
 
+    // Detectar si el usuario pegó 2 columnas comenzando en col 0 pero la primera columna es texto largo (Descripción)
+    // En tal caso, mapear a Descripción (col 1) y Clasificación (col 2).
+    let mapeoCols: number[] = celdas.map((_, idx) => colInicio + idx);
+    if (colInicio === 0 && celdas.length === 2) {
+      const c0 = celdas[0].trim();
+      const esNumero = /^\d+$/.test(c0);
+      if (!esNumero) {
+        // Son Descripción y Clasificación
+        mapeoCols = [1, 2];
+      }
+    }
+
     celdas.forEach((celda, j) => {
-      const col = colInicio + j;
+      const col = mapeoCols[j];
+      const val = celda.trim();
       if (col === 0) {
-        resultado[destino].descripcion = celda.trim();
+        // Columna 0: Clave
+        resultado[destino].clave = val;
       } else if (col === 1) {
-        if (celda.trim() !== '') {
-          resultado[destino].clasificacion = normalizarClasificacion(celda);
+        // Columna 1: Descripción
+        resultado[destino].descripcion = val;
+      } else if (col === 2) {
+        // Columna 2: Clasificación
+        if (val !== '') {
+          resultado[destino].clasificacion = normalizarClasificacion(val);
         }
       }
     });

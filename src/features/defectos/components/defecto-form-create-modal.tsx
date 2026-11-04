@@ -166,7 +166,11 @@ export function DefectoFormCreateModal({
     return {
       lineaId: Number(lineaId),
       departamentoId: Number(departamentoId),
-      filas: filas.map((f) => ({ descripcion: f.descripcion, clasificacion: f.clasificacion })),
+      filas: filas.map((f) => ({
+        clave: f.clave && !isNaN(Number(f.clave)) ? Number(f.clave) : undefined,
+        descripcion: f.descripcion,
+        clasificacion: f.clasificacion,
+      })),
       departamentosIds: Array.from(deptosIdsSet),
       etapasPermitidasIds: Array.from(deptosIdsSet),
     };
@@ -261,7 +265,8 @@ export function DefectoFormCreateModal({
 
   const clavesPropuestas = preview?.filas.map((f) => f.clavePropuesta).filter((c): c is number => c !== null) ?? [];
   const puedeConfirmar = !!preview?.valido && !isWorking;
-  const sinGrupo = !!lineaId && !!departamentoId && !!grupoError;
+  const todasFilasConClave = filas.length > 0 && filas.every((f) => f.clave && !isNaN(Number(f.clave)) && Number(f.clave) > 0);
+  const sinGrupo = !!lineaId && !!departamentoId && !!grupoError && !todasFilasConClave;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} className={modo === 'masiva' ? 'max-w-4xl max-h-[92vh]' : 'max-w-xl max-h-[90vh]'}>

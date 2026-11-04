@@ -85,9 +85,9 @@ export function DefectoCargaMasivaTabla({
           <thead className="sticky top-0 z-10 bg-app-surface-muted text-text-secondary text-2xs uppercase tracking-wider">
             <tr>
               <th className="py-2 px-2 w-10 text-center border-b border-border">#</th>
+              <th className="py-2 px-2 w-28 text-center border-b border-border">Clave</th>
               <th className="py-2 px-2 border-b border-border">Descripción del defecto</th>
               <th className="py-2 px-2 w-36 border-b border-border">Clasificación</th>
-              <th className="py-2 px-2 w-24 text-center border-b border-border">Clave</th>
               <th className="py-2 px-2 w-44 border-b border-border">Validación</th>
               <th className="py-2 px-1 w-10 border-b border-border" aria-label="Acciones" />
             </tr>
@@ -96,7 +96,7 @@ export function DefectoCargaMasivaTabla({
             {filas.length === 0 && (
               <tr>
                 <td colSpan={6} className="py-8 text-center text-xs text-text-muted italic">
-                  Sin filas. Use «Agregar fila» o pegue un bloque copiado desde Excel (Descripción, Clasificación).
+                  Sin filas. Use «Agregar fila» o pegue un bloque copiado desde Excel (Clave, Descripción, Clasificación).
                 </td>
               </tr>
             )}
@@ -108,10 +108,26 @@ export function DefectoCargaMasivaTabla({
                   <td className="py-1 px-2 text-center text-xs text-text-muted font-mono">{i + 1}</td>
                   <td className="p-0.5">
                     <input
-                      type="text"
+                      type="number"
                       data-celda={`${i}-0`}
                       data-fila={i}
                       data-col={0}
+                      value={fila.clave}
+                      disabled={disabled}
+                      min={1}
+                      placeholder="Ej. 1120"
+                      aria-label={`Clave fila ${i + 1}`}
+                      onChange={(e) => actualizar(i, { clave: e.target.value })}
+                      onKeyDown={(e) => handleKeyDown(e, i)}
+                      className={`${inputBase} text-center font-mono font-semibold text-brand-primary`}
+                    />
+                  </td>
+                  <td className="p-0.5">
+                    <input
+                      type="text"
+                      data-celda={`${i}-1`}
+                      data-fila={i}
+                      data-col={1}
                       value={fila.descripcion}
                       disabled={disabled}
                       maxLength={255}
@@ -124,9 +140,9 @@ export function DefectoCargaMasivaTabla({
                   </td>
                   <td className="p-0.5">
                     <select
-                      data-celda={`${i}-1`}
+                      data-celda={`${i}-2`}
                       data-fila={i}
-                      data-col={1}
+                      data-col={2}
                       value={fila.clasificacion}
                       disabled={disabled}
                       aria-label={`Clasificación fila ${i + 1}`}
@@ -138,9 +154,6 @@ export function DefectoCargaMasivaTabla({
                       <option value="MAYOR">Mayor</option>
                       <option value="MENOR">Menor</option>
                     </select>
-                  </td>
-                  <td className="py-1 px-2 text-center font-mono text-xs font-bold text-brand-primary">
-                    {estado?.clave ? `#${estado.clave}` : '—'}
                   </td>
                   <td className="py-1 px-2 text-xs align-top">
                     {!estado ? (

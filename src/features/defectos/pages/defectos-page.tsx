@@ -342,6 +342,45 @@ export function DefectosPage() {
     }
   };
 
+  /** Refresca los defectos cargados conservando la cantidad de páginas acumuladas y la posición de scroll */
+  const refrescarManteniendoScroll = async () => {
+    const scrollY = typeof window !== 'undefined' ? window.scrollY : 0;
+    const paginasAcumuladas = Math.max(1, page);
+
+    try {
+      const params: Parameters<typeof defectosApi.getDefectos>[0] = {
+        busqueda: busqueda.trim() || undefined,
+        clasificacion: filtroClasificacion || undefined,
+        departamentoId: filtroDepartamento || undefined,
+        soloEliminados: verEliminados ? true : undefined,
+        page: 1,
+        limit: paginasAcumuladas * limit,
+      };
+
+      if (lineaActivaId !== 'TODAS') {
+        params.lineaId = lineaActivaId;
+      } else if (selectedLineas.length > 0) {
+        params.lineasIds = selectedLineas;
+      }
+
+      const data = await defectosApi.getDefectos(params);
+      const items = data.items || [];
+      cachedDefectosRef.current = items;
+      setDefectos(items);
+      setTotalItems(data.total || 0);
+      setTotalPages(Math.ceil((data.total || 0) / limit) || 1);
+
+      // Restaurar scroll de forma no intrusiva
+      if (typeof window !== 'undefined') {
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: scrollY, behavior: 'instant' });
+        });
+      }
+    } catch {
+      await fetchDefectosData(1, false);
+    }
+  };
+
   // Handlers para abrir modales
   const openCreateModal = () => {
     setIsModalCreateOpen(true);
@@ -435,7 +474,7 @@ export function DefectosPage() {
         await defectosApi.syncDefectoDepartamentos(currentDefecto.id, data.departamentosList);
       }
 
-      await Promise.all([fetchDefectosData(1, false), fetchConteosLineas()]);
+      await Promise.all([refrescarManteniendoScroll(), fetchConteosLineas()]);
       toast.success('Defecto actualizado correctamente');
     } catch (err: any) {
       toast.error(err.message || 'Error al actualizar defecto');
@@ -449,7 +488,7 @@ export function DefectosPage() {
     if (!currentDefecto) return;
     try {
       await defectosApi.syncDefectoDepartamentos(currentDefecto.id, list);
-      await Promise.all([fetchDefectosData(page, false), fetchConteosLineas()]);
+      await Promise.all([refrescarManteniendoScroll(), fetchConteosLineas()]);
       toast.success('Departamentos sincronizados exitosamente');
     } catch (err: any) {
       toast.error(err.message || 'Error al sincronizar departamentos');
@@ -460,7 +499,7 @@ export function DefectosPage() {
   const handleDeleteConfirm = async (def: Defecto) => {
     try {
       await defectosApi.deleteDefecto(def.id);
-      await Promise.all([fetchDefectosData(1, false), fetchConteosLineas()]);
+      await Promise.all([refrescarManteniendoScroll(), fetchConteosLineas()]);
       toast.success(`Defecto #${def.clave} "${def.defecto}" eliminado exitosamente`);
     } catch (err: any) {
       toast.error(err.message || 'Error al eliminar defecto');
@@ -472,7 +511,7 @@ export function DefectosPage() {
     try {
       setLoading(true);
       await defectosApi.reactivarDefecto(def.id);
-      await Promise.all([fetchDefectosData(1, false), fetchConteosLineas()]);
+      await Promise.all([refrescarManteniendoScroll(), fetchConteosLineas()]);
       toast.success(`Defecto #${def.clave} reactivado exitosamente`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al reactivar defecto';

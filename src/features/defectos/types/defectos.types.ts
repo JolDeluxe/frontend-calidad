@@ -74,6 +74,7 @@ export interface GrupoCodificacion {
 }
 
 export interface FilaLotePayload {
+  clave?: number;
   descripcion: string;
   clasificacion: string;
 }
