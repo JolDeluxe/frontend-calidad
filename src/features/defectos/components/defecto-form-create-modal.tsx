@@ -119,16 +119,23 @@ export function DefectoFormCreateModal({
 
   if (!isOpen) return null;
 
+  const hayLineaSeleccionada = typeof lineaId === 'number' && lineaId > 0;
+
   const gruposActivos = new Set(
-    grupos.filter((g) => g.activo && g.lineaId === lineaId).map((g) => g.departamentoId),
+    hayLineaSeleccionada
+      ? grupos.filter((g) => g.activo && g.lineaId === lineaId).map((g) => g.departamentoId)
+      : [],
   );
-  const deptosDeLinea = departamentos
-    .filter((d) => d.estado === 'ACTIVO' && d.lineasAsociadas?.some((l) => l.activo && l.lineaId === lineaId))
-    .sort(
-      (a, b) =>
-        (a.lineasAsociadas?.find((l) => l.lineaId === lineaId)?.orden ?? 0) -
-        (b.lineasAsociadas?.find((l) => l.lineaId === lineaId)?.orden ?? 0),
-    );
+
+  const deptosDeLinea = hayLineaSeleccionada
+    ? departamentos
+        .filter((d) => d.estado === 'ACTIVO' && d.lineasAsociadas?.some((l) => l.activo && l.lineaId === lineaId))
+        .sort(
+          (a, b) =>
+            (a.lineasAsociadas?.find((l) => l.lineaId === lineaId)?.orden ?? 0) -
+            (b.lineasAsociadas?.find((l) => l.lineaId === lineaId)?.orden ?? 0),
+        )
+    : [];
 
   const payloadLote = (): LoteDefectosPayload => {
     const deptosIdsSet = new Set(
@@ -280,7 +287,7 @@ export function DefectoFormCreateModal({
               <Label className="mb-1 block">Departamento *</Label>
               <Select
                 value={departamentoId ? String(departamentoId) : ''}
-                disabled={isWorking || !lineaId}
+                disabled={isWorking || !hayLineaSeleccionada}
                 onChange={(e) => {
                   const nuevoDeptoId = e.target.value ? Number(e.target.value) : '';
                   setDepartamentoId(nuevoDeptoId);
@@ -295,12 +302,18 @@ export function DefectoFormCreateModal({
                   }
                 }}
               >
-                <option value="" disabled>-- Selecciona un departamento --</option>
-                {deptosDeLinea.map((d) => (
-                  <option key={d.id} value={d.id} disabled={!gruposActivos.has(d.id)}>
-                    {d.nombre}{gruposActivos.has(d.id) ? '' : ' (codificación pendiente)'}
-                  </option>
-                ))}
+                {!hayLineaSeleccionada ? (
+                  <option value="" disabled>Seleccione una línea para continuar</option>
+                ) : (
+                  <>
+                    <option value="" disabled>-- Selecciona un departamento --</option>
+                    {deptosDeLinea.map((d) => (
+                      <option key={d.id} value={d.id} disabled={!gruposActivos.has(d.id)}>
+                        {d.nombre}{gruposActivos.has(d.id) ? '' : ' (codificación pendiente)'}
+                      </option>
+                    ))}
+                  </>
+                )}
               </Select>
             </div>
           </div>
