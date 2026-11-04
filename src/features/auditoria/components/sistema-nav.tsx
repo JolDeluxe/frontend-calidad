@@ -27,6 +27,12 @@ const SISTEMA_AUDITORIA_TABS: SectionTabItem[] = [
     to: ROUTES.AUDITORIA_TERMINALES,
     icon: 'devices',
   },
+  {
+    id: 'matriz-visibilidad',
+    label: 'Matriz Visibilidad',
+    to: ROUTES.MATRIZ_VISIBILIDAD,
+    icon: 'grid_view',
+  },
 ];
 
 export interface SistemaNavProps {

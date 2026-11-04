@@ -5,7 +5,7 @@
  */
 
 export const IDB_NAME = 'mbc_calidad_offline_v1';
-export const IDB_VERSION = 2;
+export const IDB_VERSION = 3;
 
 export interface SesionOfflineStore {
   id: string; // Fijo "activa"
@@ -143,6 +143,16 @@ export interface ContingenciaInspeccionStore {
   motivoContingencia: string | null;
   payload: ColaInspeccionStore['payload'];
   registradoEn: string;
+}
+
+export interface MatrizVisibilidadOfflineStore {
+  key: string; // `${departamentoOrigenId}_${departamentoDestinoId}`
+  departamentoOrigenId: number;
+  departamentoDestinoId: number;
+  permitido: boolean;
+  versionConfiguracion: string;
+  actualizadoEn: string;
+  hashIntegridad: string;
 }
 
 export interface MetaSincronizacionStore {
@@ -320,7 +330,7 @@ export class IdbDatabase {
             db.createObjectStore('meta_sincronizacion', { keyPath: 'clave' });
           }
 
-          // 8. Nuevo en v2: Catálogo de Inspectores Autorizados para Multiusuario Offline
+          // 8. Catálogo de Inspectores Autorizados para Multiusuario Offline
           if (!db.objectStoreNames.contains('cat_inspectores')) {
             const inspStore = db.createObjectStore('cat_inspectores', { keyPath: 'inspectorId' });
             inspStore.createIndex('by_usuario', 'usuario', { unique: true });
@@ -332,6 +342,21 @@ export class IdbDatabase {
             }
             if (!inspStore.indexNames.contains('by_nombre')) {
               inspStore.createIndex('by_nombre', 'nombre', { unique: false });
+            }
+          }
+
+          // 9. Nuevo en v3: Matriz Maestra de Visibilidad por Departamento
+          if (!db.objectStoreNames.contains('matriz_visibilidad')) {
+            const matStore = db.createObjectStore('matriz_visibilidad', { keyPath: 'key' });
+            matStore.createIndex('by_origen', 'departamentoOrigenId', { unique: false });
+            matStore.createIndex('by_destino', 'departamentoDestinoId', { unique: false });
+          } else if (upgradeTx) {
+            const matStore = upgradeTx.objectStore('matriz_visibilidad');
+            if (!matStore.indexNames.contains('by_origen')) {
+              matStore.createIndex('by_origen', 'departamentoOrigenId', { unique: false });
+            }
+            if (!matStore.indexNames.contains('by_destino')) {
+              matStore.createIndex('by_destino', 'departamentoDestinoId', { unique: false });
             }
           }
         };

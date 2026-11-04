@@ -4,6 +4,7 @@ import {
   type DefectoOfflineStore,
   type InspectorOfflineStore,
   type LoteOfflineStore,
+  type MatrizVisibilidadOfflineStore,
   type SesionOfflineStore,
   type TerminalProfileStore,
 } from '@/lib/db/idb-database';
@@ -521,6 +522,76 @@ export class CatalogoOfflineService {
   }
 
   /**
+   * Sincroniza la matriz maestra de visibilidad de defectos desde el backend y la almacena en IndexedDB
+   * para resolución local sin conexión de reglas generales y compatibilidad de departamentos.
+   */
+  async sincronizarMatrizVisibilidad(): Promise<number> {
+    if (!idbDatabase.getAvailable()) return 0;
+    try {
+      const res = await httpClient.get<ApiResponse<{
+        departamentos: Array<{ id: number; codigo: string; nombre: string }>;
+        matrices: Array<{
+          departamentoOrigenId: number;
+          departamentoOrigenCodigo: string;
+          departamentoOrigenNombre: string;
+          destinos: Array<{
+            departamentoDestinoId: number;
+            departamentoDestinoCodigo: string;
+            departamentoDestinoNombre: string;
+            permitido: boolean;
+            configurado: boolean;
+          }>;
+        }>;
+      }>>('/defectos/matriz-visibilidad');
+
+      if (!res.data?.matrices || !Array.isArray(res.data.matrices)) {
+        return 0;
+      }
+
+      const ahoraIso = new Date().toISOString();
+      const versionConfiguracion = `v_${Date.now()}`;
+      const registros: MatrizVisibilidadOfflineStore[] = [];
+
+      for (const m of res.data.matrices) {
+        const origenId = Number(m.departamentoOrigenId);
+        if (!origenId || !Array.isArray(m.destinos)) continue;
+
+        for (const d of m.destinos) {
+          const destinoId = Number(d.departamentoDestinoId);
+          if (!destinoId) continue;
+
+          const key = `${origenId}_${destinoId}`;
+          const hashIntegridad = `${key}:${d.permitido ? '1' : '0'}:${versionConfiguracion}`;
+
+          registros.push({
+            key,
+            departamentoOrigenId: origenId,
+            departamentoDestinoId: destinoId,
+            permitido: Boolean(d.permitido),
+            versionConfiguracion,
+            actualizadoEn: ahoraIso,
+            hashIntegridad,
+          });
+        }
+      }
+
+      if (registros.length > 0) {
+        await idbDatabase.replaceAllAtomic('matriz_visibilidad', registros);
+        await idbDatabase.put('meta_sincronizacion', {
+          clave: 'matriz_visibilidad_actualizado_en',
+          valor: ahoraIso,
+          actualizadoEn: ahoraIso,
+        });
+      }
+
+      return registros.length;
+    } catch (err) {
+      console.warn('[Offline] No fue posible sincronizar la matriz de visibilidad de defectos:', err);
+      return 0;
+    }
+  }
+
+  /**
    * Descarga completa paginada y/o sincronización diferencial del maestro de lotes activos.
    * - Fija la marca temporal `inicioSyncTimestamp` tomada de la primera página ANTES de recorrer el resto,
    *   garantizando que modificaciones concurrentes durante la descarga no se omitan en la siguiente corrida.
@@ -656,6 +727,7 @@ export class CatalogoOfflineService {
 
         await Promise.allSettled([
           this.sincronizarInspectoresOffline(),
+          this.sincronizarMatrizVisibilidad(),
           deptoId ? this.sincronizarDefectos(deptoId) : Promise.resolve(0),
           this.sincronizarLotes(),
         ]);
@@ -757,11 +829,24 @@ export class CatalogoOfflineService {
 
     if (etapaId && etapaId > 0) {
       const etapaSincronizadaId = typeof metaEtapa?.valor === 'number' ? metaEtapa.valor : null;
-      const permiteEtapa =
+      let permiteEtapa =
         (Array.isArray(encontrado.etapasPermitidasIds) &&
           encontrado.etapasPermitidasIds.includes(etapaId)) ||
         encontrado.etapaId === etapaId ||
         (etapaSincronizadaId === etapaId && encontrado.permitidoEnEtapa);
+
+      // Si no tiene excepción local explícita en cat_defectos, consultar la matriz maestra en IndexedDB
+      if (!permiteEtapa && encontrado.departamentoId) {
+        const reglaLocal = await idbDatabase.get<MatrizVisibilidadOfflineStore>(
+          'matriz_visibilidad',
+          `${encontrado.departamentoId}_${etapaId}`,
+        );
+        if (reglaLocal) {
+          permiteEtapa = reglaLocal.permitido;
+        } else if (encontrado.departamentoId === etapaId) {
+          permiteEtapa = true; // Compatibilidad por defecto en su propio departamento
+        }
+      }
 
       if (!permiteEtapa) {
         return {

@@ -27,6 +27,9 @@ export const ROUTES = {
   /** Submódulo: Gestión de Terminales Físicas y Códigos OTP */
   AUDITORIA_TERMINALES: '/sistema/terminales',
 
+  /** Submódulo: Matriz Maestra de Visibilidad de Defectos por Departamento */
+  MATRIZ_VISIBILIDAD: '/sistema/matriz-visibilidad',
+
   /** Catálogos Administrativos */
   DEPARTAMENTOS: '/departamentos',
   DEFECTOS: '/defectos',

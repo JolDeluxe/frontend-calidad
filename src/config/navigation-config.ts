@@ -78,6 +78,8 @@ export function getRouteTitle(pathname: string): string {
     if (pathname.includes('/auditoria')) return 'Auditoría Funcional';
     if (pathname.includes('/logs')) return 'Logs Técnicos';
     if (pathname.includes('/consola')) return 'Consola PM2';
+    if (pathname.includes('/terminales')) return 'Terminales Físicas';
+    if (pathname.includes('/matriz-visibilidad')) return 'Matriz Maestra de Visibilidad';
     return 'Sistema y Auditoría';
   }
   if (pathname.startsWith('/admin')) {

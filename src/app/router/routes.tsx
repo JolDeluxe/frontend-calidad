@@ -28,6 +28,9 @@ const Pm2ConsolePage = lazy(() =>
 const TerminalesPage = lazy(() =>
   import('@/features/auditoria/pages/terminales-page').then((m) => ({ default: m.TerminalesPage })),
 );
+const MatrizVisibilidadPage = lazy(() =>
+  import('@/features/defectos/pages/matriz-visibilidad-page').then((m) => ({ default: m.MatrizVisibilidadPage })),
+);
 const DepartamentosPage = lazy(() =>
   import('@/features/departamentos/pages/departamentos-page').then((m) => ({ default: m.DepartamentosPage })),
 );
@@ -176,6 +179,10 @@ export const routes: RouteObject[] = [
               {
                 path: 'terminales',
                 element: withSuspense(<TerminalesPage />),
+              },
+              {
+                path: 'matriz-visibilidad',
+                element: withSuspense(<MatrizVisibilidadPage />),
               },
             ],
           },
