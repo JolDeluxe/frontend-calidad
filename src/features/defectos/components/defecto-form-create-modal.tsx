@@ -44,17 +44,40 @@ type Modo = 'individual' | 'masiva';
 
 const mensajeDe = (err: unknown, fallback: string): string => (err instanceof Error ? err.message : fallback);
 
-// Plantillas históricas por omisión de departamentos evaluadores según el depto propietario
-const PLANTILLAS_EVALUADORES_POR_DEPTO: Record<number, number[]> = {
-  2: [5, 6, 7, 8, 9, 11], // CORTE: preliminares, bordado, pespunte, montado, acabado, adorno
-  8: [5, 6, 7, 9, 11],    // PRELIMINARES: bordado, pespunte, montado, acabado, adorno
-  9: [5, 6, 7, 11],       // BORDADO: pespunte, montado, acabado, adorno
-  5: [6, 7, 11],          // PESPUNTE: montado, acabado, adorno
-  6: [7, 11],             // MONTADO: acabado, adorno
-  10: [7, 11],            // AVIOS: acabado, adorno
-  7: [11],                // ACABADO: adorno
-  11: [],                 // ADORNO: ninguno adicional
+// Plantillas sugeridas de departamentos evaluadores aguas abajo según el código del departamento propietario
+const PLANTILLAS_CODIGOS_EVALUADORES: Record<string, string[]> = {
+  CORTE: ['PRELIMINARES', 'BORDADO_Y_LASER', 'PESPUNTE', 'MONTADO', 'ACABADO', 'ADORNO'],
+  PRELIMINARES: ['BORDADO_Y_LASER', 'PESPUNTE', 'MONTADO', 'ACABADO', 'ADORNO'],
+  BORDADO_Y_LASER: ['PESPUNTE', 'MONTADO', 'ACABADO', 'ADORNO'],
+  PESPUNTE: ['MONTADO', 'ACABADO', 'ADORNO'],
+  MONTADO: ['ACABADO', 'ADORNO'],
+  AVIOS: ['ACABADO', 'ADORNO'],
+  ACABADO: ['ADORNO'],
+  ADORNO: [],
 };
+
+function resolverEvaluadoresSugeridos(
+  departamentoPropietarioId: number,
+  departamentos: Departamento[],
+  lineaId?: number | '',
+): Record<number, boolean> {
+  const deptoProp = departamentos.find((d) => d.id === departamentoPropietarioId);
+  const codigosSugeridos = new Set(
+    deptoProp?.codigo ? PLANTILLAS_CODIGOS_EVALUADORES[deptoProp.codigo] ?? [] : [],
+  );
+
+  const mapa: Record<number, boolean> = {};
+  departamentos.forEach((d) => {
+    // Si se pasa lineaId, filtrar sugerencias prioritariamente para la misma línea si aplica
+    const perteneceALinea = typeof lineaId === 'number' && lineaId > 0
+      ? d.lineasAsociadas?.some((l) => l.activo && l.lineaId === lineaId) ?? true
+      : true;
+
+    mapa[d.id] = perteneceALinea && codigosSugeridos.has(d.codigo);
+  });
+
+  return mapa;
+}
 
 export function DefectoFormCreateModal({
   isOpen,
@@ -293,11 +316,7 @@ export function DefectoFormCreateModal({
                   setDepartamentoId(nuevoDeptoId);
                   cambiarFilas(filas);
                   if (nuevoDeptoId) {
-                    const sugeridos = PLANTILLAS_EVALUADORES_POR_DEPTO[nuevoDeptoId] ?? [];
-                    const nextMap: Record<number, boolean> = {};
-                    departamentos.forEach((d) => {
-                      nextMap[d.id] = sugeridos.includes(d.id);
-                    });
+                    const nextMap = resolverEvaluadoresSugeridos(nuevoDeptoId, departamentos, lineaId);
                     setSelectedDeptosMap(nextMap);
                   }
                 }}
