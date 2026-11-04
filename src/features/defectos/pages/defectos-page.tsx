@@ -369,10 +369,11 @@ export function DefectosPage() {
 
   // Operaciones de Mutación conectadas a la API
   const handleCreateSubmit = async (data: {
+    clave?: number;
     defecto: string;
     clasificacion: ClasificacionDefecto;
     departamentoId: number;
-    lineaId: number;
+    lineaId?: number;
     departamentosIds: number[];
   }) => {
     try {

@@ -30,10 +30,11 @@ export interface DefectoFormCreateModalProps {
   grupos: GrupoCodificacion[];
   lineaInicialId?: number | null;
   onSubmit: (data: {
+    clave?: number;
     defecto: string;
     clasificacion: ClasificacionDefecto;
     departamentoId: number;
-    lineaId: number;
+    lineaId?: number;
     departamentosIds: number[];
   }) => Promise<void>;
   onPreviewLote: (data: LoteDefectosPayload) => Promise<LotePreviewResponse>;
@@ -84,7 +85,7 @@ export function DefectoFormCreateModal({
   onClose,
   departamentos,
   lineas,
-  grupos,
+  grupos: _grupos,
   lineaInicialId,
   onSubmit,
   onPreviewLote,
@@ -93,6 +94,7 @@ export function DefectoFormCreateModal({
   const [modo, setModo] = useState<Modo>('individual');
   const [lineaId, setLineaId] = useState<number | ''>('');
   const [departamentoId, setDepartamentoId] = useState<number | ''>('');
+  const [claveManual, setClaveManual] = useState<string>('');
   const [grupoInfo, setGrupoInfo] = useState<LotePreviewResponse['grupo'] | null>(null);
   const [grupoError, setGrupoError] = useState<string | null>(null);
 
@@ -115,6 +117,7 @@ export function DefectoFormCreateModal({
     setModo('individual');
     setLineaId(lineaInicialId ?? '');
     setDepartamentoId('');
+    setClaveManual('');
     setGrupoInfo(null);
     setGrupoError(null);
     setDefecto('');
@@ -143,12 +146,6 @@ export function DefectoFormCreateModal({
   if (!isOpen) return null;
 
   const hayLineaSeleccionada = typeof lineaId === 'number' && lineaId > 0;
-
-  const gruposActivos = new Set(
-    hayLineaSeleccionada
-      ? grupos.filter((g) => g.activo && g.lineaId === lineaId).map((g) => g.departamentoId)
-      : [],
-  );
 
   const deptosDeLinea = hayLineaSeleccionada
     ? departamentos
@@ -195,9 +192,14 @@ export function DefectoFormCreateModal({
 
   const handleSubmitIndividual = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!claveManual.trim()) return setError('La clave numérica del defecto es obligatoria');
+    const numClave = Number(claveManual);
+    if (isNaN(numClave) || numClave <= 0 || !Number.isInteger(numClave)) {
+      return setError('La clave debe ser un número entero positivo');
+    }
     if (!defecto.trim()) return setError('La descripción del defecto es obligatoria');
-    if (!lineaId) return setError('Debes seleccionar la línea de referencia');
     if (!departamentoId) return setError('Debes seleccionar explícitamente un departamento propietario');
+
     try {
       setIsWorking(true);
       setError(null);
@@ -208,10 +210,11 @@ export function DefectoFormCreateModal({
       deptosIdsSet.add(departamentoId);
 
       await onSubmit({
+        clave: numClave,
         defecto: defecto.trim(),
         clasificacion,
         departamentoId,
-        lineaId,
+        lineaId: typeof lineaId === 'number' && lineaId > 0 ? lineaId : undefined,
         departamentosIds: Array.from(deptosIdsSet),
       });
       onClose();
@@ -310,7 +313,7 @@ export function DefectoFormCreateModal({
               <Label className="mb-1 block">Departamento *</Label>
               <Select
                 value={departamentoId ? String(departamentoId) : ''}
-                disabled={isWorking || !hayLineaSeleccionada}
+                disabled={isWorking}
                 onChange={(e) => {
                   const nuevoDeptoId = e.target.value ? Number(e.target.value) : '';
                   setDepartamentoId(nuevoDeptoId);
@@ -321,40 +324,40 @@ export function DefectoFormCreateModal({
                   }
                 }}
               >
-                {!hayLineaSeleccionada ? (
-                  <option value="" disabled>Seleccione una línea para continuar</option>
-                ) : (
-                  <>
-                    <option value="" disabled>-- Selecciona un departamento --</option>
-                    {deptosDeLinea.map((d) => (
-                      <option key={d.id} value={d.id} disabled={!gruposActivos.has(d.id)}>
-                        {d.nombre}{gruposActivos.has(d.id) ? '' : ' (codificación pendiente)'}
-                      </option>
-                    ))}
-                  </>
-                )}
+                <option value="" disabled>-- Selecciona un departamento --</option>
+                {(deptosDeLinea.length > 0 ? deptosDeLinea : departamentos.filter((d) => d.estado === 'ACTIVO')).map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.nombre}
+                  </option>
+                ))}
               </Select>
             </div>
           </div>
 
-          {grupoInfo && (
-            <div className="p-3 bg-app-surface-muted rounded-lg border border-border text-xs text-text-secondary flex items-start gap-2">
-              <Icon name="tag" size="16px" className="text-brand-primary shrink-0 mt-0.5" />
-              <span>
-                Grupo de codificación <strong>{grupoInfo.prefijo}xx</strong> (rango {grupoInfo.rangoMin}–{grupoInfo.rangoMax}).{' '}
-                {grupoInfo.proximaClave
-                  ? <>Próxima clave: <strong>#{grupoInfo.proximaClave}</strong> · {grupoInfo.disponibles} libres. </>
-                  : <strong className="text-red-700">Grupo agotado. </strong>}
-                La clave definitiva la asigna el servidor al guardar.
-              </span>
-            </div>
-          )}
-          {sinGrupo && (
-            <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-xs">{grupoError}</div>
-          )}
-
           {modo === 'individual' ? (
             <>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-1">
+                  <Label className="mb-1 block">Clave del Defecto *</Label>
+                  <Input
+                    type="number"
+                    value={claveManual}
+                    onChange={(e) => setClaveManual(e.target.value)}
+                    placeholder="Ej. 1124"
+                    required
+                    min={1}
+                  />
+                  <span className="text-[11px] text-text-muted mt-0.5 block">Código numérico único</span>
+                </div>
+                <div className="sm:col-span-2">
+                  <Label className="mb-1 block">Clasificación *</Label>
+                  <Select value={clasificacion} onChange={(e) => setClasificacion(e.target.value as ClasificacionDefecto)}>
+                    <option value="CRITICO">Crítico</option>
+                    <option value="MAYOR">Mayor</option>
+                    <option value="MENOR">Menor</option>
+                  </Select>
+                </div>
+              </div>
               <div>
                 <Label className="mb-1 block">Descripción del Defecto *</Label>
                 <Input
@@ -364,17 +367,23 @@ export function DefectoFormCreateModal({
                   required
                 />
               </div>
-              <div>
-                <Label className="mb-1 block">Clasificación *</Label>
-                <Select value={clasificacion} onChange={(e) => setClasificacion(e.target.value as ClasificacionDefecto)}>
-                  <option value="CRITICO">Crítico</option>
-                  <option value="MAYOR">Mayor</option>
-                  <option value="MENOR">Menor</option>
-                </Select>
-              </div>
             </>
           ) : (
             <div className="space-y-3">
+              {grupoInfo && (
+                <div className="p-3 bg-app-surface-muted rounded-lg border border-border text-xs text-text-secondary flex items-start gap-2">
+                  <Icon name="tag" size="16px" className="text-brand-primary shrink-0 mt-0.5" />
+                  <span>
+                    Grupo de codificación masiva: <strong>{grupoInfo.prefijo}xx</strong> (rango {grupoInfo.rangoMin}–{grupoInfo.rangoMax}).{' '}
+                    {grupoInfo.proximaClave
+                      ? <>Próxima clave: <strong>#{grupoInfo.proximaClave}</strong> · {grupoInfo.disponibles} libres. </>
+                      : <strong className="text-red-700">Grupo agotado. </strong>}
+                  </span>
+                </div>
+              )}
+              {sinGrupo && (
+                <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-xs">{grupoError}</div>
+              )}
               <div className="flex flex-wrap items-end gap-3">
                 <div className="w-44">
                   <Label className="mb-1 block">Clasificación por defecto</Label>
@@ -445,7 +454,7 @@ export function DefectoFormCreateModal({
             <Button
               type="submit"
               variant="guardar"
-              disabled={isWorking || !defecto.trim() || !lineaId || !departamentoId || sinGrupo}
+              disabled={isWorking || !claveManual.trim() || !defecto.trim() || !departamentoId}
               icon={isWorking ? undefined : 'check_circle'}
             >
               {isWorking ? <span className="flex items-center gap-2"><Spinner size="xs" />Guardando...</span> : 'Crear Defecto'}

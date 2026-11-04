@@ -66,6 +66,7 @@ export const defectosApi = {
   },
 
   createDefecto: async (data: {
+    clave?: number;
     defecto: string;
     clasificacion: 'CRITICO' | 'MAYOR' | 'MENOR';
     departamentoId?: number;
