@@ -700,6 +700,117 @@ export class CatalogoOfflineService {
   }
 
   /**
+   * Valida un defecto en el almacenamiento local IndexedDB (`cat_defectos`) para una etapa dada.
+   * Permite distinguir sin conexión entre:
+   * - 'VALIDO': el defecto existe, está activo y está autorizado en la etapa.
+   * - 'INACTIVO': el defecto existe localmente pero está marcado inactivo.
+   * - 'NO_PERMITIDO': el defecto existe localmente, está activo, pero no incluye la etapa actual.
+   * - 'INEXISTENTE': la etapa fue sincronizada formalmente y la clave no existe en el catálogo.
+   * - 'SIN_CATALOGO': no hay catálogo sincronizado en el dispositivo para emitir un juicio concluyente.
+   */
+  async validarDefectoLocalParaCaptura(
+    clave: number,
+    etapaId?: number,
+  ): Promise<{
+    estado: 'VALIDO' | 'INEXISTENTE' | 'INACTIVO' | 'NO_PERMITIDO' | 'SIN_CATALOGO';
+    mensaje: string;
+    defecto: Defecto | null;
+  }> {
+    if (!idbDatabase.getAvailable()) {
+      return {
+        estado: 'SIN_CATALOGO',
+        mensaje: 'Sin conexión y almacenamiento local no disponible.',
+        defecto: null,
+      };
+    }
+
+    const [todos, metaEtapa] = await Promise.all([
+      idbDatabase.getAll<DefectoOfflineStore>('cat_defectos'),
+      idbDatabase.get<{ clave: string; valor: number }>('meta_sincronizacion', 'defectos_etapa_id'),
+    ]);
+
+    if (!todos || todos.length === 0) {
+      return {
+        estado: 'SIN_CATALOGO',
+        mensaje: 'Sin conexión al servidor y no hay catálogo de defectos guardado en este equipo.',
+        defecto: null,
+      };
+    }
+
+    const encontrado = todos.find((d) => d.clave === clave);
+    if (!encontrado) {
+      // Si la terminal tiene su catálogo sincronizado para esta etapa o general, sabemos que no existe
+      return {
+        estado: 'INEXISTENTE',
+        mensaje: 'Defecto inexistente',
+        defecto: null,
+      };
+    }
+
+    if (encontrado.activo === false) {
+      return {
+        estado: 'INACTIVO',
+        mensaje: 'Defecto inactivo',
+        defecto: null,
+      };
+    }
+
+    if (etapaId && etapaId > 0) {
+      const etapaSincronizadaId = typeof metaEtapa?.valor === 'number' ? metaEtapa.valor : null;
+      const permiteEtapa =
+        (Array.isArray(encontrado.etapasPermitidasIds) &&
+          encontrado.etapasPermitidasIds.includes(etapaId)) ||
+        encontrado.etapaId === etapaId ||
+        (etapaSincronizadaId === etapaId && encontrado.permitidoEnEtapa);
+
+      if (!permiteEtapa) {
+        return {
+          estado: 'NO_PERMITIDO',
+          mensaje: 'Defecto no permitido',
+          defecto: null,
+        };
+      }
+    }
+
+    const etapaSincronizadaId = typeof metaEtapa?.valor === 'number' ? metaEtapa.valor : null;
+    const etapasIds =
+      Array.isArray(encontrado.etapasPermitidasIds) && encontrado.etapasPermitidasIds.length > 0
+        ? encontrado.etapasPermitidasIds
+        : encontrado.etapaId
+        ? [encontrado.etapaId]
+        : etapaSincronizadaId
+        ? [etapaSincronizadaId]
+        : [];
+
+    const defectoObj: Defecto = {
+      id: encontrado.id,
+      clave: encontrado.clave,
+      defecto: encontrado.defecto,
+      clasificacion: encontrado.clasificacion,
+      departamentoId: encontrado.departamentoId,
+      activo: Boolean(encontrado.activo),
+      creadoPor: 0,
+      creadoEn: new Date(0).toISOString(),
+      departamento: {
+        id: encontrado.departamentoId,
+        codigo: encontrado.departamentoCodigo || encontrado.departamentoNombre || 'GENERAL',
+        nombre: encontrado.departamentoNombre || 'GENERAL',
+      },
+      etapas: etapasIds.map((etId, idx) => ({
+        id: idx + 1,
+        departamentoId: etId,
+        permitido: true,
+      })),
+    };
+
+    return {
+      estado: 'VALIDO',
+      mensaje: 'Defecto válido',
+      defecto: defectoObj,
+    };
+  }
+
+  /**
    * Consulta rápida de los defectos locales en IndexedDB.
    */
   async getDefectosLocales(): Promise<DefectoOfflineStore[]> {

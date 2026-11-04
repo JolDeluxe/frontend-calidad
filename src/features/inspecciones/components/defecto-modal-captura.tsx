@@ -443,23 +443,17 @@ export function DefectoModalCaptura({
     }
 
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      const resLocal = await catalogoOfflineService.consultarDefectosLocales({
-        clave: num,
-        etapaId: departamentoAuditor?.id,
-        activo: true,
-        limit: 1,
-      });
-      if (resLocal.items.length > 0) {
-        setDefectoSeleccionado(resLocal.items[0]);
+      const validacionLocal = await catalogoOfflineService.validarDefectoLocalParaCaptura(
+        num,
+        departamentoAuditor?.id,
+      );
+      if (validacionLocal.estado === 'VALIDO' && validacionLocal.defecto) {
+        setDefectoSeleccionado(validacionLocal.defecto);
         setErrorDefecto(null);
-        return resLocal.items[0];
+        return validacionLocal.defecto;
       } else {
         setDefectoSeleccionado(null);
-        setErrorDefecto(
-          catalogoDefectos.length === 0
-            ? 'Sin conexión al servidor y no hay catálogo de defectos guardado en este equipo.'
-            : `Defecto #${num} no encontrado o no permitido en esta etapa`,
-        );
+        setErrorDefecto(validacionLocal.mensaje);
         return null;
       }
     }
@@ -468,9 +462,22 @@ export function DefectoModalCaptura({
     setErrorDefecto(null);
 
     try {
+      if (departamentoAuditor?.id) {
+        const validacion = await defectosApi.validarCaptura(num, departamentoAuditor.id);
+        if (validacion.estado === 'VALIDO' && validacion.defecto) {
+          setDefectoSeleccionado(validacion.defecto);
+          setErrorDefecto(null);
+          return validacion.defecto;
+        } else {
+          setDefectoSeleccionado(null);
+          setErrorDefecto(validacion.mensaje);
+          return null;
+        }
+      }
+
+      // Si por alguna razón no hay etapa auditora aún definida, consultar directamente
       const resp = await defectosApi.getDefectos({
         clave: num,
-        etapaId: departamentoAuditor?.id,
         activo: true,
         limit: 1,
       });
@@ -482,23 +489,21 @@ export function DefectoModalCaptura({
         return d;
       } else {
         setDefectoSeleccionado(null);
-        setErrorDefecto(`Defecto #${num} no encontrado en esta etapa`);
+        setErrorDefecto('Defecto inexistente');
         return null;
       }
     } catch {
-      const resLocal = await catalogoOfflineService.consultarDefectosLocales({
-        clave: num,
-        etapaId: departamentoAuditor?.id,
-        activo: true,
-        limit: 1,
-      });
-      if (resLocal.items.length > 0) {
-        setDefectoSeleccionado(resLocal.items[0]);
+      const validacionLocal = await catalogoOfflineService.validarDefectoLocalParaCaptura(
+        num,
+        departamentoAuditor?.id,
+      );
+      if (validacionLocal.estado === 'VALIDO' && validacionLocal.defecto) {
+        setDefectoSeleccionado(validacionLocal.defecto);
         setErrorDefecto(null);
-        return resLocal.items[0];
+        return validacionLocal.defecto;
       } else {
         setDefectoSeleccionado(null);
-        setErrorDefecto('Sin conexión para consultar el defecto y no se encontró en este equipo.');
+        setErrorDefecto(validacionLocal.mensaje);
         return null;
       }
     } finally {

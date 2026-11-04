@@ -9,7 +9,20 @@ import type {
 } from '../types/defectos.types';
 import type { Departamento } from '@/features/departamentos/types/departamentos.types';
 
+export interface ValidacionDefectoCaptura {
+  estado: 'VALIDO' | 'INEXISTENTE' | 'INACTIVO' | 'NO_PERMITIDO';
+  mensaje: string;
+  defecto: Defecto | null;
+}
+
 export const defectosApi = {
+  validarCaptura: async (clave: number, etapaId: number): Promise<ValidacionDefectoCaptura> => {
+    const res = await httpClient.get<ApiResponse<ValidacionDefectoCaptura>>(
+      `/defectos/validar-captura?clave=${clave}&etapaId=${etapaId}`,
+    );
+    return res.data!;
+  },
+
   getDefectos: async (params?: {
     clave?: number;
     texto?: string;
