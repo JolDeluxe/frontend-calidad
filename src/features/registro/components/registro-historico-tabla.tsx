@@ -13,6 +13,12 @@ export interface RegistroHistoricoTablaProps {
   busqueda?: string;
   isLoading?: boolean;
   totalItems?: number;
+  totalInspecciones?: number;
+  periodoDescripcion?: string;
+  errorMensaje?: string | null;
+  tieneFiltrosActivos?: boolean;
+  onReintentar?: () => void;
+  onLimpiarFiltros?: () => void;
   toolbar?: ReactNode;
   puedeCargarMas?: boolean;
   cargandoMas?: boolean;
@@ -112,6 +118,11 @@ export function RegistroHistoricoTabla({
   busqueda = '',
   isLoading = false,
   totalItems = 0,
+  periodoDescripcion,
+  errorMensaje = null,
+  tieneFiltrosActivos = false,
+  onReintentar,
+  onLimpiarFiltros,
   toolbar,
   puedeCargarMas = false,
   cargandoMas = false,
@@ -122,6 +133,7 @@ export function RegistroHistoricoTabla({
     try {
       const d = new Date(fechaIso);
       return d.toLocaleDateString('es-MX', {
+        timeZone: 'America/Mexico_City',
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
@@ -161,13 +173,51 @@ export function RegistroHistoricoTabla({
             </tr>
           </thead>
         </table>
-        <div className="flex flex-col items-center justify-center py-16 px-4 text-text-muted">
-          <Icon name="search_off" size="40px" className="mx-auto mb-2 opacity-50" />
-          <h4 className="text-sm font-semibold text-text-primary">No se encontraron defectos registrados</h4>
-          <p className="text-xs text-text-muted/80 mt-1 max-w-md mx-auto">
-            Intente con otro término de búsqueda o seleccione otro mes, año o estación de departamento.
-          </p>
-        </div>
+        {errorMensaje ? (
+          <div className="flex flex-col items-center justify-center py-14 px-4 text-center">
+            <Icon name="error_outline" size="38px" className="mx-auto mb-2 text-rose-500 opacity-80" />
+            <h4 className="text-sm font-semibold text-slate-900">
+              No se pudo completar la consulta del histórico
+            </h4>
+            <p className="text-xs text-rose-700 mt-1 max-w-md mx-auto">{errorMensaje}</p>
+            {onReintentar && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onReintentar}
+                className="mt-3 text-xs font-semibold cursor-pointer gap-1.5"
+              >
+                <Icon name="refresh" size="14px" />
+                <span>Reintentar consulta</span>
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16 px-4 text-text-muted text-center">
+            <Icon name="search_off" size="40px" className="mx-auto mb-2 opacity-50" />
+            <h4 className="text-sm font-semibold text-text-primary">
+              No se encontraron defectos registrados
+            </h4>
+            <p className="text-xs text-text-muted/80 mt-1 max-w-md mx-auto">
+              {periodoDescripcion
+                ? `Sin registros para ${periodoDescripcion} con los filtros actuales.`
+                : 'Intente con otro término de búsqueda o cambie el período, inspector, defecto o departamento.'}
+            </p>
+            {tieneFiltrosActivos && onLimpiarFiltros && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onLimpiarFiltros}
+                className="mt-3 text-xs font-semibold cursor-pointer gap-1.5"
+              >
+                <Icon name="filter_alt_off" size="14px" />
+                <span>Limpiar filtros</span>
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -329,10 +379,12 @@ export function RegistroHistoricoTabla({
 
       {/* Footer: Contador y Botón "Ver más" */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-border bg-app-surface text-xs rounded-b-xl">
-        <span className="text-text-secondary">
-          Mostrando <strong className="text-text-primary font-bold">{items.length}</strong> de{' '}
-          <strong className="text-text-primary font-bold">{totalItems || items.length}</strong> defectos
-        </span>
+        <div className="flex flex-wrap items-center gap-2 text-text-secondary">
+          <span>
+            Mostrando <strong className="text-text-primary font-bold">{items.length}</strong> de{' '}
+            <strong className="text-text-primary font-bold">{totalItems || items.length}</strong> registros
+          </span>
+        </div>
 
         {puedeCargarMas && onCargarMas && (
           <Button

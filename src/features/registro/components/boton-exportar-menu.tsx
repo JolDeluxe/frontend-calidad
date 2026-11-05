@@ -8,6 +8,7 @@ export interface BotonExportarMenuProps {
   onExportarPdf: () => Promise<void> | void;
   cargando?: boolean;
   totalDefectos?: number;
+  totalInspecciones?: number;
 }
 
 export function BotonExportarMenu({
@@ -15,6 +16,7 @@ export function BotonExportarMenu({
   onExportarPdf,
   cargando = false,
   totalDefectos = 0,
+  totalInspecciones,
 }: BotonExportarMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
@@ -90,7 +92,7 @@ export function BotonExportarMenu({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-2.5 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-1">
-              Exportar ({totalDefectos} defectos)
+              Exportar ({totalDefectos} defectos{typeof totalInspecciones === 'number' ? ` · ${totalInspecciones} insp.` : ''})
             </div>
 
             {/* Opción Excel */}

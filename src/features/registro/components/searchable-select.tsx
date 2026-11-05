@@ -13,10 +13,12 @@ export interface SearchableSelectProps {
   value: number | string | null;
   onChange: (value: number | string | null) => void;
   placeholder?: string;
+  searchPlaceholder?: string;
   emptyText?: string;
   allOptionLabel?: string;
   className?: string;
   title?: string;
+  disabled?: boolean;
 }
 
 export function SearchableSelect({
@@ -24,10 +26,12 @@ export function SearchableSelect({
   value,
   onChange,
   placeholder = 'Seleccionar...',
+  searchPlaceholder = 'Buscar...',
   emptyText = 'No se encontraron resultados',
   allOptionLabel = 'Todos',
   className = '',
   title = 'Seleccionar opción',
+  disabled = false,
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [busqueda, setBusqueda] = useState('');
@@ -47,6 +51,7 @@ export function SearchableSelect({
 
   // Abrir o cerrar y calcular coordenadas flotantes (Fixed Portal)
   const handleToggle = () => {
+    if (disabled) return;
     if (!isOpen && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
       const dropdownWidth = Math.max(rect.width, 240);
@@ -131,15 +136,18 @@ export function SearchableSelect({
   });
 
   return (
-    <div className={`relative inline-block ${className}`} title={title}>
+    <div className={`relative block w-full min-w-0 ${className}`} title={title}>
       {/* Botón Trigger tipo Select */}
       <button
         ref={buttonRef}
         type="button"
+        disabled={disabled}
         onClick={handleToggle}
-        className="w-full h-8 px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 flex items-center justify-between gap-1.5 cursor-pointer shadow-2xs transition-colors"
+        className={`w-full min-w-0 overflow-hidden h-8 px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 flex items-center justify-between gap-1.5 shadow-2xs transition-colors ${
+          disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+        }`}
       >
-        <span className="truncate text-left">
+        <span className="truncate text-left flex-1 min-w-0">
           {selectedOption ? selectedOption.label : allOptionLabel || placeholder}
         </span>
         <Icon
@@ -151,7 +159,7 @@ export function SearchableSelect({
         />
       </button>
 
-      {/* Menú Dropdown en Portal */}
+      {/* Menú Dropdown en Portal (z-[200] para quedar siempre por encima de modales z-[100]) */}
       {isOpen &&
         createPortal(
           <div
@@ -162,7 +170,7 @@ export function SearchableSelect({
               left: `${coords.left}px`,
               width: `${coords.width}px`,
             }}
-            className="fixed z-50 bg-white border border-slate-200 rounded-xl shadow-xl p-1.5 text-xs animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-72"
+            className="fixed z-[200] bg-white border border-slate-200 rounded-xl shadow-xl p-1.5 text-xs animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-72"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Buscador interno */}
@@ -177,7 +185,7 @@ export function SearchableSelect({
                 type="text"
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                placeholder="Buscar inspector..."
+                placeholder={searchPlaceholder}
                 className="w-full pl-7 pr-6 py-1 bg-slate-50 border border-slate-200 rounded-md text-xs placeholder:text-slate-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-brand-primary focus:border-brand-primary text-slate-800"
               />
               {busqueda && (

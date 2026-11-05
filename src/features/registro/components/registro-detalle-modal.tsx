@@ -16,6 +16,7 @@ export function RegistroDetalleModal({ isOpen, onClose, item }: RegistroDetalleM
   const fechaFormateada = (() => {
     try {
       return new Date(item.fecha).toLocaleString('es-MX', {
+        timeZone: 'America/Mexico_City',
         dateStyle: 'full',
         timeStyle: 'medium',
       });

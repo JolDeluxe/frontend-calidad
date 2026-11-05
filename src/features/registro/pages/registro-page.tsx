@@ -1,73 +1,95 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { Icon } from '@/components/ui/icon';
+import { Spinner } from '@/components/ui/spinner';
 import { RegistroHistoricoTabla } from '../components/registro-historico-tabla';
 import { SearchableSelect } from '../components/searchable-select';
+import { CalendarioDiaPicker } from '../components/calendario-dia-picker';
 import { RegistroExportModal, type ExportModalConfig } from '../components/registro-export-modal';
-import { exportarRegistrosAExcel, exportarRegistrosAPdf } from '../utils/exportar-reporte';
+import {
+  exportarRegistrosAExcel,
+  exportarRegistrosAPdf,
+  UMBRAL_ADVERTENCIA_PDF,
+} from '../utils/exportar-reporte';
+import {
+  construirQueryInspecciones,
+  construirQueryPeriodosDisponibles,
+  describirPeriodoActivo,
+  formatearEtiquetaAnio,
+  formatearEtiquetaSemana,
+  formatearSemanaIsoCodigo,
+  getHoyMexicoIso,
+  leerFiltrosDesdeSearchParams,
+  MODALIDADES_PERIODO_OPCIONES,
+  obtenerSemanasDeAnio,
+  parsearSemanaIsoCodigo,
+  puedeEjecutarConsultaTemporal,
+  serializarFiltrosASearchParams,
+  sincronizarFiltrosConPeriodosDisponibles,
+  tieneFiltrosActivos,
+} from '../utils/filtros-registro';
 import { InspeccionDetalleModal } from '@/features/inspecciones/components/inspeccion-detalle-modal';
 import { inspeccionesApi } from '@/features/inspecciones/api/inspecciones-api';
 import { useAuthSession } from '@/providers/auth-provider';
+import { usePermissions } from '@/shared/hooks/use-permissions';
 import { toast } from '@/components/ui/toast';
-import type { InspeccionFilaResponse } from '../types/registro.types';
+import type {
+  FiltrosRegistroState,
+  InspeccionFilaResponse,
+  InspectorActivoItem,
+  ModalidadPeriodoRegistro,
+  PeriodosDisponiblesResponse,
+} from '../types/registro.types';
 import type { Departamento } from '@/features/departamentos/types/departamentos.types';
 
 const ROLES_CON_CAMBIO_DEPTO = ['SUPER_ADMIN', 'ADMIN', 'COORD'];
 
-const MESES = [
-  { val: '1', label: 'Enero' },
-  { val: '2', label: 'Febrero' },
-  { val: '3', label: 'Marzo' },
-  { val: '4', label: 'Abril' },
-  { val: '5', label: 'Mayo' },
-  { val: '6', label: 'Junio' },
-  { val: '7', label: 'Julio' },
-  { val: '8', label: 'Agosto' },
-  { val: '9', label: 'Septiembre' },
-  { val: '10', label: 'Octubre' },
-  { val: '11', label: 'Noviembre' },
-  { val: '12', label: 'Diciembre' },
-];
-
-const ANIOS = ['2026', '2025', '2024'];
-
-interface InspectorItem {
-  id: number;
-  nombre: string;
-  usuario: string;
-  rol?: { id: number; codigo: string; nombre: string };
-}
-
 export function RegistroPage() {
   const { user } = useAuthSession();
+  const { can, canAny } = usePermissions();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const rolCodigo = user?.rol?.codigo || '';
   const puedeCambiarDepto = ROLES_CON_CAMBIO_DEPTO.includes(rolCodigo);
+  const puedeFiltrarInspector =
+    puedeCambiarDepto || canAny('calidad.ver', 'reportes.ver', 'inspecciones.todas');
+  const puedeVerEliminados = can('defectos.eliminar');
 
-  // Estados de Filtros sincronizados con la URL: Por defecto 'todos' (Histórico) con mes y año actual
-  const fechaActual = new Date();
-  const periodo = (searchParams.get('periodo') as 'hoy' | 'todos') || 'todos';
-  const busquedaParam = searchParams.get('q') || '';
-  const mesParam = searchParams.get('mes') || (fechaActual.getMonth() + 1).toString();
-  const anioParam = searchParams.get('anio') || fechaActual.getFullYear().toString();
-  const deptoParam = searchParams.get('depto') || '';
-  const inspectorParam = searchParams.get('inspector') || '';
-  const lineaParam = searchParams.get('linea') || '';
-  const verEliminados = searchParams.get('eliminados') === 'true';
+  const hoyIso = useMemo(() => getHoyMexicoIso(), []);
 
-  const [inputBusqueda, setInputBusqueda] = useState(busquedaParam);
+  // Estado de filtros leído desde la URL de forma tipada y acotada
+  const filtrosUrl = useMemo(() => {
+    const base = leerFiltrosDesdeSearchParams(searchParams);
+    if (!puedeVerEliminados && base.soloEliminados) {
+      return { ...base, soloEliminados: false };
+    }
+    return base;
+  }, [searchParams, puedeVerEliminados]);
+
+  // Periodos reales devueltos por el backend según los filtros activos
+  const [periodosDisponibles, setPeriodosDisponibles] =
+    useState<PeriodosDisponiblesResponse | null>(null);
+  const [cargandoPeriodos, setCargandoPeriodos] = useState(true);
+
+  // Filtros efectivos sincronizados con los periodos reales disponibles
+  const filtros = useMemo(
+    () => sincronizarFiltrosConPeriodosDisponibles(filtrosUrl, periodosDisponibles),
+    [filtrosUrl, periodosDisponibles]
+  );
+
+  const [inputBusqueda, setInputBusqueda] = useState(filtros.busqueda || '');
   const [items, setItems] = useState<InspeccionFilaResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [errorConsulta, setErrorConsulta] = useState<string | null>(null);
   const [totalItems, setTotalItems] = useState(0);
+  const [totalInspecciones, setTotalInspecciones] = useState(0);
   const [page, setPage] = useState(1);
   const [cargandoMas, setCargandoMas] = useState(false);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Catálogos
+  // Catálogos dinámicos
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
-  const [deptoSeleccionado, setDeptoSeleccionado] = useState<Departamento | null>(null);
-  const [inspectores, setInspectores] = useState<InspectorItem[]>([]);
+  const [inspectores, setInspectores] = useState<InspectorActivoItem[]>([]);
 
   // Modales
   const [modalExportarAbierto, setModalExportarAbierto] = useState(false);
@@ -76,6 +98,8 @@ export function RegistroPage() {
   const [mostrarBotonArriba, setMostrarBotonArriba] = useState(false);
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const filtrosUrlRef = useRef<FiltrosRegistroState>(filtrosUrl);
+  filtrosUrlRef.current = filtrosUrl;
 
   // Detectar scroll para mostrar el botón de regresar arriba
   useEffect(() => {
@@ -105,63 +129,157 @@ export function RegistroPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Sincronizar input con cambios de URL
+  // Sincronizar input de búsqueda con cambios de URL
   useEffect(() => {
-    setInputBusqueda(busquedaParam);
-  }, [busquedaParam]);
+    setInputBusqueda(filtros.busqueda || '');
+  }, [filtros.busqueda]);
 
-  // Cargar catálogos auxiliares (departamentos e inspectores)
+  // Cargar departamentos una sola vez
   useEffect(() => {
     let cancelado = false;
-    const cargar = async () => {
-      try {
-        const [deptosRes, inspectoresRes] = await Promise.all([
-          inspeccionesApi.getDepartamentos(),
-          inspeccionesApi.getInspectores(),
-        ]);
-        if (!cancelado) {
-          setDepartamentos(deptosRes);
-          setInspectores(inspectoresRes);
-
-          // Si hay depto en la URL
-          if (deptoParam) {
-            const enc = deptosRes.find((d) => d.id === Number(deptoParam));
-            if (enc) setDeptoSeleccionado(enc);
-          } else {
-            setDeptoSeleccionado(null);
-          }
-        }
-      } catch (err) {
-        console.error('Error cargando catálogos en registro', err);
-      }
-    };
-    cargar();
+    inspeccionesApi
+      .getDepartamentos()
+      .then((res) => {
+        if (!cancelado) setDepartamentos(res);
+      })
+      .catch((err) => {
+        console.error('Error cargando departamentos en registro', err);
+      });
     return () => {
       cancelado = true;
     };
-  }, [deptoParam]);
+  }, []);
 
-  // Consultar filas de inspección
+  // Cargar inspectores activos según departamento seleccionado
+  useEffect(() => {
+    if (!puedeFiltrarInspector) {
+      setInspectores([]);
+      return;
+    }
+
+    let cancelado = false;
+    const deptoId = filtros.departamentoId ?? undefined;
+
+    inspeccionesApi
+      .getInspectores({ departamentoId: deptoId })
+      .then((inspectoresRes) => {
+        if (!cancelado) setInspectores(inspectoresRes);
+      })
+      .catch((err) => {
+        if (!cancelado) {
+          console.error('Error cargando inspectores activos en registro', err);
+        }
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [filtros.departamentoId, puedeFiltrarInspector]);
+
+  // Consultar periodos disponibles reales en el backend cuando cambian los filtros de contexto
+  const queryPeriodos = useMemo(
+    () => construirQueryPeriodosDisponibles(filtrosUrl),
+    [
+      filtrosUrl.departamentoId,
+      filtrosUrl.lineaTexto,
+      filtrosUrl.inspectorId,
+      filtrosUrl.busqueda,
+      filtrosUrl.soloEliminados,
+      filtrosUrl.anio,
+      filtrosUrl.mes,
+      filtrosUrl.anioIso,
+      filtrosUrl.semana,
+    ]
+  );
+
+  useEffect(() => {
+    let cancelado = false;
+    setCargandoPeriodos(true);
+
+    inspeccionesApi
+      .getPeriodosDisponibles(queryPeriodos)
+      .then((res) => {
+        if (cancelado) return;
+        setPeriodosDisponibles(res);
+        const sincronizado = sincronizarFiltrosConPeriodosDisponibles(filtrosUrlRef.current, res);
+        const actualParams = serializarFiltrosASearchParams(filtrosUrlRef.current).toString();
+        const nuevoParams = serializarFiltrosASearchParams(sincronizado).toString();
+        if (actualParams !== nuevoParams) {
+          setSearchParams(serializarFiltrosASearchParams(sincronizado), { replace: true });
+        }
+      })
+      .catch((err) => {
+        if (!cancelado) {
+          console.error('Error al consultar periodos disponibles', err);
+        }
+      })
+      .finally(() => {
+        if (!cancelado) setCargandoPeriodos(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [queryPeriodos, setSearchParams]);
+
+  const deptoSeleccionado = useMemo(
+    () => departamentos.find((d) => d.id === filtros.departamentoId) || null,
+    [departamentos, filtros.departamentoId]
+  );
+
+  const estadoConsulta = useMemo(
+    () =>
+      puedeEjecutarConsultaTemporal(
+        filtros,
+        periodosDisponibles,
+        periodosDisponibles?.rangoTotal.hoy || hoyIso
+      ),
+    [filtros, periodosDisponibles, hoyIso]
+  );
+
+  const semanasDelAnioSeleccionado = useMemo(
+    () =>
+      obtenerSemanasDeAnio(
+        periodosDisponibles?.semanas,
+        filtros.anioIso ?? filtros.anio
+      ),
+    [periodosDisponibles?.semanas, filtros.anioIso, filtros.anio]
+  );
+
+  // Consultar filas de inspección paginadas
   const cargarRegistros = useCallback(
     async (pageTarget = 1, append = false) => {
+      // Si es entrada inicial sin período explícito en URL, esperar a resolver `periodosDisponibles`
+      if (filtrosUrl.esSeleccionInicial && !periodosDisponibles && cargandoPeriodos) {
+        return;
+      }
+
+      if (!estadoConsulta.listo) {
+        if (cargandoPeriodos) {
+          return;
+        }
+        setItems([]);
+        setTotalItems(0);
+        setTotalInspecciones(0);
+        setTotalPages(1);
+        setIsLoading(false);
+        setCargandoMas(false);
+        return;
+      }
+
       if (append) {
         setCargandoMas(true);
       } else {
         setIsLoading(true);
+        setErrorConsulta(null);
       }
 
       try {
+        const queryBase = construirQueryInspecciones(filtros);
         const resp = await inspeccionesApi.getFilasInspeccion({
-          periodo,
-          busqueda: busquedaParam || undefined,
-          departamentoResponsableId: deptoSeleccionado ? deptoSeleccionado.id : undefined,
-          lineaTexto: lineaParam || undefined,
-          inspectorId: inspectorParam ? Number(inspectorParam) : undefined,
-          mes: periodo === 'todos' && mesParam ? Number(mesParam) : undefined,
-          anio: periodo === 'todos' && anioParam ? Number(anioParam) : undefined,
-          soloEliminados: verEliminados,
+          ...queryBase,
           page: pageTarget,
-          limit: 100, // 100 por bloque en Registro
+          limit: 100,
         });
 
         if (append) {
@@ -169,81 +287,101 @@ export function RegistroPage() {
         } else {
           setItems(resp.items);
         }
-        setTotalItems(resp.total);
+        setTotalItems(resp.totalDefectos ?? resp.total ?? 0);
+        setTotalInspecciones(resp.totalInspecciones ?? 0);
         setPage(pageTarget);
         setTotalPages(resp.totalPages || 1);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error al consultar registros de defectos', err);
-        if (!append) setItems([]);
+        const mensaje =
+          err?.message || 'Ocurrió un error al consultar los registros de inspección.';
+        setErrorConsulta(mensaje);
+        if (!append) {
+          setItems([]);
+          setTotalItems(0);
+          setTotalInspecciones(0);
+        }
       } finally {
         setIsLoading(false);
         setCargandoMas(false);
       }
     },
-    [periodo, busquedaParam, deptoSeleccionado, lineaParam, inspectorParam, mesParam, anioParam, verEliminados]
+    [
+      filtros,
+      filtrosUrl.esSeleccionInicial,
+      periodosDisponibles,
+      cargandoPeriodos,
+      estadoConsulta.listo,
+    ]
   );
 
   const handleCargarMas = () => {
     if (cargandoMas || page >= totalPages) return;
-    cargarRegistros(page + 1, true);
+    void cargarRegistros(page + 1, true);
   };
 
   useEffect(() => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
-      cargarRegistros(1, false);
-    }, 280);
+      void cargarRegistros(1, false);
+    }, 220);
 
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     };
   }, [cargarRegistros]);
 
-  // Manejadores de Filtros en URL
-  const actualizarParametro = (clave: string, valor: string | null) => {
-    const nuevos = new URLSearchParams(searchParams);
-    if (valor) {
-      nuevos.set(clave, valor);
-    } else {
-      nuevos.delete(clave);
-    }
-    setSearchParams(nuevos, { replace: true });
-  };
+  // Actualizar filtros en URL
+  const aplicarNuevosFiltros = useCallback(
+    (actualizador: (actual: FiltrosRegistroState) => FiltrosRegistroState) => {
+      const siguiente = sincronizarFiltrosConPeriodosDisponibles(
+        {
+          ...actualizador(filtros),
+          esSeleccionInicial: false,
+        },
+        periodosDisponibles
+      );
+      setSearchParams(serializarFiltrosASearchParams(siguiente), { replace: true });
+    },
+    [filtros, periodosDisponibles, setSearchParams]
+  );
 
-  const handlePeriodoChange = (nuevoPeriodo: 'hoy' | 'todos') => {
-    const nuevos = new URLSearchParams(searchParams);
-    nuevos.set('periodo', nuevoPeriodo);
-    if (nuevoPeriodo === 'todos') {
-      const fecha = new Date();
-      nuevos.set('mes', (fecha.getMonth() + 1).toString());
-      nuevos.set('anio', fecha.getFullYear().toString());
-    } else {
-      nuevos.delete('mes');
-      nuevos.delete('anio');
-    }
-    setSearchParams(nuevos, { replace: true });
+  const handleModalidadChange = (nuevaModalidad: ModalidadPeriodoRegistro) => {
+    aplicarNuevosFiltros((prev) => ({
+      ...prev,
+      periodo: nuevaModalidad,
+      esSeleccionInicial: false,
+    }));
   };
 
   const handleDeptoChange = (idStr: string) => {
-    if (!idStr) {
-      setDeptoSeleccionado(null);
-      actualizarParametro('depto', null);
-      actualizarParametro('linea', null); // Resetear línea si cambia o quita depto
-      return;
-    }
-    const d = departamentos.find((dep) => dep.id === Number(idStr));
-    if (d) {
-      setDeptoSeleccionado(d);
-      actualizarParametro('depto', d.id.toString());
-      // Si el nuevo depto solo tiene 1 línea, resetear línea seleccionada
-      if ((d.numeroLineas || 1) <= 1) {
-        actualizarParametro('linea', null);
-      }
-    }
+    const idNum = idStr ? Number(idStr) : undefined;
+    const d = departamentos.find((dep) => dep.id === idNum);
+    aplicarNuevosFiltros((prev) => ({
+      ...prev,
+      departamentoId: idNum,
+      lineaTexto: !d || (d.numeroLineas || 1) <= 1 ? undefined : prev.lineaTexto,
+    }));
   };
 
   const handleInspectorChange = (id: number | string | null) => {
-    actualizarParametro('inspector', id ? String(id) : null);
+    aplicarNuevosFiltros((prev) => ({
+      ...prev,
+      inspectorId: id ? Number(id) : undefined,
+    }));
+  };
+
+  const handleLimpiarFiltros = () => {
+    setInputBusqueda('');
+    const limpio = sincronizarFiltrosConPeriodosDisponibles(
+      {
+        periodo: 'hoy',
+        esSeleccionInicial: true,
+        soloEliminados: false,
+      },
+      periodosDisponibles
+    );
+    setSearchParams(serializarFiltrosASearchParams(limpio), { replace: true });
   };
 
   const handleAbrirDetalle = (item: InspeccionFilaResponse) => {
@@ -256,99 +394,137 @@ export function RegistroPage() {
     deptoSeleccionado && (deptoSeleccionado.numeroLineas || 1) > 1
   );
 
-  // Opciones para el selector de inspectores
-  const inspectorOptions = inspectores.map((insp) => ({
-    id: insp.id,
-    label: insp.nombre || insp.usuario,
-    sublabel: insp.rol?.nombre ? `${insp.rol.nombre} (${insp.usuario})` : `${insp.usuario}`,
-  }));
+  // Opciones para el selector de inspectores activos
+  const inspectorOptions = useMemo(
+    () =>
+      inspectores.map((insp) => ({
+        id: insp.id,
+        label: insp.nombre || insp.usuario,
+        sublabel: insp.rol?.nombre ? `${insp.rol.nombre} (${insp.usuario})` : insp.usuario,
+      })),
+    [inspectores]
+  );
 
-  // Procesar la exportación configurada en el Modal
+  const periodoActivoDescripcion = useMemo(
+    () => describirPeriodoActivo(filtros, periodosDisponibles),
+    [filtros, periodosDisponibles]
+  );
+
+  const hayFiltrosActivos = useMemo(() => tieneFiltrosActivos(filtros), [filtros]);
+
+  // Procesar la exportación completa sin truncamiento mediante GET /api/v1/inspecciones/exportar
   const handleProcesarExportacion = async (cfg: ExportModalConfig) => {
-    // 1. Consultar los registros conforme a la configuración elegida en el modal
-    const deptoObj = departamentos.find((d) => d.id === cfg.departamentoId);
-    const inspectorObj = inspectores.find((i) => i.id === cfg.inspectorId);
-    const mesObj = MESES.find((m) => m.val === cfg.mes);
+    const deptoObj = departamentos.find((d) => d.id === cfg.filtros.departamentoId);
+    const inspectorObj = inspectores.find((i) => i.id === cfg.filtros.inspectorId);
+    const periodoNombre = describirPeriodoActivo(cfg.filtros, periodosDisponibles);
 
-    const periodoNombre =
-      cfg.periodo === 'hoy'
-        ? `Hoy (${new Date().toLocaleDateString('es-MX')})`
-        : cfg.periodo === 'mes'
-        ? `${mesObj?.label || 'Mes actual'} ${cfg.anio}`
-        : 'Histórico Completo';
-
-    const res = await inspeccionesApi.getFilasInspeccion({
-      periodo: cfg.periodo === 'hoy' ? 'hoy' : 'todos',
-      busqueda: busquedaParam || undefined,
-      departamentoResponsableId: cfg.departamentoId || undefined,
-      lineaTexto: cfg.lineaTexto || undefined,
-      inspectorId: cfg.inspectorId || undefined,
-      mes: cfg.periodo === 'mes' ? Number(cfg.mes) : undefined,
-      anio: cfg.periodo === 'mes' ? Number(cfg.anio) : undefined,
-      page: 1,
-      limit: 500, // Exportación amplia
-    });
+    const queryExport = construirQueryInspecciones(cfg.filtros);
+    const res = await inspeccionesApi.exportarFilasInspeccion(queryExport);
 
     const datosAExportar = res.items || [];
+    const totalDefectosExport = res.totalDefectos ?? datosAExportar.length;
+    const totalInspeccionesExport = res.totalInspecciones ?? 0;
 
     if (datosAExportar.length === 0) {
       toast.warning('No se encontraron registros para exportar con los criterios seleccionados');
       return;
     }
 
+    // Si es PDF y supera el umbral de 2,500 defectos sin confirmación previa, solicitar confirmación en el modal
+    if (
+      cfg.formato === 'pdf' &&
+      totalDefectosExport > UMBRAL_ADVERTENCIA_PDF &&
+      !cfg.confirmarPdfVolumenAlto
+    ) {
+      return {
+        requiereConfirmacionPdf: true,
+        totalDefectos: totalDefectosExport,
+        totalInspecciones: totalInspeccionesExport,
+      };
+    }
+
+    const configReporte = {
+      periodoNombre,
+      departamentoNombre: deptoObj?.nombre,
+      lineaNombre: cfg.filtros.lineaTexto || undefined,
+      inspectorNombre: inspectorObj?.nombre || inspectorObj?.usuario,
+      busqueda: cfg.filtros.busqueda || undefined,
+      soloEliminados: cfg.filtros.soloEliminados,
+      totalDefectos: totalDefectosExport,
+      totalInspecciones: totalInspeccionesExport,
+    };
+
     if (cfg.formato === 'excel') {
-      exportarRegistrosAExcel(
+      const resultado = exportarRegistrosAExcel(
         datosAExportar,
-        {
-          periodoNombre,
-          departamentoNombre: deptoObj?.nombre,
-          lineaNombre: cfg.lineaTexto || undefined,
-          inspectorNombre: inspectorObj?.nombre || inspectorObj?.usuario,
-        },
+        configReporte,
         `defectos_${deptoObj?.codigo?.toLowerCase() || 'general'}`
       );
-      toast.success(`Reporte Excel generado con ${datosAExportar.length} registros`);
+      toast.success(
+        `Reporte Excel (.csv) generado: ${resultado.totalDefectos.toLocaleString('es-MX')} registros`
+      );
     } else {
-      exportarRegistrosAPdf(datosAExportar, {
-        periodoNombre,
-        departamentoNombre: deptoObj?.nombre,
-        lineaNombre: cfg.lineaTexto || undefined,
-        inspectorNombre: inspectorObj?.nombre || inspectorObj?.usuario,
-      });
-      toast.success(`Reporte PDF generado con ${datosAExportar.length} registros`);
+      const resultado = exportarRegistrosAPdf(datosAExportar, configReporte);
+      if (!resultado.ok) {
+        toast.warning(
+          resultado.error || 'No se pudo abrir la ventana de impresión del reporte PDF.'
+        );
+        return;
+      }
+      toast.success(
+        `Reporte PDF generado: ${resultado.totalDefectos.toLocaleString('es-MX')} registros`
+      );
     }
   };
 
   return (
     <div className="flex-1 flex flex-col min-h-0 space-y-3">
-      {/* Encabezado Principal: Título del módulo de Registro */}
-      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-border/80">
-        <div className="flex items-center gap-3">
+      {/* Encabezado Principal: Título del módulo de Registro, contador y período activo */}
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b border-border/80">
+        <div className="flex flex-wrap items-center gap-2.5">
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 uppercase">
             REGISTRO HISTÓRICO DE DEFECTOS
           </h1>
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-marca-primario/10 text-marca-primario">
-            {totalItems} defectos
+          <span
+            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-marca-primario/10 text-marca-primario"
+            title="Total de registros que cumplen con los filtros"
+          >
+            {totalItems.toLocaleString('es-MX')} registros
           </span>
+        </div>
+
+        {/* Indicador de período activo */}
+        <div className="flex items-center gap-1.5 text-xs text-slate-600">
+          <Icon name="calendar_today" size="14px" className="text-marca-primario shrink-0" />
+          <span className="font-semibold text-slate-700 truncate max-w-xs sm:max-w-md">
+            {periodoActivoDescripcion}
+          </span>
+          {cargandoPeriodos && <Spinner size="xs" className="ml-1" />}
         </div>
       </div>
 
       {/* TABLA PRINCIPAL DE REGISTROS CON FILTROS Y CABECERA STICKY */}
       <RegistroHistoricoTabla
         items={items}
-        busqueda={busquedaParam}
+        busqueda={filtros.busqueda || ''}
         isLoading={isLoading}
         totalItems={totalItems}
+        totalInspecciones={totalInspecciones}
+        periodoDescripcion={periodoActivoDescripcion}
+        errorMensaje={errorConsulta}
+        tieneFiltrosActivos={hayFiltrosActivos}
+        onReintentar={() => void cargarRegistros(1, false)}
+        onLimpiarFiltros={handleLimpiarFiltros}
         puedeCargarMas={page < totalPages}
         cargandoMas={cargandoMas}
         onCargarMas={handleCargarMas}
         onVerDetalle={handleAbrirDetalle}
         toolbar={
-          <div className="flex flex-wrap items-center justify-between gap-2.5 w-full select-none py-1">
-            {/* Lado izquierdo: Buscador, Pestañas HOY | HISTÓRICO, Mes/Año e Inspector */}
-            <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-0">
+          <div className="flex flex-wrap items-center justify-between gap-2 w-full select-none py-1">
+            {/* Lado izquierdo: Buscador, Segmentación Temporal, Inspector y Línea */}
+            <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
               {/* Buscador */}
-              <div className="relative w-56 sm:w-60 shrink-0">
+              <div className="relative w-52 sm:w-56 shrink-0">
                 <Icon
                   name="search"
                   size="16px"
@@ -359,17 +535,24 @@ export function RegistroPage() {
                   placeholder="Buscar lote, modelo, defecto..."
                   value={inputBusqueda}
                   onChange={(e) => {
-                    setInputBusqueda(e.target.value);
-                    actualizarParametro('q', e.target.value.trim() || null);
+                    const val = e.target.value;
+                    setInputBusqueda(val);
+                    aplicarNuevosFiltros((prev) => ({
+                      ...prev,
+                      busqueda: val.trim() || undefined,
+                    }));
                   }}
-                  className="w-full pl-8 pr-7 py-1.5 bg-white border border-slate-300 rounded-lg text-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 focus:border-brand-primary transition-all text-slate-800"
+                  className="w-full h-8 pl-8 pr-7 py-1 bg-white border border-slate-300 rounded-lg text-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 focus:border-brand-primary transition-all text-slate-800"
                 />
                 {inputBusqueda && (
                   <button
                     type="button"
                     onClick={() => {
                       setInputBusqueda('');
-                      actualizarParametro('q', null);
+                      aplicarNuevosFiltros((prev) => ({
+                        ...prev,
+                        busqueda: undefined,
+                      }));
                     }}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                     title="Limpiar búsqueda"
@@ -379,109 +562,262 @@ export function RegistroPage() {
                 )}
               </div>
 
-              {/* Botones de Período: HOY | HISTÓRICO */}
-              {/* Pestañas HOY | HISTÓRICO, Mes/Año e Inspector (Ocultos en Papelera) */}
-              {!verEliminados && (
-                <>
-                  <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5 shadow-2xs shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => handlePeriodoChange('hoy')}
-                      className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                        periodo === 'hoy'
-                          ? 'bg-marca-primario text-white'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Hoy
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handlePeriodoChange('todos')}
-                      className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                        periodo === 'todos'
-                          ? 'bg-marca-primario text-white'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Histórico
-                    </button>
-                  </div>
+              {/* Selector de Modalidad de Período (Hoy, Día, Semana, Mes, Año) */}
+              <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5 shadow-2xs shrink-0">
+                {MODALIDADES_PERIODO_OPCIONES.map((mod) => (
+                  <button
+                    key={mod.id}
+                    type="button"
+                    onClick={() => handleModalidadChange(mod.id)}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                      filtros.periodo === mod.id
+                        ? 'bg-marca-primario text-white'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {mod.shortLabel}
+                  </button>
+                ))}
+              </div>
 
-                  {/* Selectores de Mes y Año si el período es 'todos' (Histórico) */}
-                  {periodo === 'todos' && (
-                    <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in duration-150">
-                      <select
-                        value={mesParam}
-                        onChange={(e) => actualizarParametro('mes', e.target.value || null)}
-                        className="bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer w-28 shrink-0"
-                        title="Filtrar por mes"
-                      >
-                        {MESES.map((m) => (
-                          <option key={m.val} value={m.val}>
-                            {m.label}
-                          </option>
-                        ))}
-                      </select>
+              {/* Selectores Dependientes: Modalidad AÑO (sin conteos) */}
+              {filtros.periodo === 'anio' && (
+                <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in duration-150">
+                  <select
+                    value={filtros.anio ?? ''}
+                    disabled={!periodosDisponibles || periodosDisponibles.anios.length === 0}
+                    onChange={(e) =>
+                      aplicarNuevosFiltros((prev) => ({
+                        ...prev,
+                        anio: e.target.value ? Number(e.target.value) : undefined,
+                      }))
+                    }
+                    className="h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
+                    title="Filtrar por año"
+                  >
+                    {(!periodosDisponibles || periodosDisponibles.anios.length === 0) && (
+                      <option value="">Sin años</option>
+                    )}
+                    {periodosDisponibles?.anios.map((a) => (
+                      <option key={a.anio} value={a.anio}>
+                        {formatearEtiquetaAnio(a.anio)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
-                      <select
-                        value={anioParam}
-                        onChange={(e) => actualizarParametro('anio', e.target.value || null)}
-                        className="bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer w-20 shrink-0"
-                        title="Filtrar por año"
-                      >
-                        {ANIOS.map((a) => (
-                          <option key={a} value={a}>
-                            {a}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+              {/* Selectores Dependientes: Modalidad MES */}
+              {filtros.periodo === 'mes' && (
+                <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in duration-150">
+                  <select
+                    value={filtros.anio ?? ''}
+                    disabled={!periodosDisponibles || periodosDisponibles.anios.length === 0}
+                    onChange={(e) =>
+                      aplicarNuevosFiltros((prev) => ({
+                        ...prev,
+                        anio: e.target.value ? Number(e.target.value) : undefined,
+                        mes: undefined,
+                      }))
+                    }
+                    className="h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
+                    title="Seleccionar año"
+                  >
+                    {(!periodosDisponibles || periodosDisponibles.anios.length === 0) && (
+                      <option value="">Sin años</option>
+                    )}
+                    {periodosDisponibles?.anios.map((a) => (
+                      <option key={a.anio} value={a.anio}>
+                        {formatearEtiquetaAnio(a.anio)}
+                      </option>
+                    ))}
+                  </select>
 
-                  {/* Selector con buscador de Inspector */}
-                  <div className="w-44 shrink-0">
-                    <SearchableSelect
-                      options={inspectorOptions}
-                      value={inspectorParam ? Number(inspectorParam) : null}
-                      onChange={handleInspectorChange}
-                      allOptionLabel="Todos los Inspectores"
-                      placeholder="Inspector..."
-                      emptyText="No se encontraron inspectores"
-                      title="Filtrar por inspector"
-                    />
-                  </div>
+                  <select
+                    value={filtros.mes ?? ''}
+                    disabled={!periodosDisponibles || periodosDisponibles.meses.length === 0}
+                    onChange={(e) =>
+                      aplicarNuevosFiltros((prev) => ({
+                        ...prev,
+                        mes: e.target.value ? Number(e.target.value) : undefined,
+                      }))
+                    }
+                    className="h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
+                    title="Seleccionar mes"
+                  >
+                    {(!periodosDisponibles || periodosDisponibles.meses.length === 0) && (
+                      <option value="">Sin meses</option>
+                    )}
+                    {periodosDisponibles?.meses.map((m) => (
+                      <option key={`${m.anio}-${m.mes}`} value={m.mes}>
+                        {m.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
-                  {/* Selector de Línea: Solo aplica si el departamento seleccionado tiene más de 1 línea */}
-                  {tieneMultiplesLineas && deptoSeleccionado && (
-                    <div className="flex items-center gap-1 shrink-0 animate-in fade-in duration-150">
-                      <select
-                        value={lineaParam}
-                        onChange={(e) => actualizarParametro('linea', e.target.value || null)}
-                        className="bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer w-28"
-                        title="Filtrar por línea operativa del departamento"
-                      >
-                        <option value="">Todas Líneas</option>
-                        {Array.from({ length: deptoSeleccionado.numeroLineas || 1 }, (_, i) => `L${i + 1}`).map((lin) => (
-                          <option key={lin} value={lin}>
-                            {lin}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </>
+              {/* Selectores Dependientes: Modalidad SEMANA (sin palabra ISO ni conteos) */}
+              {filtros.periodo === 'semana' && (
+                <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in duration-150">
+                  <select
+                    value={filtros.anioIso ?? ''}
+                    disabled={
+                      !periodosDisponibles || (periodosDisponibles.aniosIso || []).length === 0
+                    }
+                    onChange={(e) =>
+                      aplicarNuevosFiltros((prev) => ({
+                        ...prev,
+                        anioIso: e.target.value ? Number(e.target.value) : undefined,
+                        semana: undefined,
+                        semanaIsoCodigo: undefined,
+                      }))
+                    }
+                    className="h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
+                    title="Seleccionar año"
+                  >
+                    {(!periodosDisponibles ||
+                      (periodosDisponibles.aniosIso || []).length === 0) && (
+                      <option value="">Sin años</option>
+                    )}
+                    {(periodosDisponibles?.aniosIso || []).map((a) => (
+                      <option key={a.anioIso} value={a.anioIso}>
+                        {formatearEtiquetaAnio(a.anioIso)}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={
+                      filtros.anioIso && filtros.semana
+                        ? formatearSemanaIsoCodigo(filtros.anioIso, filtros.semana)
+                        : ''
+                    }
+                    disabled={semanasDelAnioSeleccionado.length === 0}
+                    onChange={(e) => {
+                      const parsed = parsearSemanaIsoCodigo(e.target.value);
+                      if (parsed) {
+                        aplicarNuevosFiltros((prev) => ({
+                          ...prev,
+                          anioIso: parsed.anioIso,
+                          semana: parsed.semana,
+                          semanaIsoCodigo: parsed.codigo,
+                        }));
+                      }
+                    }}
+                    className="h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer max-w-[250px] truncate shrink-0"
+                    title="Seleccionar semana"
+                  >
+                    {semanasDelAnioSeleccionado.length === 0 && (
+                      <option value="">Sin semanas</option>
+                    )}
+                    {semanasDelAnioSeleccionado.map((s) => (
+                      <option key={s.codigo} value={s.codigo}>
+                        {formatearEtiquetaSemana(s)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Selector Dependiente: Modalidad DÍA mediante Calendario */}
+              {filtros.periodo === 'dia' && (
+                <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in duration-150">
+                  <CalendarioDiaPicker
+                    value={filtros.dia}
+                    anio={filtros.anio}
+                    mes={filtros.mes}
+                    aniosDisponibles={periodosDisponibles?.anios || []}
+                    mesesDisponibles={periodosDisponibles?.meses || []}
+                    diasDisponibles={periodosDisponibles?.dias || []}
+                    hoyIso={periodosDisponibles?.rangoTotal.hoy || hoyIso}
+                    disabled={!periodosDisponibles || periodosDisponibles.anios.length === 0}
+                    onSelectDia={(fechaIso, anioSel, mesSel) =>
+                      aplicarNuevosFiltros((prev) => ({
+                        ...prev,
+                        dia: fechaIso,
+                        anio: anioSel,
+                        mes: mesSel,
+                      }))
+                    }
+                    onCambiarMesAnio={(nuevoAnio, nuevoMes) =>
+                      aplicarNuevosFiltros((prev) => ({
+                        ...prev,
+                        anio: nuevoAnio,
+                        mes: nuevoMes,
+                        dia: undefined,
+                      }))
+                    }
+                  />
+                </div>
+              )}
+
+              {/* Selector de Línea: Solo aplica si el departamento seleccionado tiene más de 1 línea */}
+              {tieneMultiplesLineas && deptoSeleccionado && (
+                <div className="flex items-center gap-1 shrink-0 animate-in fade-in duration-150">
+                  <select
+                    value={filtros.lineaTexto || ''}
+                    onChange={(e) =>
+                      aplicarNuevosFiltros((prev) => ({
+                        ...prev,
+                        lineaTexto: e.target.value || undefined,
+                      }))
+                    }
+                    className="h-8 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer w-28 shrink-0"
+                    title="Filtrar por línea operativa del departamento"
+                  >
+                    <option value="">Todas Líneas</option>
+                    {Array.from(
+                      { length: deptoSeleccionado.numeroLineas || 1 },
+                      (_, i) => `L${i + 1}`
+                    ).map((lin) => (
+                      <option key={lin} value={lin}>
+                        {lin}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Botón Limpiar filtros */}
+              {hayFiltrosActivos && (
+                <button
+                  type="button"
+                  onClick={handleLimpiarFiltros}
+                  className="inline-flex items-center gap-1 h-8 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0"
+                  title="Restablecer filtros"
+                >
+                  <Icon name="filter_alt_off" size="14px" className="text-slate-500" />
+                  <span>Limpiar</span>
+                </button>
               )}
             </div>
 
-            {/* Lado derecho: Selector de Departamento y Botón de Exportar con Modal */}
-            <div className="shrink-0 flex items-center justify-end gap-2">
+            {/* Lado derecho: Selector de Inspector, Departamento, Exportar y Papelera */}
+            <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+              {/* Selector con buscador de Inspector activo junto al de Departamento */}
+              {puedeFiltrarInspector && (
+                <div className="w-44 sm:w-48 shrink-0 min-w-0">
+                  <SearchableSelect
+                    options={inspectorOptions}
+                    value={filtros.inspectorId ?? null}
+                    onChange={handleInspectorChange}
+                    allOptionLabel="Todos los Inspectores"
+                    placeholder="Inspector..."
+                    searchPlaceholder="Buscar inspector activo..."
+                    emptyText="No se encontraron inspectores activos"
+                    title="Filtrar por inspector activo"
+                    className="w-full"
+                  />
+                </div>
+              )}
+
               {/* Selector de Departamento */}
               {puedeCambiarDepto ? (
                 <select
                   value={deptoSeleccionado?.id.toString() || ''}
                   onChange={(e) => handleDeptoChange(e.target.value)}
-                  className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer w-40"
+                  className="h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer w-40 shrink-0"
                   title="Filtrar por departamento"
                 >
                   <option value="">Todos los Deptos</option>
@@ -492,47 +828,59 @@ export function RegistroPage() {
                   ))}
                 </select>
               ) : (
-                <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs">
+                <div className="flex items-center gap-1.5 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs shrink-0">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                     Depto:
                   </span>
-                  <span className="font-bold text-marca-primario truncate max-w-[130px]" title="Departamento asignado">
-                    {deptoSeleccionado?.nombre || 'Todos'}
+                  <span
+                    className="font-bold text-marca-primario truncate max-w-[130px]"
+                    title="Departamento asignado"
+                  >
+                    {deptoSeleccionado?.nombre || 'Asignado'}
                   </span>
                 </div>
               )}
 
-              {/* Botón Exportar que abre el Modal de selección (Oculto en Papelera) */}
-              {!verEliminados && (
-                <button
-                  type="button"
-                  onClick={() => setModalExportarAbierto(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 h-8 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-700 hover:text-slate-900 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 shadow-2xs cursor-pointer transition-colors"
-                  title="Configurar y exportar reporte"
-                >
-                  <Icon name="download" size="15px" className="text-slate-500" />
-                  <span>Exportar</span>
-                </button>
-              )}
-
-              {/* Botón Papelera a un lado de Exportar con ligera separación */}
+              {/* Botón Exportar que abre el Modal de selección */}
               <button
                 type="button"
-                onClick={() => actualizarParametro('eliminados', verEliminados ? null : 'true')}
-                title={
-                  verEliminados
-                    ? 'Papelera: Viendo defectos eliminados (Click para volver a activos)'
-                    : 'Papelera: Ver defectos eliminados'
-                }
-                className={`p-1.5 rounded-lg border transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold shrink-0 ${
-                  verEliminados
-                    ? 'bg-rose-100 text-rose-700 border-rose-300 shadow-2xs'
-                    : 'bg-white text-slate-500 border-slate-300 hover:text-slate-700 hover:bg-slate-50'
-                }`}
+                onClick={() => setModalExportarAbierto(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 h-8 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-700 hover:text-slate-900 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 shadow-2xs cursor-pointer transition-colors"
+                title="Configurar y exportar reporte completo"
               >
-                <Icon name="delete" size="18px" className={verEliminados ? 'text-rose-600' : 'text-slate-400'} />
-                {verEliminados && <span>Eliminados</span>}
+                <Icon name="download" size="15px" className="text-slate-500" />
+                <span>Exportar</span>
               </button>
+
+              {/* Botón Papelera (solo si el usuario tiene permiso defectos.eliminar) */}
+              {puedeVerEliminados && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    aplicarNuevosFiltros((prev) => ({
+                      ...prev,
+                      soloEliminados: !prev.soloEliminados,
+                    }))
+                  }
+                  title={
+                    filtros.soloEliminados
+                      ? 'Papelera: Viendo defectos eliminados (Click para volver a activos)'
+                      : 'Papelera: Ver defectos eliminados'
+                  }
+                  className={`h-8 px-2.5 py-1 rounded-lg border transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold shrink-0 ${
+                    filtros.soloEliminados
+                      ? 'bg-rose-100 text-rose-700 border-rose-300 shadow-2xs'
+                      : 'bg-white text-slate-500 border-slate-300 hover:text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <Icon
+                    name="delete"
+                    size="16px"
+                    className={filtros.soloEliminados ? 'text-rose-600' : 'text-slate-400'}
+                  />
+                  {filtros.soloEliminados && <span>Eliminados</span>}
+                </button>
+              )}
             </div>
           </div>
         }
@@ -545,13 +893,12 @@ export function RegistroPage() {
         onExportar={handleProcesarExportacion}
         departamentos={departamentos}
         inspectores={inspectores}
-        periodoActual={periodo}
-        mesActual={mesParam}
-        anioActual={anioParam}
-        departamentoActualId={deptoSeleccionado?.id || null}
-        lineaActualTexto={lineaParam || null}
-        inspectorActualId={inspectorParam ? Number(inspectorParam) : null}
+        filtrosActivos={filtros}
+        periodosIniciales={periodosDisponibles}
         totalDefectosVista={totalItems}
+        totalInspeccionesVista={totalInspecciones}
+        puedeCambiarDepto={puedeCambiarDepto}
+        puedeFiltrarInspector={puedeFiltrarInspector}
       />
 
       {/* MODAL DE DETALLE COMPLETO */}

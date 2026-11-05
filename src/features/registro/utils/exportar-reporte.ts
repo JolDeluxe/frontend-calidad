@@ -1,19 +1,85 @@
 import type { InspeccionFilaResponse } from '../types/registro.types';
 
+/**
+ * Umbral a partir del cual se muestra una advertencia preventiva no bloqueante
+ * al usuario antes de generar un documento PDF en el navegador.
+ */
+export const UMBRAL_ADVERTENCIA_PDF = 2500;
+
 export interface ExportFiltrosConfig {
   periodoNombre: string;
   departamentoNombre?: string;
   lineaNombre?: string;
   inspectorNombre?: string;
+  busqueda?: string;
+  soloEliminados?: boolean;
+  totalDefectos?: number;
+  totalInspecciones?: number;
+  totalParesDefectuosos?: number;
+}
+
+export interface ResumenExportacion {
+  totalDefectos: number;
+  totalInspecciones: number;
+  totalParesDefectuosos: number;
+}
+
+export interface ResultadoExportacionReporte extends ResumenExportacion {
+  ok: boolean;
+  error?: string;
 }
 
 /**
- * Formatea una fecha ISO a DD/MM/AAAA
+ * Deduplica filas de exportación por ID preservando el orden original.
  */
-function formatearFecha(fechaIso: string): string {
+export function deduplicarFilasExportacion(
+  items: InspeccionFilaResponse[]
+): InspeccionFilaResponse[] {
+  const vistos = new Set<number | string>();
+  const resultado: InspeccionFilaResponse[] = [];
+  for (const item of items) {
+    const clave = item.id;
+    if (vistos.has(clave)) continue;
+    vistos.add(clave);
+    resultado.push(item);
+  }
+  return resultado;
+}
+
+/**
+ * Calcula los totales reales de defectos (filas), inspecciones únicas (lotes)
+ * y pares defectuosos sobre el conjunto deduplicado.
+ */
+export function calcularResumenExportacion(
+  items: InspeccionFilaResponse[]
+): ResumenExportacion {
+  const unicos = deduplicarFilasExportacion(items);
+  const inspeccionesSet = new Set<number>();
+  let totalParesDefectuosos = 0;
+
+  for (const item of unicos) {
+    if (typeof item.inspeccionId === 'number') {
+      inspeccionesSet.add(item.inspeccionId);
+    }
+    totalParesDefectuosos += Number(item.paresDefectuosos || 0);
+  }
+
+  return {
+    totalDefectos: unicos.length,
+    totalInspecciones: inspeccionesSet.size,
+    totalParesDefectuosos,
+  };
+}
+
+/**
+ * Formatea una fecha ISO a DD/MM/AAAA en la zona horaria operativa America/Mexico_City.
+ */
+export function formatearFechaReporte(fechaIso: string): string {
   try {
     const d = new Date(fechaIso);
+    if (Number.isNaN(d.getTime())) return fechaIso;
     return d.toLocaleDateString('es-MX', {
+      timeZone: 'America/Mexico_City',
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -24,23 +90,36 @@ function formatearFecha(fechaIso: string): string {
 }
 
 /**
- * Escapa valores para CSV/Excel compatible
+ * Escapa valores para CSV/Excel compatible.
  */
-function escaparCsv(valor: any): string {
+function escaparCsv(valor: unknown): string {
   if (valor === null || valor === undefined) return '""';
   const str = String(valor).replace(/"/g, '""');
   return `"${str}"`;
 }
 
 /**
- * Exporta los datos a formato Excel (.csv compatible con Excel con BOM UTF-8)
- * Estructura tabulada directa y limpia sin bloques desordenados.
+ * Escapa texto para inserción segura en HTML de impresión PDF.
  */
-export function exportarRegistrosAExcel(
+function escaparHtml(valor: unknown): string {
+  if (valor === null || valor === undefined) return '';
+  return String(valor)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Construye los bloques (chunks) de texto CSV con BOM UTF-8 sin concatenar
+ * un único string gigante en memoria para soportar exportaciones masivas.
+ */
+export function construirBloquesCsvExportacion(
   items: InspeccionFilaResponse[],
-  _filtros?: ExportFiltrosConfig,
-  nombreBase = 'reporte_defectos'
-): void {
+  chunkSize = 2000
+): string[] {
+  const filasUnicas = deduplicarFilasExportacion(items);
   const headers = [
     'No',
     'Departamento Auditado',
@@ -58,68 +137,112 @@ export function exportarRegistrosAExcel(
     'Inspector',
   ];
 
-  const filas = items.map((item, idx) => [
-    idx + 1,
-    escaparCsv(item.departamentoAuditoria),
-    escaparCsv(item.defDepto),
-    escaparCsv(formatearFecha(item.fecha)),
-    escaparCsv(item.lista),
-    escaparCsv(item.lote),
-    escaparCsv(item.linea),
-    escaparCsv(item.modelo),
-    escaparCsv(item.descripcion || ''),
-    item.defectoClave,
-    escaparCsv(item.defectoNombre),
-    escaparCsv(item.clasificacion),
-    item.paresDefectuosos,
-    escaparCsv(item.usuario),
-  ]);
+  const chunks: string[] = [
+    '\uFEFF' + headers.map(escaparCsv).join(',') + '\r\n',
+  ];
 
-  const csvContent =
-    '\uFEFF' + // BOM UTF-8 para apertura directa en Excel con caracteres especiales
-    headers.map(escaparCsv).join(',') +
-    '\r\n' +
-    filas.map((f) => f.join(',')).join('\r\n');
+  for (let i = 0; i < filasUnicas.length; i += chunkSize) {
+    const slice = filasUnicas.slice(i, i + chunkSize);
+    const lineas = slice.map((item, idx) =>
+      [
+        i + idx + 1,
+        escaparCsv(item.departamentoAuditoria),
+        escaparCsv(item.defDepto),
+        escaparCsv(formatearFechaReporte(item.fecha)),
+        escaparCsv(item.lista),
+        escaparCsv(item.lote),
+        escaparCsv(item.linea),
+        escaparCsv(item.modelo),
+        escaparCsv(item.descripcion || ''),
+        item.defectoClave,
+        escaparCsv(item.defectoNombre),
+        escaparCsv(item.clasificacion),
+        item.paresDefectuosos,
+        escaparCsv(item.usuario),
+      ].join(',')
+    );
+    chunks.push(lineas.join('\r\n') + (i + chunkSize < filasUnicas.length ? '\r\n' : ''));
+  }
 
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.setAttribute('href', url);
-  const timestamp = new Date().toISOString().slice(0, 10);
-  link.setAttribute('download', `${nombreBase}_${timestamp}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  return chunks;
 }
 
 /**
- * Exporta los datos a formato PDF mediante ventana de impresión formateada profesionalmente
+ * Exporta los datos a formato Excel (.csv compatible con Excel con BOM UTF-8)
+ * empleando construcción por bloques para evitar picos de memoria y sin truncar.
  */
-export function exportarRegistrosAPdf(
+export function exportarRegistrosAExcel(
   items: InspeccionFilaResponse[],
-  filtros: ExportFiltrosConfig
-): void {
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) {
-    alert('Por favor permita las ventanas emergentes (pop-ups) para generar el PDF de impresión.');
-    return;
+  _filtros?: ExportFiltrosConfig,
+  nombreBase = 'reporte_defectos'
+): ResultadoExportacionReporte {
+  const filasUnicas = deduplicarFilasExportacion(items);
+  const resumen = calcularResumenExportacion(filasUnicas);
+  const chunks = construirBloquesCsvExportacion(filasUnicas);
+
+  if (typeof document !== 'undefined' && typeof URL !== 'undefined') {
+    const blob = new Blob(chunks, { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    const timestamp = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Mexico_City',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+    link.setAttribute('download', `${nombreBase}_${timestamp}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
-  const filasHtml = items
+  return {
+    ok: true,
+    ...resumen,
+  };
+}
+
+/**
+ * Construye el documento HTML imprimible del reporte PDF distinguiendo claramente
+ * entre defectos (filas), inspecciones (lotes únicos) y pares defectuosos.
+ */
+export function construirHtmlReportePdf(
+  items: InspeccionFilaResponse[],
+  filtros: ExportFiltrosConfig
+): string {
+  const filasUnicas = deduplicarFilasExportacion(items);
+  const resumen = calcularResumenExportacion(filasUnicas);
+
+  const totalDefectos = filtros.totalDefectos ?? resumen.totalDefectos;
+  const totalInspecciones = filtros.totalInspecciones ?? resumen.totalInspecciones;
+  const totalPares = filtros.totalParesDefectuosos ?? resumen.totalParesDefectuosos;
+
+  const ahora = new Date();
+  const fechaGeneracion = ahora.toLocaleDateString('es-MX', {
+    timeZone: 'America/Mexico_City',
+  });
+  const horaGeneracion = ahora.toLocaleTimeString('es-MX', {
+    timeZone: 'America/Mexico_City',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const filasHtml = filasUnicas
     .map(
       (item, idx) => `
     <tr>
       <td style="text-align: center; font-family: monospace; font-size: 10px; color: #64748b;">${idx + 1}</td>
-      <td style="font-weight: bold; color: #0f172a; text-transform: uppercase;">${item.defDepto}</td>
-      <td style="white-space: nowrap; font-family: monospace;">${formatearFecha(item.fecha)}</td>
-      <td style="font-weight: 600;">${item.lista}</td>
-      <td style="font-family: monospace; font-weight: 800; color: #0284c7;">${item.lote}</td>
-      <td style="text-align: center;"><span style="background: #f1f5f9; padding: 2px 5px; border-radius: 4px; font-weight: 600;">${item.linea}</span></td>
-      <td style="font-weight: 600;">${item.modelo}</td>
-      <td style="color: #64748b; font-size: 10px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.descripcion || ''}</td>
-      <td style="text-align: center; font-family: monospace; font-weight: 800; color: #0284c7;">${item.defectoClave}</td>
-      <td style="font-weight: 600; color: #1e293b;">${item.defectoNombre}</td>
+      <td style="font-weight: bold; color: #0f172a; text-transform: uppercase;">${escaparHtml(item.defDepto)}</td>
+      <td style="white-space: nowrap; font-family: monospace;">${escaparHtml(formatearFechaReporte(item.fecha))}</td>
+      <td style="font-weight: 600;">${escaparHtml(item.lista)}</td>
+      <td style="font-family: monospace; font-weight: 800; color: #0284c7;">${escaparHtml(item.lote)}</td>
+      <td style="text-align: center;"><span style="background: #f1f5f9; padding: 2px 5px; border-radius: 4px; font-weight: 600;">${escaparHtml(item.linea)}</span></td>
+      <td style="font-weight: 600;">${escaparHtml(item.modelo)}</td>
+      <td style="color: #64748b; font-size: 10px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escaparHtml(item.descripcion || '')}</td>
+      <td style="text-align: center; font-family: monospace; font-weight: 800; color: #0284c7;">${escaparHtml(item.defectoClave)}</td>
+      <td style="font-weight: 600; color: #1e293b;">${escaparHtml(item.defectoNombre)}</td>
       <td style="text-align: center;">
         <span style="display: inline-block; padding: 2px 6px; border-radius: 9999px; font-size: 9px; font-weight: 700; ${
           item.clasificacion === 'CRITICO'
@@ -128,19 +251,17 @@ export function exportarRegistrosAPdf(
             ? 'background: #ffedd5; color: #c2410c;'
             : 'background: #fef9c3; color: #a16207;'
         }">
-          ${item.clasificacion}
+          ${escaparHtml(item.clasificacion)}
         </span>
       </td>
-      <td style="text-align: center; font-weight: bold;">${item.paresDefectuosos}</td>
-      <td style="color: #475569; font-size: 10px; white-space: nowrap;">${item.usuario}</td>
+      <td style="text-align: center; font-weight: bold;">${Number(item.paresDefectuosos || 0)}</td>
+      <td style="color: #475569; font-size: 10px; white-space: nowrap;">${escaparHtml(item.usuario)}</td>
     </tr>
   `
     )
     .join('');
 
-  const totalPares = items.reduce((acc, curr) => acc + (curr.paresDefectuosos || 0), 0);
-
-  const html = `
+  return `
     <!DOCTYPE html>
     <html lang="es">
     <head>
@@ -249,31 +370,31 @@ export function exportarRegistrosAPdf(
     <body>
       <div class="header">
         <div>
-          <h1 class="title">Reporte Histórico de Defectos</h1>
+          <h1 class="title">Reporte Histórico de Defectos${filtros.soloEliminados ? ' (Papelera)' : ''}</h1>
           <div class="subtitle">Sistema de Control de Calidad y Trazabilidad Operativa</div>
         </div>
         <div style="text-align: right; font-size: 10px; color: #64748b;">
-          <div>Generado: ${new Date().toLocaleDateString('es-MX')} ${new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
-          <div>Total de registros: <strong>${items.length}</strong></div>
+          <div>Generado: ${escaparHtml(fechaGeneracion)} ${escaparHtml(horaGeneracion)}</div>
+          <div>Defectos: <strong>${totalDefectos}</strong> · Inspecciones (lotes): <strong>${totalInspecciones}</strong></div>
         </div>
       </div>
 
       <div class="meta-grid">
         <div class="meta-item">
           <strong>Período:</strong>
-          <span>${filtros.periodoNombre}</span>
+          <span>${escaparHtml(filtros.periodoNombre)}</span>
         </div>
         <div class="meta-item">
           <strong>Departamento:</strong>
-          <span>${filtros.departamentoNombre || 'Todos los Departamentos'}</span>
+          <span>${escaparHtml(filtros.departamentoNombre || 'Todos los Departamentos')}</span>
         </div>
         <div class="meta-item">
           <strong>Línea:</strong>
-          <span>${filtros.lineaNombre || 'Todas las Líneas'}</span>
+          <span>${escaparHtml(filtros.lineaNombre || 'Todas las Líneas')}</span>
         </div>
         <div class="meta-item">
           <strong>Inspector:</strong>
-          <span>${filtros.inspectorNombre || 'Todos los Inspectores'}</span>
+          <span>${escaparHtml(filtros.inspectorNombre || 'Todos los Inspectores')}</span>
         </div>
       </div>
 
@@ -301,7 +422,8 @@ export function exportarRegistrosAPdf(
       </table>
 
       <div class="footer-summary">
-        <div>Total de Defectos: <strong>${items.length}</strong></div>
+        <div>Total de Defectos: <strong>${totalDefectos}</strong></div>
+        <div>Total de Inspecciones (Lotes): <strong>${totalInspecciones}</strong></div>
         <div>Total Pares Defectuosos: <strong>${totalPares}</strong></div>
       </div>
 
@@ -315,8 +437,44 @@ export function exportarRegistrosAPdf(
     </body>
     </html>
   `;
+}
 
+/**
+ * Exporta los datos a formato PDF mediante ventana de impresión formateada profesionalmente.
+ * Nunca utiliza alert() ni confirm() del navegador.
+ */
+export function exportarRegistrosAPdf(
+  items: InspeccionFilaResponse[],
+  filtros: ExportFiltrosConfig
+): ResultadoExportacionReporte {
+  const filasUnicas = deduplicarFilasExportacion(items);
+  const resumen = calcularResumenExportacion(filasUnicas);
+
+  if (typeof window === 'undefined') {
+    return {
+      ok: false,
+      error: 'Entorno sin ventana de impresión disponible.',
+      ...resumen,
+    };
+  }
+
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    return {
+      ok: false,
+      error:
+        'Por favor permita las ventanas emergentes (pop-ups) en su navegador para generar el PDF de impresión.',
+      ...resumen,
+    };
+  }
+
+  const html = construirHtmlReportePdf(filasUnicas, filtros);
   printWindow.document.open();
   printWindow.document.write(html);
   printWindow.document.close();
+
+  return {
+    ok: true,
+    ...resumen,
+  };
 }

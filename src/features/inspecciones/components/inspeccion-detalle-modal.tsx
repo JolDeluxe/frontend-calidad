@@ -20,17 +20,24 @@ export function InspeccionDetalleModal({
   const fechaHoraStr = (() => {
     try {
       const d = new Date(item.fecha);
-      const diaSemana = d.toLocaleDateString('es-MX', { weekday: 'long' });
-      const dia = String(d.getDate()).padStart(2, '0');
-      const mes = String(d.getMonth() + 1).padStart(2, '0');
-      const anio = d.getFullYear();
+      const diaSemana = d.toLocaleDateString('es-MX', {
+        timeZone: 'America/Mexico_City',
+        weekday: 'long',
+      });
+      const fechaCorta = d.toLocaleDateString('es-MX', {
+        timeZone: 'America/Mexico_City',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
       const hora = d.toLocaleTimeString('es-MX', {
+        timeZone: 'America/Mexico_City',
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
         hour12: true,
       });
-      return `${diaSemana} ${dia}/${mes}/${anio} ${hora}`;
+      return `${diaSemana} ${fechaCorta} ${hora}`;
     } catch {
       return item.fecha;
     }
@@ -40,17 +47,24 @@ export function InspeccionDetalleModal({
     if (!item.eliminadoEn) return null;
     try {
       const d = new Date(item.eliminadoEn);
-      const diaSemana = d.toLocaleDateString('es-MX', { weekday: 'long' });
-      const dia = String(d.getDate()).padStart(2, '0');
-      const mes = String(d.getMonth() + 1).padStart(2, '0');
-      const anio = d.getFullYear();
+      const diaSemana = d.toLocaleDateString('es-MX', {
+        timeZone: 'America/Mexico_City',
+        weekday: 'long',
+      });
+      const fechaCorta = d.toLocaleDateString('es-MX', {
+        timeZone: 'America/Mexico_City',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
       const hora = d.toLocaleTimeString('es-MX', {
+        timeZone: 'America/Mexico_City',
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
         hour12: true,
       });
-      return `${diaSemana} ${dia}/${mes}/${anio} ${hora}`;
+      return `${diaSemana} ${fechaCorta} ${hora}`;
     } catch {
       return String(item.eliminadoEn);
     }
