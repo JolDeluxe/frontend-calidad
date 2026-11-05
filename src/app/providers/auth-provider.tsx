@@ -102,6 +102,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // autenticado offline coincide con la sesión del backend antes de sobrescribirlo automáticamente.
     const sesionOfflineVigente = await catalogoOfflineService.getSesionOfflineVigente();
 
+    // TRANSICIÓN AUTOMÁTICA OFFLINE -> ONLINE:
+    // Si el usuario está operando con una sesión offline activa y cuenta con token firmado de 48h,
+    // y el backend ya es alcanzable, canjear automáticamente el token offline por una sesión online
+    // oficial completa en MySQL. De este modo pasa a "confirmed" sin pedir login ni contraseña.
+    if (
+      sesionOfflineVigente &&
+      sesionOfflineVigente.offlineToken &&
+      terminalStorage.getCredential() &&
+      connectivityState.isBackendReachable()
+    ) {
+      try {
+        const exchangeRes = await authApi.exchangeOfflineToken(sesionOfflineVigente.offlineToken);
+        if (exchangeRes.success && exchangeRes.data?.accessToken && exchangeRes.data?.usuario) {
+          const loggedUser = exchangeRes.data.usuario;
+          authState.setAccessToken(exchangeRes.data.accessToken);
+          persistUser(loggedUser);
+          setSessionState('confirmed');
+
+          void catalogoOfflineService.sincronizarTodoEnBackground();
+          void inspeccionesOfflineService.sincronizarCola({ forceIgnoreBackoff: true });
+          return true;
+        }
+      } catch (exchangeErr) {
+        console.warn(
+          '[Auth] No fue posible canjear el token offline por sesión en línea (se mantiene offline):',
+          exchangeErr,
+        );
+      }
+    }
+
     const result = await performTokenRefresh();
 
     if (result.status === 'success' && result.token) {
@@ -116,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // PROTECCIÓN MULTIUSUARIO OFFLINE:
-      // Si mientras estuvo offline se autenticó otro inspector localmente (ej: Ana Aguilar en lugar de Jaqueline Meza),
+      // Si mientras estuvo offline se autenticó otro inspector localmente (ej: Karina Cabrera en lugar de Jacqueline Meza),
       // no debemos resucitar la sesión online anterior de la cookie. La cookie del usuario previo debe invalidarse.
       if (
         sesionOfflineVigente &&
@@ -132,7 +162,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch {}
         document.cookie = 'auth_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
 
-        // Conservar al usuario que inició sesión offline
+        // Intentar canjear inmediatamente el token offline del inspector actual por su propia sesión online
+        if (sesionOfflineVigente.offlineToken && terminalStorage.getCredential()) {
+          try {
+            const exRes = await authApi.exchangeOfflineToken(sesionOfflineVigente.offlineToken);
+            if (exRes.success && exRes.data?.accessToken && exRes.data?.usuario) {
+              const loggedUser = exRes.data.usuario;
+              authState.setAccessToken(exRes.data.accessToken);
+              persistUser(loggedUser);
+              setSessionState('confirmed');
+
+              void catalogoOfflineService.sincronizarTodoEnBackground();
+              void inspeccionesOfflineService.sincronizarCola({ forceIgnoreBackoff: true });
+              return true;
+            }
+          } catch {}
+        }
+
+        // Conservar al usuario que inició sesión offline si no pudo canjearse en el acto
         const offlineUser: UsuarioAuth = {
           id: sesionOfflineVigente.inspectorId,
           usuario: sesionOfflineVigente.usuario,
@@ -171,8 +218,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // El backend rechazó la cookie de sesión (o no hay sesión online activa en MySQL).
       // PROTECCIÓN DE SESIÓN OFFLINE: Si hay una sesión offline activa y vigente en IndexedDB
       // (ej: un inspector inició sesión localmente mientras no había conexión o cambió de turno),
-      // NO debemos revocar al usuario ni borrar su sesión local. Se mantiene en offline_limited.
+      // intentamos canjear su token offline si el backend ya está disponible.
       if (sesionOfflineVigente) {
+        if (
+          sesionOfflineVigente.offlineToken &&
+          terminalStorage.getCredential() &&
+          connectivityState.isBackendReachable()
+        ) {
+          try {
+            const exRes = await authApi.exchangeOfflineToken(sesionOfflineVigente.offlineToken);
+            if (exRes.success && exRes.data?.accessToken && exRes.data?.usuario) {
+              const loggedUser = exRes.data.usuario;
+              authState.setAccessToken(exRes.data.accessToken);
+              persistUser(loggedUser);
+              setSessionState('confirmed');
+
+              void catalogoOfflineService.sincronizarTodoEnBackground();
+              void inspeccionesOfflineService.sincronizarCola({ forceIgnoreBackoff: true });
+              return true;
+            }
+          } catch {}
+        }
+
         const offlineUser: UsuarioAuth = {
           id: sesionOfflineVigente.inspectorId,
           usuario: sesionOfflineVigente.usuario,

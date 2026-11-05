@@ -5,6 +5,11 @@ export const authApi = {
   login: (credentials: LoginCredentials) =>
     httpClient.post<ApiResponse<LoginResponseData>>('/auth/login', credentials),
 
+  exchangeOfflineToken: (offlineToken: string) =>
+    httpClient.post<ApiResponse<LoginResponseData>>('/auth/exchange-offline-token', {
+      offlineToken,
+    }),
+
   refresh: () =>
     httpClient.post<ApiResponse<{ accessToken: string; usuario?: UsuarioAuth }>>('/auth/refresh'),
 
