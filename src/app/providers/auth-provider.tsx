@@ -84,6 +84,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Ignorar error de red al cerrar sesión y limpiar únicamente la sesión activa
     } finally {
+      // Purgar cookie de sesión del navegador para evitar que una reconexión posterior
+      // restaure la sesión online anterior que quedó en la cookie HTTP-only
+      document.cookie = 'auth_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
+
       authState.setAccessToken(null);
       persistUser(null);
       setSessionState('unauthenticated');
@@ -94,19 +98,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [persistUser]);
 
   const refreshSession = useCallback(async (): Promise<boolean> => {
+    // Si la sesión actual en el navegador es offline (`offline_limited`), debemos verificar si el usuario
+    // autenticado offline coincide con la sesión del backend antes de sobrescribirlo automáticamente.
+    const sesionOfflineVigente = await catalogoOfflineService.getSesionOfflineVigente();
+
     const result = await performTokenRefresh();
 
     if (result.status === 'success' && result.token) {
       let currentUser = result.user as UsuarioAuth | undefined;
-      if (currentUser) {
-        persistUser(currentUser);
-      } else {
+      if (!currentUser) {
         try {
           const cached = localStorage.getItem(USER_STORAGE_KEY);
           currentUser = cached ? (JSON.parse(cached) as UsuarioAuth) : undefined;
         } catch {
           currentUser = undefined;
         }
+      }
+
+      // PROTECCIÓN MULTIUSUARIO OFFLINE:
+      // Si mientras estuvo offline se autenticó otro inspector localmente (ej: Ana Aguilar en lugar de Jaqueline Meza),
+      // no debemos resucitar la sesión online anterior de la cookie. La cookie del usuario previo debe invalidarse.
+      if (
+        sesionOfflineVigente &&
+        currentUser &&
+        sesionOfflineVigente.usuario.toUpperCase() !== currentUser.usuario.toUpperCase()
+      ) {
+        console.warn(
+          `[Auth] Sesión online previa correspondía a '${currentUser.usuario}', pero en modo offline se inició sesión con '${sesionOfflineVigente.usuario}'. Cerrando sesión online anterior.`,
+        );
+        // Cerrar la sesión online vieja en backend y limpiar la cookie vieja
+        try {
+          await authApi.logout();
+        } catch {}
+        document.cookie = 'auth_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
+
+        // Conservar al usuario que inició sesión offline
+        const offlineUser: UsuarioAuth = {
+          id: sesionOfflineVigente.inspectorId,
+          usuario: sesionOfflineVigente.usuario,
+          nombre: sesionOfflineVigente.nombre,
+          rol: {
+            id: 0,
+            codigo: sesionOfflineVigente.rolCodigo || 'INSPECTOR',
+            nombre: sesionOfflineVigente.rolCodigo || 'INSPECTOR',
+          },
+        };
+        persistUser(offlineUser);
+        setSessionState('offline_limited');
+        return true;
+      }
+
+      if (currentUser) {
+        persistUser(currentUser);
       }
       setSessionState('confirmed');
 
@@ -139,8 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // result.status === 'network_error': Fallo de conexión o backend inaccesible
-    // Verificar primero si existe una sesión offline vigente en IndexedDB (`sesion_offline`)
-    const sesionOfflineVigente = await catalogoOfflineService.getSesionOfflineVigente();
+    // Verificar si existe una sesión offline vigente en IndexedDB (`sesion_offline`)
     if (sesionOfflineVigente) {
       const offlineUser: UsuarioAuth = {
         id: sesionOfflineVigente.inspectorId,
@@ -204,6 +246,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         // Fallo de red (servidor caído, desconexión física o error 5xx de pasarela):
+        // Purgar cualquier cookie HTTP-only previa para evitar que al volver el internet
+        // el navegador intente resucitar automáticamente la sesión del usuario anterior
+        document.cookie = 'auth_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
+
         // Intentar autenticación local multiusuario contra `cat_inspectores` en IndexedDB
         const offlineResult = await offlineAuthClientService.authenticateOffline({
           usuario: credentials.usuario,
