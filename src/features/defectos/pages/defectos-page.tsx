@@ -550,7 +550,6 @@ export function DefectosPage() {
       await defectosApi.syncDefectoEtapas(defectoId, [
         { departamentoId, permitido: nuevoPermitido },
       ]);
-      toast.success('Matriz de etapas actualizada');
     } catch (err: any) {
       toast.error(err.message || 'Error al actualizar etapa de defecto');
       // Revertir recargando
