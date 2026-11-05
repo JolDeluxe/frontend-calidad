@@ -261,7 +261,7 @@ export function CalendarioDiaPicker({
                   setMesVista(nuevoMes);
                   onCambiarMesAnio?.(anioActivo, nuevoMes);
                 }}
-                className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand-primary cursor-pointer"
+                className="w-auto flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand-primary cursor-pointer"
                 title="Mes"
               >
                 {mesesDisponibles.length === 0 && <option value={mesActivo}>Sin meses</option>}

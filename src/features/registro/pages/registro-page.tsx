@@ -592,7 +592,7 @@ export function RegistroPage() {
                         anio: e.target.value ? Number(e.target.value) : undefined,
                       }))
                     }
-                    className="h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
+                    className="w-24 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
                     title="Filtrar por año"
                   >
                     {(!periodosDisponibles || periodosDisponibles.anios.length === 0) && (
@@ -620,7 +620,7 @@ export function RegistroPage() {
                         mes: undefined,
                       }))
                     }
-                    className="h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
+                    className="w-24 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
                     title="Seleccionar año"
                   >
                     {(!periodosDisponibles || periodosDisponibles.anios.length === 0) && (
@@ -642,7 +642,7 @@ export function RegistroPage() {
                         mes: e.target.value ? Number(e.target.value) : undefined,
                       }))
                     }
-                    className="h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
+                    className="w-32 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
                     title="Seleccionar mes"
                   >
                     {(!periodosDisponibles || periodosDisponibles.meses.length === 0) && (
@@ -673,7 +673,7 @@ export function RegistroPage() {
                         semanaIsoCodigo: undefined,
                       }))
                     }
-                    className="h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
+                    className="w-24 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
                     title="Seleccionar año"
                   >
                     {(!periodosDisponibles ||
@@ -705,7 +705,7 @@ export function RegistroPage() {
                         }));
                       }
                     }}
-                    className="h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer max-w-[250px] truncate shrink-0"
+                    className="w-32 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
                     title="Seleccionar semana"
                   >
                     {semanasDelAnioSeleccionado.length === 0 && (
@@ -732,6 +732,7 @@ export function RegistroPage() {
                     diasDisponibles={periodosDisponibles?.dias || []}
                     hoyIso={periodosDisponibles?.rangoTotal.hoy || hoyIso}
                     disabled={!periodosDisponibles || periodosDisponibles.anios.length === 0}
+                    className="w-36"
                     onSelectDia={(fechaIso, anioSel, mesSel) =>
                       aplicarNuevosFiltros((prev) => ({
                         ...prev,

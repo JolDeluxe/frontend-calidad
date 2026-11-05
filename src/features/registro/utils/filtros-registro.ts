@@ -98,8 +98,8 @@ export function formatearEtiquetaAnio(anio: number): string {
 
 /**
  * Formatea la etiqueta visible para una semana en los selectores:
- * muestra `Semana XX` o `Semana XX (rango de fechas)`, sin la palabra `ISO`,
- * sin repetir el año ISO en cada opción y sin conteos.
+ * muestra únicamente `Semana XX` (ej. `Semana 01`, `Semana 41`), sin rango de fechas,
+ * sin la palabra `ISO`, sin repetir el año y sin conteos.
  */
 export function formatearEtiquetaSemana(semanaItem: {
   semana: number;
@@ -109,22 +109,6 @@ export function formatearEtiquetaSemana(semanaItem: {
   fechaFin?: string;
 }): string {
   const numStr = String(semanaItem.semana).padStart(2, '0');
-  const baseLabel = (semanaItem.label || semanaItem.etiqueta || '').trim();
-
-  if (baseLabel) {
-    // Limpiar cualquier prefijo como "2025-W01 · " o la palabra "ISO" si existiera
-    const limpio = baseLabel
-      .replace(/^\d{4}-W\d{1,2}\s*[·\-:]\s*/i, '')
-      .replace(/\bSemana\s+ISO\b/gi, 'Semana')
-      .replace(/\bISO\b\s*/gi, '')
-      .trim();
-    if (limpio) return limpio;
-  }
-
-  if (semanaItem.fechaInicio && semanaItem.fechaFin) {
-    return `Semana ${numStr} (${formatearFechaCortaIso(semanaItem.fechaInicio)} – ${formatearFechaCortaIso(semanaItem.fechaFin)})`;
-  }
-
   return `Semana ${numStr}`;
 }
 

@@ -169,20 +169,21 @@ describe('Fase 3.1 Frontend — Ajustes UX y simplificación de segmentación en
   it('2. Las semanas se muestran de forma legible sin la palabra ISO ni el año repetido', () => {
     for (const s of PERIODOS_MOCK.semanas) {
       const etiqueta = formatearEtiquetaSemana(s);
-      expect(etiqueta).toMatch(/^Semana \d{2}/);
+      expect(etiqueta).toMatch(/^Semana \d{2}$/);
       expect(etiqueta.toUpperCase()).not.toContain('ISO');
+      expect(etiqueta).not.toContain('(');
       expect(etiqueta).not.toMatch(/^\d{4}-W\d{2}/);
     }
 
     const etiquetaCruceAnio = formatearEtiquetaSemana(PERIODOS_MOCK.semanas[0]!);
-    expect(etiquetaCruceAnio).toBe('Semana 01 (30 dic. 2024 – 5 ene. 2025)');
+    expect(etiquetaCruceAnio).toBe('Semana 01');
 
-    // Incluso si llegara un texto con prefijo o "ISO", lo limpia
+    // Incluso si llegara un texto con prefijo o rango de fechas, muestra solo Semana XX
     const etiquetaLimpiada = formatearEtiquetaSemana({
       semana: 3,
       label: '2025-W03 · Semana ISO 03 (13 ene. 2025 – 19 ene. 2025)',
     });
-    expect(etiquetaLimpiada).toBe('Semana 03 (13 ene. 2025 – 19 ene. 2025)');
+    expect(etiquetaLimpiada).toBe('Semana 03');
     expect(etiquetaLimpiada).not.toContain('ISO');
   });
 
