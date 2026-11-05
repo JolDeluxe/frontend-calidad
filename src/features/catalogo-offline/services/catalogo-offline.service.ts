@@ -21,6 +21,7 @@ export interface LotesOfflineResponse {
     lista: string;
     idProducto: string;
     modelo: string;
+    descripcion: string | null;
     cantidad: number;
     horma: string | null;
     cliente: string;
@@ -612,7 +613,13 @@ export class CatalogoOfflineService {
         'meta_sincronizacion',
         'lotes_ultimo_sync',
       );
-      const desdeTimestamp = meta?.valor;
+      // Migración de esquema local: si nunca se ha hecho sync completo con descripción de lotes,
+      // invalidar el watermark para forzar una sincronización limpia que pueble 'descripcion'.
+      const metaVersionDesc = await idbDatabase.get<{ clave: string; valor: number }>(
+        'meta_sincronizacion',
+        'lotes_sync_schema_version',
+      );
+      const desdeTimestamp = metaVersionDesc?.valor === 2 ? meta?.valor : undefined;
 
       let cursor = 0;
       let hasMore = true;
@@ -660,6 +667,7 @@ export class CatalogoOfflineService {
               lista: String(item.lista || ''),
               idProducto: String(item.idProducto || ''),
               modelo: String(item.modelo || ''),
+              descripcion: item.descripcion ?? null,
               cantidad: Number(item.cantidad) || 0,
               horma: item.horma ?? null,
               cliente: String(item.cliente || ''),
@@ -689,6 +697,11 @@ export class CatalogoOfflineService {
       await idbDatabase.put('meta_sincronizacion', {
         clave: 'lotes_ultimo_sync',
         valor: watermarkFinal,
+        actualizadoEn: new Date().toISOString(),
+      });
+      await idbDatabase.put('meta_sincronizacion', {
+        clave: 'lotes_sync_schema_version',
+        valor: 2,
         actualizadoEn: new Date().toISOString(),
       });
 

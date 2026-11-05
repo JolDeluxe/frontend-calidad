@@ -453,7 +453,7 @@ export class InspeccionesOfflineService {
           modelo: loteLocal?.modelo || (item.esContingencia ? 'POR VALIDAR' : 'SINCRONIZACIÓN PENDIENTE'),
           descripcion: item.esContingencia
             ? `Contingencia: ${item.motivoContingencia || 'Lote no precargado'}`
-            : null,
+            : (loteLocal?.descripcion ?? null),
           horma: item.payload.horma || loteLocal?.horma || 'N/A',
           cliente: loteLocal?.cliente || 'MBC',
           cantidadLote: loteLocal?.cantidad || 0,

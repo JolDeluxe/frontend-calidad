@@ -327,7 +327,7 @@ export function DefectoModalCaptura({
           idProducto: loteOffline.idProducto,
           modelo: loteOffline.modelo,
           cantidad: loteOffline.cantidad,
-          descripcion: null,
+          descripcion: loteOffline.descripcion ?? null,
           cliente: loteOffline.cliente,
           horma: loteOffline.horma,
           estado: 'ACTIVO',

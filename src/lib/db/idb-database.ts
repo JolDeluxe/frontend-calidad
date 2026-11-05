@@ -75,6 +75,7 @@ export interface LoteOfflineStore {
   lista: string;
   idProducto: string;
   modelo: string;
+  descripcion?: string | null;
   cantidad: number;
   horma: string | null;
   cliente: string;
