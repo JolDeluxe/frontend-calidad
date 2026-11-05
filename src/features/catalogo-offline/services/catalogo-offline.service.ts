@@ -298,21 +298,36 @@ export class CatalogoOfflineService {
    * Valida la estructura de cada elemento y solo reemplaza `cat_defectos` cuando todas las páginas
    * se descargaron exitosamente (preservando el catálogo previo si ocurre un fallo a mitad).
    */
-  async sincronizarDefectos(etapaId: number): Promise<number> {
+  async sincronizarDefectos(etapaId?: number): Promise<number> {
     if (!idbDatabase.getAvailable()) return 0;
-    if (!etapaId || etapaId <= 0) return 0;
     if (this.sincronizandoDefectos) return 0;
 
     this.sincronizandoDefectos = true;
     try {
+      // 1. Verificación de versión del catálogo offline para purga de defectos obsoletos
+      const metaVersion = await idbDatabase.get<{ clave: string; valor: number }>(
+        'meta_sincronizacion',
+        'defectos_cache_version',
+      );
+      if (metaVersion?.valor !== 3) {
+        // Purga preventiva de defectos residuales o corruptos
+        await idbDatabase.clear('cat_defectos');
+      }
+
       const acumulados: DefectoOfflineStore[] = [];
       let page = 1;
       let totalPages = 1;
       const limit = 200;
 
+      // Descargamos todo el universo de defectos activos oficiales
       while (page <= totalPages) {
+        const queryParams = new URLSearchParams();
+        queryParams.set('activo', 'true');
+        queryParams.set('page', String(page));
+        queryParams.set('limit', String(limit));
+
         const res = await httpClient.get<ApiResponse<DefectosPaginatedResponse | Defecto[]>>(
-          `/defectos?etapaId=${etapaId}&activo=true&page=${page}&limit=${limit}`,
+          `/defectos?${queryParams.toString()}`,
         );
 
         const rawData = res.data;
@@ -320,7 +335,6 @@ export class CatalogoOfflineService {
           throw new Error('Respuesta vacía al consultar catálogo de defectos');
         }
 
-        // Soportar tanto el contrato paginado `{ items, total, page, limit, totalPages }` como un arreglo directo
         let pageItems: Defecto[];
         if (Array.isArray(rawData)) {
           pageItems = rawData;
@@ -342,15 +356,12 @@ export class CatalogoOfflineService {
             !['CRITICO', 'MAYOR', 'MENOR'].includes(d.clasificacion) ||
             deptoId <= 0
           ) {
-            throw new Error(`Registro de defecto inválido recibido del servidor (ID: ${String((d as any)?.id)})`);
+            continue;
           }
 
           const etapasPermitidasIds = Array.isArray(d.etapas)
             ? d.etapas.filter((e) => e.permitido).map((e) => Number(e.departamentoId))
-            : [etapaId];
-          if (!etapasPermitidasIds.includes(etapaId)) {
-            etapasPermitidasIds.push(etapaId);
-          }
+            : [];
 
           const lineasSet = new Set<number>();
           d.departamentos?.forEach((dep) => {
@@ -382,62 +393,30 @@ export class CatalogoOfflineService {
         page += 1;
       }
 
-      // Reemplazo atómico inteligente: preserva defectos de otras etapas ya cacheadas
-      const existentes = await idbDatabase.getAll<DefectoOfflineStore>('cat_defectos');
-      const mapaExistentes = new Map(existentes.map((e) => [e.id, e]));
-      const idsNuevos = new Set(acumulados.map((a) => a.id));
+      // Reemplazo atómico autoritativo total: solo conserva los defectos activos reales del servidor
+      if (acumulados.length > 0) {
+        await idbDatabase.replaceAllAtomic('cat_defectos', acumulados);
 
-      // Para los defectos existentes que tenían esta etapaId pero ya no vinieron del servidor:
-      for (const [id, def] of mapaExistentes) {
-        if (!idsNuevos.has(id)) {
-          if (Array.isArray(def.etapasPermitidasIds) && def.etapasPermitidasIds.includes(etapaId)) {
-            const nuevasEtapas = def.etapasPermitidasIds.filter((eid) => eid !== etapaId);
-            mapaExistentes.set(id, {
-              ...def,
-              etapasPermitidasIds: nuevasEtapas,
-              permitidoEnEtapa: nuevasEtapas.length > 0,
-            });
-          }
-        }
-      }
+        await idbDatabase.put('meta_sincronizacion', {
+          clave: 'defectos_cache_version',
+          valor: 3,
+          actualizadoEn: new Date().toISOString(),
+        });
 
-      for (const nuevo of acumulados) {
-        const previo = mapaExistentes.get(nuevo.id);
-        if (previo) {
-          const etapasCombinadas = Array.from(
-            new Set([
-              ...(previo.etapasPermitidasIds || []),
-              ...(nuevo.etapasPermitidasIds || []),
-              etapaId,
-            ]),
-          );
-          const lineasCombinadas = Array.from(
-            new Set([...(previo.lineasIds || []), ...(nuevo.lineasIds || [])]),
-          );
-          mapaExistentes.set(nuevo.id, {
-            ...previo,
-            ...nuevo,
-            etapasPermitidasIds: etapasCombinadas,
-            lineasIds: lineasCombinadas,
+        await idbDatabase.put('meta_sincronizacion', {
+          clave: 'defectos_actualizado_en',
+          valor: new Date().toISOString(),
+          actualizadoEn: new Date().toISOString(),
+        });
+
+        if (etapaId && etapaId > 0) {
+          await idbDatabase.put('meta_sincronizacion', {
+            clave: 'defectos_etapa_id',
+            valor: etapaId,
+            actualizadoEn: new Date().toISOString(),
           });
-        } else {
-          mapaExistentes.set(nuevo.id, nuevo);
         }
       }
-
-      await idbDatabase.replaceAllAtomic('cat_defectos', Array.from(mapaExistentes.values()));
-
-      await idbDatabase.put('meta_sincronizacion', {
-        clave: 'defectos_actualizado_en',
-        valor: new Date().toISOString(),
-        actualizadoEn: new Date().toISOString(),
-      });
-
-      await idbDatabase.put('meta_sincronizacion', {
-        clave: 'defectos_etapa_id',
-        valor: etapaId,
-        actualizadoEn: new Date().toISOString(),
-      });
 
       return acumulados.length;
     } catch (err) {
@@ -491,6 +470,11 @@ export class CatalogoOfflineService {
           }
         });
 
+        // Ignorar defectos eliminados o inactivos para evitar ensuciar el catálogo local
+        if (d.activo === false || Boolean(d.eliminadoEn)) {
+          continue;
+        }
+
         registros.push({
           id: d.id,
           clave: d.clave,
@@ -502,7 +486,7 @@ export class CatalogoOfflineService {
           etapaId,
           etapasPermitidasIds,
           lineasIds: Array.from(lineasSet),
-          activo: d.activo !== false && !d.eliminadoEn,
+          activo: Boolean(d.activo) && !d.eliminadoEn,
           permitidoEnEtapa: true,
         });
       }
