@@ -115,11 +115,12 @@ export function MatrizVisibilidadPage() {
     );
   }
 
-  const { departamentos, matrices } = data;
+  const departamentos = data?.departamentos ?? [];
+  const matrices = data?.matrices ?? [];
   const matricesFiltradas = matrices.filter(
     (m) =>
-      m.departamentoOrigenNombre.toLowerCase().includes(filtroTexto.toLowerCase()) ||
-      m.departamentoOrigenCodigo.toLowerCase().includes(filtroTexto.toLowerCase())
+      m.departamentoOrigenNombre?.toLowerCase().includes(filtroTexto.toLowerCase()) ||
+      m.departamentoOrigenCodigo?.toLowerCase().includes(filtroTexto.toLowerCase())
   );
 
   return (

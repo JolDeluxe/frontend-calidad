@@ -1,4 +1,4 @@
-import { httpClient } from '@/lib/api/http-client';
+import { httpClient, type ApiResponse } from '@/lib/api/http-client';
 
 export interface DestinoMatrizVisibilidad {
   departamentoDestinoId: number;
@@ -44,11 +44,13 @@ export interface MatrizDepartamentoResponse {
 
 export const matrizVisibilidadApi = {
   getMatrizCompleta: async (): Promise<MatrizVisibilidadResponse> => {
-    return httpClient.get<MatrizVisibilidadResponse>('/defectos/matriz-visibilidad');
+    const res = await httpClient.get<ApiResponse<MatrizVisibilidadResponse>>('/defectos/matriz-visibilidad');
+    return (res.data ?? res) as MatrizVisibilidadResponse;
   },
 
   getMatrizPorDepartamento: async (departamentoOrigenId: number): Promise<MatrizDepartamentoResponse> => {
-    return httpClient.get<MatrizDepartamentoResponse>(`/defectos/matriz-visibilidad/${departamentoOrigenId}`);
+    const res = await httpClient.get<ApiResponse<MatrizDepartamentoResponse>>(`/defectos/matriz-visibilidad/${departamentoOrigenId}`);
+    return (res.data ?? res) as MatrizDepartamentoResponse;
   },
 
   upsertRegla: async (data: {
@@ -56,14 +58,16 @@ export const matrizVisibilidadApi = {
     departamentoDestinoId: number;
     permitido: boolean;
   }): Promise<{ id: number; permitido: boolean }> => {
-    return httpClient.post<{ id: number; permitido: boolean }>('/defectos/matriz-visibilidad/regla', data);
+    const res = await httpClient.post<ApiResponse<{ id: number; permitido: boolean }>>('/defectos/matriz-visibilidad/regla', data);
+    return (res.data ?? res) as { id: number; permitido: boolean };
   },
 
   actualizarMatrizDepartamento: async (data: {
     departamentoOrigenId: number;
     destinos: Array<{ departamentoDestinoId: number; permitido: boolean }>;
   }): Promise<unknown> => {
-    return httpClient.put('/defectos/matriz-visibilidad/departamento', data);
+    const res = await httpClient.put<ApiResponse<unknown>>('/defectos/matriz-visibilidad/departamento', data);
+    return res.data ?? res;
   },
 
   resolverVisibilidad: async (
@@ -76,6 +80,19 @@ export const matrizVisibilidadApi = {
     departamentoDeteccionId: number;
     defectoId?: number;
   }> => {
-    return httpClient.get(`/defectos/resolver-visibilidad?defectoId=${defectoId}&departamentoDeteccionId=${departamentoDeteccionId}`);
+    const res = await httpClient.get<ApiResponse<{
+      permitido: boolean;
+      origenRegla: 'EXCEPCION' | 'MATRIZ' | 'DEFAULT_COMPATIBILIDAD';
+      departamentoPropietarioId: number;
+      departamentoDeteccionId: number;
+      defectoId?: number;
+    }>>(`/defectos/resolver-visibilidad?defectoId=${defectoId}&departamentoDeteccionId=${departamentoDeteccionId}`);
+    return (res.data ?? res) as {
+      permitido: boolean;
+      origenRegla: 'EXCEPCION' | 'MATRIZ' | 'DEFAULT_COMPATIBILIDAD';
+      departamentoPropietarioId: number;
+      departamentoDeteccionId: number;
+      defectoId?: number;
+    };
   },
 };
