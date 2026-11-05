@@ -168,7 +168,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (result.status === 'unauthorized') {
-      // El backend rechazó la cookie de sesión (o el navegador aún no tiene cookie de sesión online).
+      // El backend rechazó la cookie de sesión (o no hay sesión online activa en MySQL).
+      // PROTECCIÓN DE SESIÓN OFFLINE: Si hay una sesión offline activa y vigente en IndexedDB
+      // (ej: un inspector inició sesión localmente mientras no había conexión o cambió de turno),
+      // NO debemos revocar al usuario ni borrar su sesión local. Se mantiene en offline_limited.
+      if (sesionOfflineVigente) {
+        const offlineUser: UsuarioAuth = {
+          id: sesionOfflineVigente.inspectorId,
+          usuario: sesionOfflineVigente.usuario,
+          nombre: sesionOfflineVigente.nombre,
+          rol: {
+            id: 0,
+            codigo: sesionOfflineVigente.rolCodigo || 'INSPECTOR',
+            nombre: sesionOfflineVigente.rolCodigo || 'INSPECTOR',
+          },
+        };
+        persistUser(offlineUser);
+        setSessionState('offline_limited');
+
+        if (terminalStorage.getCredential()) {
+          void catalogoOfflineService.sincronizarTodoEnBackground();
+          void inspeccionesOfflineService.sincronizarCola();
+        }
+        return true;
+      }
+
       if (terminalStorage.getCredential()) {
         void catalogoOfflineService.sincronizarTodoEnBackground();
         void inspeccionesOfflineService.sincronizarCola();
@@ -283,7 +307,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshSession]);
 
   useEffect(() => {
-    const handleSessionExpired = () => {
+    const handleSessionExpired = async () => {
+      // Si el usuario está operando con una sesión offline activa y vigente en IndexedDB,
+      // no debemos revocarlo ni expulsarlo de pantalla ante un 401 del backend.
+      const sesionOfflineVigente = await catalogoOfflineService.getSesionOfflineVigente();
+      if (sesionOfflineVigente) {
+        authState.setAccessToken(null);
+        setSessionState('offline_limited');
+        return;
+      }
+
       authState.setAccessToken(null);
       persistUser(null);
       setSessionState('revoked');

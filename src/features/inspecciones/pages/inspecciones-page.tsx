@@ -455,11 +455,16 @@ export function InspeccionesPage() {
         setPage(pageTarget);
         setTotalPages(resp.totalPages || 1);
       } catch (err: any) {
-        const esErrorHttp = err instanceof ApiError && err.statusCode >= 400;
+        const es401 = err instanceof ApiError && err.statusCode === 401;
         const esErrorNegocio =
-          err instanceof ApiError && err.statusCode >= 400 && err.statusCode < 500;
+          err instanceof ApiError && err.statusCode >= 400 && err.statusCode < 500 && !es401;
+        const esErrorHttp = err instanceof ApiError && err.statusCode >= 400 && !es401;
 
-        if (esErrorNegocio) {
+        if (es401) {
+          // En modo offline o transición con sesión local, un 401 de consulta del historial
+          // no debe alarmar al inspector con un toast ni bloquear la UI; se opera con caché local.
+          setErrorConsulta(null);
+        } else if (esErrorNegocio) {
           console.error('Error al consultar inspecciones', err);
           setErrorConsulta(err?.message || 'Error al consultar historial de inspecciones');
           toast.error(err?.message || 'Error al consultar historial de inspecciones', {
