@@ -84,6 +84,11 @@ export function HomePage() {
   const [contadoresDepto, setContadoresDepto] = useState<ContadorDeptoMetrica[]>([]);
   const [rutasCruzadas, setRutasCruzadas] = useState<RutaCruzadaDashboardItem[]>([]);
   const [defectosCruzados, setDefectosCruzados] = useState<DefectoCruzadoDashboardItem[]>([]);
+  const [totalDefectosCruzados, setTotalDefectosCruzados] = useState<number>(0);
+  const [totalParesCruzados, setTotalParesCruzados] = useState<number>(0);
+  const [totalTiposCruzados, setTotalTiposCruzados] = useState<number>(0);
+  const [filtroRutaSeleccionada, setFiltroRutaSeleccionada] = useState<string | null>(null);
+  const [mostrarTodosCruzados, setMostrarTodosCruzados] = useState<boolean>(false);
   const [topPorLinea, setTopPorLinea] = useState<Record<string, TopDefectoDashboardItem[]>>({});
   const [cargandoMetricas, setCargandoMetricas] = useState(true);
 
@@ -156,8 +161,18 @@ export function HomePage() {
       }
 
       // 2. Defectos encontrados en otros departamentos (cruzados)
+      const listaCruzados = resp.defectosCruzados || [];
       setRutasCruzadas(resp.rutasCruzadas || []);
-      setDefectosCruzados(resp.defectosCruzados || []);
+      setDefectosCruzados(listaCruzados);
+      setTotalDefectosCruzados(
+        resp.totalDefectosCruzados ?? listaCruzados.reduce((acc, curr) => acc + curr.defectos, 0)
+      );
+      setTotalParesCruzados(
+        resp.totalParesCruzados ?? listaCruzados.reduce((acc, curr) => acc + curr.pares, 0)
+      );
+      setTotalTiposCruzados(resp.totalTiposCruzados ?? listaCruzados.length);
+      setFiltroRutaSeleccionada(null);
+      setMostrarTodosCruzados(false);
 
       // 3. Top por línea (BOTA)
       setTopPorLinea(resp.topSemanal || { BOTA: [] });
@@ -166,6 +181,11 @@ export function HomePage() {
       setContadoresDepto([]);
       setRutasCruzadas([]);
       setDefectosCruzados([]);
+      setTotalDefectosCruzados(0);
+      setTotalParesCruzados(0);
+      setTotalTiposCruzados(0);
+      setFiltroRutaSeleccionada(null);
+      setMostrarTodosCruzados(false);
       setTopPorLinea({ BOTA: [] });
     } finally {
       setCargandoMetricas(false);
@@ -278,6 +298,28 @@ export function HomePage() {
     };
     return describirPeriodoActivo(estadoFiltros, periodosDisponibles);
   }, [periodo, anio, anioIso, semana, mes, dia, periodosDisponibles]);
+
+  // Defectos cruzados filtrados por ruta (si se hizo clic en un flujo) y límite visual
+  const defectosCruzadosFiltrados = useMemo(() => {
+    if (!filtroRutaSeleccionada) return defectosCruzados;
+    return defectosCruzados.filter(
+      (d) => `${d.origenId}_${d.detectorId}` === filtroRutaSeleccionada
+    );
+  }, [defectosCruzados, filtroRutaSeleccionada]);
+
+  const defectosCruzadosVisibles = useMemo(() => {
+    if (!mostrarTodosCruzados && !filtroRutaSeleccionada) {
+      return defectosCruzadosFiltrados.slice(0, 10);
+    }
+    return defectosCruzadosFiltrados;
+  }, [defectosCruzadosFiltrados, mostrarTodosCruzados, filtroRutaSeleccionada]);
+
+  const rutaSeleccionadaInfo = useMemo(() => {
+    if (!filtroRutaSeleccionada) return null;
+    return (
+      rutasCruzadas.find((r) => `${r.origenId}_${r.detectorId}` === filtroRutaSeleccionada) || null
+    );
+  }, [rutasCruzadas, filtroRutaSeleccionada]);
 
   // Totales generales calculados del período
   const { totalIncidencias, totalPares } = useMemo(() => {
@@ -760,52 +802,89 @@ export function HomePage() {
           </div>
 
           {!cargandoMetricas && (
-            <span className="text-2xs font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 shrink-0 self-start sm:self-auto">
-              {defectosCruzados.length} {defectosCruzados.length === 1 ? 'defecto cruzado' : 'defectos cruzados'}
-            </span>
+            <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap">
+              {rutaSeleccionadaInfo && (
+                <button
+                  type="button"
+                  onClick={() => setFiltroRutaSeleccionada(null)}
+                  className="inline-flex items-center gap-1.5 text-2xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2.5 py-1 rounded-md transition-colors"
+                  title="Quitar filtro de flujo"
+                >
+                  <span>Filtrado: {rutaSeleccionadaInfo.origenNombre} → {rutaSeleccionadaInfo.detectorNombre}</span>
+                  <Icon name="close" size="14px" />
+                </button>
+              )}
+              <span className="text-2xs font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                {totalDefectosCruzados} {totalDefectosCruzados === 1 ? 'defecto' : 'defectos'} ({totalParesCruzados} pares) • {totalTiposCruzados} tipos
+              </span>
+            </div>
           )}
         </div>
 
-        {/* Resumen visual de flujos de detección cruzada (Una sola línea por tarjeta, sin saltos feos) */}
+        {/* Resumen visual de flujos de detección cruzada interactivos */}
         {!cargandoMetricas && rutasCruzadas.length > 0 && (
           <div className="space-y-2">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 block">
-              Principales flujos de detección cruzada:
-            </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-              {rutasCruzadas.map((ruta) => (
-                <div
-                  key={`${ruta.origenId}_${ruta.detectorId}`}
-                  className="rounded-lg border border-slate-200/90 bg-slate-50/70 hover:bg-white hover:border-slate-300 p-2.5 flex items-center justify-between gap-2 transition-all shadow-2xs"
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 block">
+                Principales flujos de detección cruzada (haz clic para filtrar):
+              </span>
+              {filtroRutaSeleccionada && (
+                <button
+                  type="button"
+                  onClick={() => setFiltroRutaSeleccionada(null)}
+                  className="text-[11px] font-bold text-brand-primary hover:underline"
                 >
-                  <div className="flex items-center gap-1.5 text-xs font-semibold whitespace-nowrap min-w-0">
-                    <span
-                      className="font-bold text-amber-800 uppercase text-[11px] truncate max-w-[90px]"
-                      title={ruta.origenNombre}
-                    >
-                      {ruta.origenNombre}
-                    </span>
-                    <span className="text-slate-400 text-xs font-bold shrink-0">→</span>
-                    <span
-                      className="font-bold text-blue-800 uppercase text-[11px] truncate max-w-[90px]"
-                      title={ruta.detectorNombre}
-                    >
-                      {ruta.detectorNombre}
-                    </span>
-                  </div>
-                  <div className="flex items-baseline gap-1 shrink-0 ml-1">
-                    <span className="font-mono text-xs font-extrabold text-amber-700">
-                      {ruta.defectos}
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-medium">def</span>
-                    <span className="text-slate-300 mx-0.5">•</span>
-                    <span className="font-mono text-xs font-bold text-slate-700">
-                      {ruta.pares}
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-medium">par</span>
-                  </div>
-                </div>
-              ))}
+                  Ver todos los flujos
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              {rutasCruzadas.map((ruta) => {
+                const claveRuta = `${ruta.origenId}_${ruta.detectorId}`;
+                const estaSeleccionada = filtroRutaSeleccionada === claveRuta;
+                return (
+                  <button
+                    type="button"
+                    key={claveRuta}
+                    onClick={() => {
+                      setFiltroRutaSeleccionada((prev) => (prev === claveRuta ? null : claveRuta));
+                    }}
+                    className={`rounded-lg border p-2.5 flex items-center justify-between gap-2 transition-all shadow-2xs text-left cursor-pointer ${
+                      estaSeleccionada
+                        ? 'bg-amber-100/90 border-amber-400 ring-2 ring-amber-400/40 shadow-xs'
+                        : 'border-slate-200/90 bg-slate-50/70 hover:bg-white hover:border-slate-300'
+                    }`}
+                    title={`Haz clic para ver solo defectos de ${ruta.origenNombre} en ${ruta.detectorNombre}`}
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-semibold whitespace-nowrap min-w-0">
+                      <span
+                        className="font-bold text-amber-800 uppercase text-[11px] truncate max-w-[90px]"
+                        title={ruta.origenNombre}
+                      >
+                        {ruta.origenNombre}
+                      </span>
+                      <span className="text-slate-400 text-xs font-bold shrink-0">→</span>
+                      <span
+                        className="font-bold text-blue-800 uppercase text-[11px] truncate max-w-[90px]"
+                        title={ruta.detectorNombre}
+                      >
+                        {ruta.detectorNombre}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-1 shrink-0 ml-1">
+                      <span className="font-mono text-xs font-extrabold text-amber-700">
+                        {ruta.defectos}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-medium">def</span>
+                      <span className="text-slate-300 mx-0.5">•</span>
+                      <span className="font-mono text-xs font-bold text-slate-700">
+                        {ruta.pares}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-medium">par</span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -825,67 +904,95 @@ export function HomePage() {
               </div>
             ))}
           </div>
-        ) : defectosCruzados.length === 0 ? (
+        ) : defectosCruzadosFiltrados.length === 0 ? (
           <div className="py-6 text-center text-xs text-slate-400 italic bg-slate-50/40 rounded-lg border border-dashed border-slate-200">
-            No se detectaron defectos de otros departamentos en este período.
+            {filtroRutaSeleccionada
+              ? 'No hay defectos para el flujo seleccionado.'
+              : 'No se detectaron defectos de otros departamentos en este período.'}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead className="text-[10px] font-extrabold text-slate-500 uppercase border-b border-slate-200">
-                <tr>
-                  <th className="py-2.5 px-2 w-[40px] text-center font-mono">Num</th>
-                  <th className="py-2.5 px-2 w-[65px] font-mono text-center">Clave</th>
-                  <th className="py-2.5 px-3">Defecto</th>
-                  <th className="py-2.5 px-3 w-[160px]">Origen (Responsable)</th>
-                  <th className="py-2.5 px-3 w-[160px]">Detectado En</th>
-                  <th className="py-2.5 px-3 w-[80px] text-right font-bold text-amber-800">
-                    Defectos
-                  </th>
-                  <th className="py-2.5 px-3 w-[70px] text-right font-bold text-slate-700">
-                    Pares
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium">
-                {defectosCruzados.map((item, idx) => (
-                  <tr
-                    key={`${item.clave}_${item.origenId}_${item.detectorId}_${idx}`}
-                    className="hover:bg-slate-50/80 transition-colors"
-                  >
-                    <td className="py-2 px-2 text-center font-mono font-bold text-slate-400">
-                      {idx + 1}
-                    </td>
-                    <td className="py-2 px-2 text-center font-mono font-bold text-brand-primary">
-                      {item.clave}
-                    </td>
-                    <td
-                      className="py-2 px-3 text-slate-800 font-medium truncate max-w-[240px] sm:max-w-[340px]"
-                      title={item.defecto}
-                    >
-                      {item.defecto}
-                    </td>
-                    <td className="py-2 px-3 whitespace-nowrap">
-                      <span className="inline-block px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200/80 font-bold text-[11px] uppercase tracking-wide">
-                        {item.origenNombre}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3 whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-sky-50 text-sky-800 border border-sky-200/80 font-bold text-[11px] uppercase tracking-wide">
-                        <span className="text-slate-400 font-normal">en</span>
-                        <span>{item.detectorNombre}</span>
-                      </span>
-                    </td>
-                    <td className="py-2 px-3 text-right font-mono font-extrabold text-amber-700">
-                      {item.defectos}
-                    </td>
-                    <td className="py-2 px-3 text-right font-mono font-bold text-slate-800">
-                      {item.pares}
-                    </td>
+          <div className="space-y-3">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="text-[10px] font-extrabold text-slate-500 uppercase border-b border-slate-200">
+                  <tr>
+                    <th className="py-2.5 px-2 w-[40px] text-center font-mono">Num</th>
+                    <th className="py-2.5 px-2 w-[65px] font-mono text-center">Clave</th>
+                    <th className="py-2.5 px-3">Defecto</th>
+                    <th className="py-2.5 px-3 w-[160px]">Origen (Responsable)</th>
+                    <th className="py-2.5 px-3 w-[160px]">Detectado En</th>
+                    <th className="py-2.5 px-3 w-[80px] text-right font-bold text-amber-800">
+                      Defectos
+                    </th>
+                    <th className="py-2.5 px-3 w-[70px] text-right font-bold text-slate-700">
+                      Pares
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {defectosCruzadosVisibles.map((item, idx) => (
+                    <tr
+                      key={`${item.clave}_${item.origenId}_${item.detectorId}_${idx}`}
+                      className="hover:bg-slate-50/80 transition-colors"
+                    >
+                      <td className="py-2 px-2 text-center font-mono font-bold text-slate-400">
+                        {idx + 1}
+                      </td>
+                      <td className="py-2 px-2 text-center font-mono font-bold text-brand-primary">
+                        {item.clave}
+                      </td>
+                      <td
+                        className="py-2 px-3 text-slate-800 font-medium truncate max-w-[240px] sm:max-w-[340px]"
+                        title={item.defecto}
+                      >
+                        {item.defecto}
+                      </td>
+                      <td className="py-2 px-3 whitespace-nowrap">
+                        <span className="inline-block px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200/80 font-bold text-[11px] uppercase tracking-wide">
+                          {item.origenNombre}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-sky-50 text-sky-800 border border-sky-200/80 font-bold text-[11px] uppercase tracking-wide">
+                          <span className="text-slate-400 font-normal">en</span>
+                          <span>{item.detectorNombre}</span>
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono font-extrabold text-amber-700">
+                        {item.defectos}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono font-bold text-slate-800">
+                        {item.pares}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Alternar entre Top 10 y Todos cuando hay más de 10 elementos y no hay filtro por ruta */}
+            {!filtroRutaSeleccionada && defectosCruzadosFiltrados.length > 10 && (
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                <span className="text-2xs text-slate-500">
+                  Mostrando {defectosCruzadosVisibles.length} de {defectosCruzadosFiltrados.length} tipos de defectos cruzados
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMostrarTodosCruzados((prev) => !prev)}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-primary hover:text-brand-primary-dark hover:underline transition-colors py-1 px-2.5 rounded-md hover:bg-slate-50"
+                >
+                  <span>
+                    {mostrarTodosCruzados
+                      ? 'Mostrar solo Top 10'
+                      : `Ver todos los ${defectosCruzadosFiltrados.length} defectos cruzados`}
+                  </span>
+                  <Icon
+                    name={mostrarTodosCruzados ? 'expand_less' : 'expand_more'}
+                    size="16px"
+                  />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

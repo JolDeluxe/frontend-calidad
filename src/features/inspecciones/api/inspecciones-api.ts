@@ -103,6 +103,9 @@ export interface DashboardMetricasResponse {
   contadoresDeptoHoy: Record<number, { pares: number; incidencias: number }>;
   rutasCruzadas?: RutaCruzadaDashboardItem[];
   defectosCruzados?: DefectoCruzadoDashboardItem[];
+  totalDefectosCruzados?: number;
+  totalParesCruzados?: number;
+  totalTiposCruzados?: number;
   topSemanal: Record<string, TopDefectoDashboardItem[]>;
 }
 
