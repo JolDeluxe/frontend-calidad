@@ -99,7 +99,7 @@ export const routes: RouteObject[] = [
           {
             path: ROUTES.ROOT,
             element: (
-              <RequireRole roles={['SUPER_ADMIN']}>
+              <RequireRole roles={['SUPER_ADMIN', 'ADMIN', 'COORD']}>
                 {withSuspense(<HomePage />)}
               </RequireRole>
             ),

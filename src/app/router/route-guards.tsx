@@ -25,13 +25,13 @@ export function RequireAuth({ children }: { children?: ReactNode }) {
  */
 export function getDefaultRouteForUser(rolCodigo?: string): string {
   const rol = rolCodigo?.toUpperCase();
-  if (rol === 'SUPER_ADMIN') {
+  if (rol === 'SUPER_ADMIN' || rol === 'ADMIN' || rol === 'COORD') {
     return ROUTES.ROOT;
   }
   if (rol === 'INSPECTOR') {
     return ROUTES.INSPECCIONES;
   }
-  if (rol === 'COORD' || rol === 'ADMIN' || rol === 'VISUALIZADOR') {
+  if (rol === 'VISUALIZADOR') {
     return ROUTES.REGISTRO;
   }
   return ROUTES.INSPECCIONES;
