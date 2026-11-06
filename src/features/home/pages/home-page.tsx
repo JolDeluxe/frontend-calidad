@@ -1,94 +1,301 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router';
 import { useAuthSession } from '@/providers/auth-provider';
 import { Icon } from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
 import { useTerminalStatus } from '@/features/terminales/hooks/use-terminal-status';
 import { TerminalVinculacionModal } from '@/features/terminales/components/terminal-vinculacion-modal';
-import { inspeccionesApi } from '@/features/inspecciones/api/inspecciones-api';
-import { departamentosApi } from '@/features/departamentos/api/departamentos-api';
-import type { TipoOperacion } from '@/features/departamentos/types/departamentos.types';
-
-interface TopDefectoSimple {
-  clave: number;
-  defecto: string;
-  defectos: number;
-}
+import {
+  inspeccionesApi,
+  type ContadorDeptoMetrica,
+  type TopDefectoDashboardItem,
+  type RutaCruzadaDashboardItem,
+  type DefectoCruzadoDashboardItem,
+} from '@/features/inspecciones/api/inspecciones-api';
+import { CalendarioDiaPicker } from '@/features/registro/components/calendario-dia-picker';
+import {
+  describirPeriodoActivo,
+  formatearEtiquetaAnio,
+  formatearEtiquetaSemana,
+  formatearSemanaIsoCodigo,
+  getHoyMexicoIso,
+  MODALIDADES_PERIODO_OPCIONES,
+  obtenerSemanasDeAnio,
+  parsearSemanaIsoCodigo,
+} from '@/features/registro/utils/filtros-registro';
+import type {
+  ModalidadPeriodoRegistro,
+  PeriodosDisponiblesResponse,
+  FiltrosRegistroState,
+} from '@/features/registro/types/registro.types';
 
 export function HomePage() {
   const { user } = useAuthSession();
   const { estado: terminalEstado, terminal, recargar } = useTerminalStatus();
   const [modalVinculacionAbierto, setModalVinculacionAbierto] = useState(false);
-
-  // Estados dinámicos derivados 100% de la base de datos
-  const [tiposOperacion, setTiposOperacion] = useState<TipoOperacion[]>([]);
-  const [contadoresDeptoHoy, setContadoresDeptoHoy] = useState<Record<number, { pares: number; incidencias: number }>>({});
-  const [topSemanal, setTopSemanal] = useState<Record<string, TopDefectoSimple[]>>({});
-  const [cargandoDatos, setCargandoDatos] = useState(true);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const rolCodigo = user?.rol?.codigo || '';
   const esAdmin = ['SUPER_ADMIN', 'ADMIN', 'COORD'].includes(rolCodigo);
+  const hoyIso = useMemo(() => getHoyMexicoIso(), []);
 
-  const cargarDatosDashboard = useCallback(async () => {
-    setCargandoDatos(true);
-    try {
-      const [tiposResult, metricasResult] = await Promise.allSettled([
-        departamentosApi.getTiposOperacion(false),
-        inspeccionesApi.getDashboardMetricas(),
-      ]);
+  // 1. Periodos reales disponibles en la base de datos
+  const [periodosDisponibles, setPeriodosDisponibles] =
+    useState<PeriodosDisponiblesResponse | null>(null);
+  const [cargandoPeriodos, setCargandoPeriodos] = useState(true);
 
-      if (tiposResult.status === 'fulfilled') {
-        setTiposOperacion(tiposResult.value || []);
-      }
-
-      if (metricasResult.status === 'fulfilled') {
-        setContadoresDeptoHoy(metricasResult.value.contadoresDeptoHoy || {});
-        setTopSemanal(metricasResult.value.topSemanal || {});
-      }
-    } catch (err) {
-      console.error('Error al cargar datos del dashboard de inicio:', err);
-    } finally {
-      setCargandoDatos(false);
+  // 2. Estado de filtros temporales (Por defecto: SEMANA)
+  const [periodo, setPeriodo] = useState<ModalidadPeriodoRegistro>(() => {
+    const raw = searchParams.get('periodo');
+    if (raw === 'hoy' || raw === 'dia' || raw === 'semana' || raw === 'mes' || raw === 'anio') {
+      return raw;
     }
+    return 'semana'; // Requisito: por defecto Semana
+  });
+
+  const [anio, setAnio] = useState<number | undefined>(() => {
+    const raw = searchParams.get('anio');
+    return raw && /^\d{4}$/.test(raw) ? Number(raw) : undefined;
+  });
+
+  const [anioIso, setAnioIso] = useState<number | undefined>(() => {
+    const raw = searchParams.get('anioIso') || searchParams.get('anio');
+    return raw && /^\d{4}$/.test(raw) ? Number(raw) : undefined;
+  });
+
+  const [semana, setSemana] = useState<number | undefined>(() => {
+    const raw = searchParams.get('semana');
+    return raw && /^\d{1,2}$/.test(raw) ? Number(raw) : undefined;
+  });
+
+  const [mes, setMes] = useState<number | undefined>(() => {
+    const raw = searchParams.get('mes');
+    return raw && /^\d{1,2}$/.test(raw) ? Number(raw) : undefined;
+  });
+
+  const [dia, setDia] = useState<string | undefined>(() => {
+    const raw = searchParams.get('dia');
+    return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : undefined;
+  });
+
+  // Estados de datos del dashboard
+  const [contadoresDepto, setContadoresDepto] = useState<ContadorDeptoMetrica[]>([]);
+  const [rutasCruzadas, setRutasCruzadas] = useState<RutaCruzadaDashboardItem[]>([]);
+  const [defectosCruzados, setDefectosCruzados] = useState<DefectoCruzadoDashboardItem[]>([]);
+  const [topPorLinea, setTopPorLinea] = useState<Record<string, TopDefectoDashboardItem[]>>({});
+  const [cargandoMetricas, setCargandoMetricas] = useState(true);
+
+  // Cargar periodos disponibles reales al montar
+  useEffect(() => {
+    let cancelado = false;
+    setCargandoPeriodos(true);
+
+    inspeccionesApi
+      .getPeriodosDisponibles()
+      .then((res) => {
+        if (cancelado) return;
+        setPeriodosDisponibles(res);
+
+        // Si es la primera carga y no hay filtros explícitos en URL, inicializar con la semana más reciente
+        if (!searchParams.get('semana') && !searchParams.get('dia') && !searchParams.get('mes')) {
+          if (res.semanas && res.semanas.length > 0) {
+            const ultimaSem = res.semanas[0];
+            setPeriodo('semana');
+            setAnioIso(ultimaSem.anioIso);
+            setSemana(ultimaSem.semana);
+          } else if (res.aniosIso && res.aniosIso.length > 0) {
+            setAnioIso(res.aniosIso[0].anioIso);
+          }
+        }
+      })
+      .catch((err) => {
+        if (!cancelado) console.error('Error al cargar periodos disponibles en dashboard:', err);
+      })
+      .finally(() => {
+        if (!cancelado) setCargandoPeriodos(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
   }, []);
 
-  useEffect(() => {
-    cargarDatosDashboard();
-  }, [cargarDatosDashboard]);
+  // Consultar métricas del dashboard según el período seleccionado
+  const cargarMetricas = useCallback(async () => {
+    setCargandoMetricas(true);
+    try {
+      const resp = await inspeccionesApi.getDashboardMetricas({
+        periodo,
+        dia: periodo === 'dia' ? dia : undefined,
+        semana: periodo === 'semana' ? semana : undefined,
+        anioIso: periodo === 'semana' ? anioIso : undefined,
+        mes: periodo === 'mes' ? mes : undefined,
+        anio: periodo === 'mes' || periodo === 'anio' ? anio : undefined,
+      });
 
-  // Actualización automática al recibir eventos de reconexión del backend
+      // 1. Departamentos con registros
+      if (resp.contadoresDepto && resp.contadoresDepto.length > 0) {
+        setContadoresDepto(resp.contadoresDepto);
+      } else if (resp.contadoresDeptoHoy) {
+        const list: ContadorDeptoMetrica[] = [];
+        for (const [deptoIdStr, val] of Object.entries(resp.contadoresDeptoHoy)) {
+          if (val.incidencias > 0 || val.pares > 0) {
+            list.push({
+              departamentoId: Number(deptoIdStr),
+              departamentoNombre: `Depto ${deptoIdStr}`,
+              incidencias: val.incidencias,
+              pares: val.pares,
+            });
+          }
+        }
+        setContadoresDepto(list);
+      } else {
+        setContadoresDepto([]);
+      }
+
+      // 2. Defectos encontrados en otros departamentos (cruzados)
+      setRutasCruzadas(resp.rutasCruzadas || []);
+      setDefectosCruzados(resp.defectosCruzados || []);
+
+      // 3. Top por línea (BOTA)
+      setTopPorLinea(resp.topSemanal || { BOTA: [] });
+    } catch (err) {
+      console.error('Error al consultar métricas del dashboard:', err);
+      setContadoresDepto([]);
+      setRutasCruzadas([]);
+      setDefectosCruzados([]);
+      setTopPorLinea({ BOTA: [] });
+    } finally {
+      setCargandoMetricas(false);
+    }
+  }, [periodo, dia, semana, anioIso, mes, anio]);
+
+  useEffect(() => {
+    // Si estamos en semana pero aún no se define la semana y hay periodos cargados, esperar
+    if (periodo === 'semana' && !semana && periodosDisponibles?.semanas?.length) {
+      const ult = periodosDisponibles.semanas[0];
+      setAnioIso(ult.anioIso);
+      setSemana(ult.semana);
+      return;
+    }
+    void cargarMetricas();
+  }, [cargarMetricas, periodo, semana, periodosDisponibles]);
+
+  // Actualización automática al recibir reconexión del backend
   useEffect(() => {
     const handleReachable = () => {
-      cargarDatosDashboard();
+      void cargarMetricas();
     };
     window.addEventListener('backend:reachable', handleReachable);
     return () => window.removeEventListener('backend:reachable', handleReachable);
-  }, [cargarDatosDashboard]);
+  }, [cargarMetricas]);
 
-  // Líneas dinámicas presentes en la estructura registrada o en los datos del top semanal
-  const lineasParaTop = useMemo(() => {
-    const nombres: string[] = [];
-
-    // 1. Líneas registradas en tiposOperacion activos
-    tiposOperacion.forEach((t) => {
-      t.lineas?.forEach((l) => {
-        const n = l.nombre?.trim();
-        if (n && !nombres.includes(n)) {
-          nombres.push(n);
-        }
-      });
-    });
-
-    // 2. Líneas con registros en topSemanal que pudieran no estar en tiposOperacion
-    Object.keys(topSemanal).forEach((linKey) => {
-      const k = linKey.trim();
-      if (k && !nombres.includes(k)) {
-        nombres.push(k);
+  // Sincronizar URL searchParams con los filtros
+  const actualizarFiltrosUrl = useCallback(
+    (
+      nuevoPeriodo: ModalidadPeriodoRegistro,
+      valores?: {
+        anio?: number;
+        anioIso?: number;
+        semana?: number;
+        mes?: number;
+        dia?: string;
       }
-    });
+    ) => {
+      const p = new URLSearchParams();
+      p.set('periodo', nuevoPeriodo);
 
-    return nombres;
-  }, [tiposOperacion, topSemanal]);
+      if (nuevoPeriodo === 'semana') {
+        const aIso = valores?.anioIso ?? anioIso;
+        const sem = valores?.semana ?? semana;
+        if (aIso) p.set('anioIso', String(aIso));
+        if (sem) p.set('semana', String(sem));
+      } else if (nuevoPeriodo === 'mes') {
+        const a = valores?.anio ?? anio;
+        const m = valores?.mes ?? mes;
+        if (a) p.set('anio', String(a));
+        if (m) p.set('mes', String(m));
+      } else if (nuevoPeriodo === 'anio') {
+        const a = valores?.anio ?? anio;
+        if (a) p.set('anio', String(a));
+      } else if (nuevoPeriodo === 'dia') {
+        const d = valores?.dia ?? dia;
+        if (d) p.set('dia', d);
+      }
+
+      setSearchParams(p, { replace: true });
+    },
+    [anioIso, semana, anio, mes, dia, setSearchParams]
+  );
+
+  // Cambiar modalidad de período
+  const handleModalidadChange = (nuevaModalidad: ModalidadPeriodoRegistro) => {
+    setPeriodo(nuevaModalidad);
+
+    if (nuevaModalidad === 'hoy') {
+      actualizarFiltrosUrl('hoy');
+    } else if (nuevaModalidad === 'semana') {
+      const ultSem = periodosDisponibles?.semanas?.[0];
+      const aIso = ultSem ? ultSem.anioIso : anioIso;
+      const sem = ultSem ? ultSem.semana : semana;
+      if (aIso) setAnioIso(aIso);
+      if (sem) setSemana(sem);
+      actualizarFiltrosUrl('semana', { anioIso: aIso, semana: sem });
+    } else if (nuevaModalidad === 'mes') {
+      const ultMes = periodosDisponibles?.meses?.[0];
+      const a = ultMes ? ultMes.anio : anio;
+      const m = ultMes ? ultMes.mes : mes;
+      if (a) setAnio(a);
+      if (m) setMes(m);
+      actualizarFiltrosUrl('mes', { anio: a, mes: m });
+    } else if (nuevaModalidad === 'anio') {
+      const ultAnio = periodosDisponibles?.anios?.[0]?.anio || anio;
+      if (ultAnio) setAnio(ultAnio);
+      actualizarFiltrosUrl('anio', { anio: ultAnio });
+    } else if (nuevaModalidad === 'dia') {
+      const ultDia = periodosDisponibles?.dias?.[0]?.fecha || hoyIso;
+      setDia(ultDia);
+      actualizarFiltrosUrl('dia', { dia: ultDia });
+    }
+  };
+
+  // Semanas disponibles para el año ISO seleccionado
+  const semanasDelAnioSeleccionado = useMemo(() => {
+    return obtenerSemanasDeAnio(periodosDisponibles?.semanas, anioIso);
+  }, [periodosDisponibles?.semanas, anioIso]);
+
+  // Descripción legible del período activo
+  const periodoActivoDescripcion = useMemo(() => {
+    const estadoFiltros: FiltrosRegistroState = {
+      periodo,
+      anio,
+      anioIso,
+      semana,
+      mes,
+      dia,
+    };
+    return describirPeriodoActivo(estadoFiltros, periodosDisponibles);
+  }, [periodo, anio, anioIso, semana, mes, dia, periodosDisponibles]);
+
+  // Totales generales calculados del período
+  const { totalIncidencias, totalPares } = useMemo(() => {
+    let inc = 0;
+    let par = 0;
+    for (const c of contadoresDepto) {
+      inc += c.incidencias;
+      par += c.pares;
+    }
+    return { totalIncidencias: inc, totalPares: par };
+  }, [contadoresDepto]);
+
+  // Lista de items de Top 10 para la línea BOTA
+  const itemsTopBota = useMemo(() => {
+    if (topPorLinea['BOTA']) return topPorLinea['BOTA'];
+    const primeraLinea = Object.keys(topPorLinea)[0];
+    return primeraLinea ? topPorLinea[primeraLinea] : [];
+  }, [topPorLinea]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -114,9 +321,7 @@ export function HomePage() {
                 Terminal vinculada: <strong>{terminal.nombre}</strong> ({terminal.departamentoNombre})
               </span>
             ) : (
-              <span className="text-slate-500">
-                Sin estación física asignada
-              </span>
+              <span className="text-slate-500">Sin estación física asignada</span>
             )}
           </div>
 
@@ -162,232 +367,526 @@ export function HomePage() {
         </div>
       )}
 
-      {/* 3. TOP 10 DEFECTOS POR LÍNEA (SEMANAL) - DINÁMICO */}
-      <div className="bg-white border border-border/80 rounded-xl p-4 shadow-2xs space-y-3">
-        <div className="flex items-center gap-2 border-b border-border/80 pb-2">
-          <Icon name="leaderboard" size="18px" className="text-slate-700" />
-          <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-800">
-            Top 10 Defectos por Línea (Semanal)
-          </h2>
+      {/* 3. BARRA DE FILTROS TEMPORALES (POR DEFECTO SEMANA, CAMBIABLE A HOY, DÍA, MES, AÑO) */}
+      <div className="bg-white border border-border/90 rounded-xl p-3.5 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-3 select-none">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mr-1">
+            <Icon name="filter_list" size="16px" className="text-marca-primario" />
+            <span>Filtrar período:</span>
+          </div>
+
+          {/* Selector de Modalidad (Hoy, Día, Semana, Mes, Año) */}
+          <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5 shadow-2xs shrink-0">
+            {MODALIDADES_PERIODO_OPCIONES.map((mod) => (
+              <button
+                key={mod.id}
+                type="button"
+                onClick={() => handleModalidadChange(mod.id)}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                  periodo === mod.id
+                    ? 'bg-marca-primario text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                {mod.shortLabel}
+              </button>
+            ))}
+          </div>
+
+          {/* Selectores dependientes de la modalidad */}
+          {/* Modalidad AÑO */}
+          {periodo === 'anio' && (
+            <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in duration-150">
+              <select
+                value={anio ?? ''}
+                disabled={!periodosDisponibles || periodosDisponibles.anios.length === 0}
+                onChange={(e) => {
+                  const val = e.target.value ? Number(e.target.value) : undefined;
+                  setAnio(val);
+                  actualizarFiltrosUrl('anio', { anio: val });
+                }}
+                className="w-24 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer"
+                title="Filtrar por año"
+              >
+                {(!periodosDisponibles || periodosDisponibles.anios.length === 0) && (
+                  <option value="">Sin años</option>
+                )}
+                {periodosDisponibles?.anios.map((a) => (
+                  <option key={a.anio} value={a.anio}>
+                    {formatearEtiquetaAnio(a.anio)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Modalidad MES */}
+          {periodo === 'mes' && (
+            <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in duration-150">
+              <select
+                value={anio ?? ''}
+                disabled={!periodosDisponibles || periodosDisponibles.anios.length === 0}
+                onChange={(e) => {
+                  const val = e.target.value ? Number(e.target.value) : undefined;
+                  setAnio(val);
+                  actualizarFiltrosUrl('mes', { anio: val, mes: undefined });
+                }}
+                className="w-24 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer"
+                title="Seleccionar año"
+              >
+                {(!periodosDisponibles || periodosDisponibles.anios.length === 0) && (
+                  <option value="">Sin años</option>
+                )}
+                {periodosDisponibles?.anios.map((a) => (
+                  <option key={a.anio} value={a.anio}>
+                    {formatearEtiquetaAnio(a.anio)}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={mes ?? ''}
+                disabled={!periodosDisponibles || periodosDisponibles.meses.length === 0}
+                onChange={(e) => {
+                  const val = e.target.value ? Number(e.target.value) : undefined;
+                  setMes(val);
+                  actualizarFiltrosUrl('mes', { anio, mes: val });
+                }}
+                className="w-32 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer"
+                title="Seleccionar mes"
+              >
+                {(!periodosDisponibles || periodosDisponibles.meses.length === 0) && (
+                  <option value="">Sin meses</option>
+                )}
+                {periodosDisponibles?.meses.map((m) => (
+                  <option key={`${m.anio}-${m.mes}`} value={m.mes}>
+                    {m.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Modalidad SEMANA (por defecto) */}
+          {periodo === 'semana' && (
+            <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in duration-150">
+              <select
+                value={anioIso ?? ''}
+                disabled={!periodosDisponibles || (periodosDisponibles.aniosIso || []).length === 0}
+                onChange={(e) => {
+                  const val = e.target.value ? Number(e.target.value) : undefined;
+                  setAnioIso(val);
+                  setSemana(undefined);
+                  actualizarFiltrosUrl('semana', { anioIso: val, semana: undefined });
+                }}
+                className="w-24 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer"
+                title="Seleccionar año"
+              >
+                {(!periodosDisponibles || (periodosDisponibles.aniosIso || []).length === 0) && (
+                  <option value="">Sin años</option>
+                )}
+                {(periodosDisponibles?.aniosIso || []).map((a) => (
+                  <option key={a.anioIso} value={a.anioIso}>
+                    {formatearEtiquetaAnio(a.anioIso)}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={anioIso && semana ? formatearSemanaIsoCodigo(anioIso, semana) : ''}
+                disabled={semanasDelAnioSeleccionado.length === 0}
+                onChange={(e) => {
+                  const parsed = parsearSemanaIsoCodigo(e.target.value);
+                  if (parsed) {
+                    setAnioIso(parsed.anioIso);
+                    setSemana(parsed.semana);
+                    actualizarFiltrosUrl('semana', {
+                      anioIso: parsed.anioIso,
+                      semana: parsed.semana,
+                    });
+                  }
+                }}
+                className="w-48 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer"
+                title="Seleccionar semana"
+              >
+                {semanasDelAnioSeleccionado.length === 0 && (
+                  <option value="">Sin semanas</option>
+                )}
+                {semanasDelAnioSeleccionado.map((s) => (
+                  <option key={s.codigo} value={s.codigo}>
+                    {formatearEtiquetaSemana(s)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Modalidad DÍA mediante CalendarioDiaPicker */}
+          {periodo === 'dia' && (
+            <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in duration-150">
+              <CalendarioDiaPicker
+                value={dia}
+                anio={anio}
+                mes={mes}
+                aniosDisponibles={periodosDisponibles?.anios || []}
+                mesesDisponibles={periodosDisponibles?.meses || []}
+                diasDisponibles={periodosDisponibles?.dias || []}
+                hoyIso={periodosDisponibles?.rangoTotal.hoy || hoyIso}
+                disabled={!periodosDisponibles || periodosDisponibles.anios.length === 0}
+                className="w-36"
+                onSelectDia={(fechaIso, anioSel, mesSel) => {
+                  setDia(fechaIso);
+                  setAnio(anioSel);
+                  setMes(mesSel);
+                  actualizarFiltrosUrl('dia', { dia: fechaIso });
+                }}
+                onCambiarMesAnio={(nuevoAnio, nuevoMes) => {
+                  setAnio(nuevoAnio);
+                  setMes(nuevoMes);
+                }}
+              />
+            </div>
+          )}
         </div>
 
-        {cargandoDatos ? (
-          /* Skeletons del Top 10 por línea */
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[1, 2].map((sk) => (
-              <div key={sk} className="rounded-lg border border-border/70 bg-slate-50/40 p-3 space-y-3">
-                <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
-                  <Skeleton className="h-4 w-28" />
-                  <Skeleton className="h-3 w-16" />
-                </div>
-                <div className="space-y-2">
-                  {[1, 2, 3, 4, 5].map((row) => (
-                    <div key={row} className="flex items-center justify-between gap-3">
-                      <Skeleton className="h-3.5 w-6" />
-                      <Skeleton className="h-3.5 w-12" />
-                      <Skeleton className="h-3.5 flex-1" />
-                      <Skeleton className="h-3.5 w-8" />
-                    </div>
-                  ))}
+        {/* Etiqueta descriptiva del período y recarga */}
+        <div className="flex items-center justify-between lg:justify-end gap-2 text-xs">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-slate-100 text-slate-700 font-medium text-xs">
+            <Icon name="event" size="14px" className="text-slate-500" />
+            <span>{periodoActivoDescripcion}</span>
+            {cargandoPeriodos && <Spinner size="xs" className="ml-1" />}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void cargarMetricas()}
+            disabled={cargandoMetricas}
+            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors cursor-pointer"
+            title="Actualizar datos"
+          >
+            <Icon
+              name="refresh"
+              size="15px"
+              className={cargandoMetricas ? 'animate-spin text-marca-primario' : ''}
+            />
+          </button>
+        </div>
+      </div>
+
+      {/* 4. PRIMERO ARRIBA: CONTADOR DE DEFECTOS Y PARES POR DEPARTAMENTO */}
+      {/* (Solo muestra departamentos donde haya registros) */}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/80 pb-2">
+          <div className="flex items-center gap-2">
+            <Icon name="domain" size="18px" className="text-slate-700" />
+            <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-800">
+              Contador de Defectos y Pares por Departamento
+            </h2>
+          </div>
+
+          {!cargandoMetricas && contadoresDepto.length > 0 && (
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+              <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                {contadoresDepto.length} depto{contadoresDepto.length === 1 ? '' : 's'} con registros
+              </span>
+              <span className="text-slate-300">|</span>
+              <span className="text-slate-700 font-bold">
+                Total:{' '}
+                <strong className="text-amber-700">{totalIncidencias}</strong> def /{' '}
+                <strong className="text-slate-900">{totalPares}</strong> pares
+              </span>
+            </div>
+          )}
+        </div>
+
+        {cargandoMetricas ? (
+          /* Skeletons de los contadores */
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {[1, 2, 3, 4, 5, 6].map((sk) => (
+              <div key={sk} className="bg-white border border-slate-200 rounded-xl p-3.5 space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <Skeleton className="h-7 w-full" />
+                  <Skeleton className="h-7 w-full" />
                 </div>
               </div>
             ))}
           </div>
-        ) : lineasParaTop.length === 0 ? (
-          <div className="py-8 text-center text-xs text-slate-400 italic">
-            No hay líneas registradas ni defectos en la semana.
+        ) : contadoresDepto.length === 0 ? (
+          <div className="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center text-xs text-slate-400 italic">
+            Sin defectos ni pares registrados en este período.
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {lineasParaTop.map((lineaNombre) => {
-              const itemsTop = topSemanal[lineaNombre] || [];
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {contadoresDepto.map((depto) => (
+              <div
+                key={depto.departamentoId}
+                className="bg-white border border-slate-200/90 hover:border-marca-primario/50 rounded-xl p-3.5 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between text-left"
+                title={`Departamento: ${depto.departamentoNombre}`}
+              >
+                <div className="flex items-center justify-between gap-1.5 border-b border-slate-100 pb-1.5">
+                  <span className="text-xs font-bold uppercase text-slate-800 truncate" title={depto.departamentoNombre}>
+                    {depto.departamentoNombre}
+                  </span>
+                  <span className="w-2 h-2 rounded-full bg-marca-primario shrink-0" />
+                </div>
 
-              return (
-                <div
-                  key={lineaNombre}
-                  className="rounded-lg border border-border/80 bg-slate-50/40 p-3 flex flex-col justify-between space-y-2"
-                >
-                  {/* Encabezado de la Línea */}
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
-                    <span className="font-extrabold text-xs text-slate-800 uppercase flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-marca-primario" />
-                      <span>{lineaNombre}</span>
+                <div className="grid grid-cols-2 gap-2 pt-2.5">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                      Defectos
                     </span>
-                    <span className="text-[11px] font-semibold text-slate-400">
-                      {itemsTop.length} registros
+                    <span className="font-mono text-xl font-black text-amber-700">
+                      {depto.incidencias}
                     </span>
                   </div>
-
-                  {/* Tabla directa Num | Clave | Defecto | DEFECTOS */}
-                  {itemsTop.length === 0 ? (
-                    <div className="py-8 text-center text-xs text-slate-400 italic">
-                      Sin defectos registrados esta semana
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs text-left">
-                        <thead className="text-[10px] font-extrabold text-slate-500 uppercase border-b border-slate-200">
-                          <tr>
-                            <th className="py-1 px-1.5 w-[36px] text-center font-mono">Num</th>
-                            <th className="py-1 px-2 w-[55px] font-mono text-center">Clave</th>
-                            <th className="py-1 px-2">Defecto</th>
-                            <th className="py-1 px-2 w-[70px] text-right font-bold text-slate-700">
-                              DEFECTOS
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 font-medium">
-                          {itemsTop.map((item, idx) => (
-                            <tr key={`${item.clave}_${idx}`} className="hover:bg-white/80 transition-colors">
-                              <td className="py-1.5 px-1.5 text-center font-mono font-bold text-slate-400">
-                                {idx + 1}
-                              </td>
-                              <td className="py-1.5 px-2 text-center font-mono font-bold text-brand-primary">
-                                {item.clave}
-                              </td>
-                              <td className="py-1.5 px-2 text-slate-800 font-medium truncate max-w-[220px]" title={item.defecto}>
-                                {item.defecto}
-                              </td>
-                              <td className="py-1.5 px-2 text-right font-mono font-extrabold text-slate-900">
-                                {item.defectos}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                      Pares
+                    </span>
+                    <span className="font-mono text-xl font-black text-slate-800">
+                      {depto.pares}
+                    </span>
+                  </div>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {/* 4. CONTADORES DE DEFECTOS POR DEPARTAMENTO (HOY) - DINÁMICO 100% DE LA BD */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between border-b border-border/80 pb-2">
+      {/* 5. TOP 10 DEFECTOS POR LÍNEA (BOTA CON DEPTO VISIBLE) */}
+      <div className="bg-white border border-border/80 rounded-xl p-4 shadow-2xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/80 pb-2">
           <div className="flex items-center gap-2">
-            <Icon name="domain" size="18px" className="text-slate-700" />
-            <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-800">
-              Contadores de Defectos por Departamento (Hoy)
+            <Icon name="leaderboard" size="18px" className="text-slate-700" />
+            <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-2">
+              <span>Top 10 Defectos por Línea — BOTA</span>
             </h2>
           </div>
+
+          {!cargandoMetricas && (
+            <span className="text-2xs font-semibold text-slate-500">
+              {itemsTopBota.length} {itemsTopBota.length === 1 ? 'defecto clasificado' : 'defectos clasificados'}
+            </span>
+          )}
         </div>
 
-        {cargandoDatos ? (
-          /* Skeletons de la estructura de departamentos */
-          <div className="bg-white border border-border/80 rounded-xl p-4 shadow-2xs space-y-3.5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <Skeleton className="h-4 w-40" />
+        {cargandoMetricas ? (
+          /* Skeletons del Top 10 */
+          <div className="space-y-2 p-2">
+            {[1, 2, 3, 4, 5].map((row) => (
+              <div key={row} className="flex items-center justify-between gap-3">
+                <Skeleton className="h-4 w-8" />
+                <Skeleton className="h-4 w-14" />
+                <Skeleton className="h-4 flex-1" />
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-12" />
+              </div>
+            ))}
+          </div>
+        ) : itemsTopBota.length === 0 ? (
+          <div className="py-8 text-center text-xs text-slate-400 italic">
+            Sin defectos registrados en la línea BOTA durante el período seleccionado.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead className="text-[10px] font-extrabold text-slate-500 uppercase border-b border-slate-200">
+                <tr>
+                  <th className="py-2 px-2 w-[40px] text-center font-mono">Num</th>
+                  <th className="py-2 px-2 w-[65px] font-mono text-center">Clave</th>
+                  <th className="py-2 px-3">Defecto</th>
+                  <th className="py-2 px-3 w-[150px]">Depto Responsable</th>
+                  <th className="py-2 px-3 w-[80px] text-right font-bold text-amber-800">
+                    Defectos
+                  </th>
+                  <th className="py-2 px-3 w-[70px] text-right font-bold text-slate-700">
+                    Pares
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium">
+                {itemsTopBota.map((item, idx) => (
+                  <tr key={`${item.clave}_${idx}`} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-2 px-2 text-center font-mono font-bold text-slate-400">
+                      {idx + 1}
+                    </td>
+                    <td className="py-2 px-2 text-center font-mono font-bold text-brand-primary">
+                      {item.clave}
+                    </td>
+                    <td
+                      className="py-2 px-3 text-slate-800 font-medium truncate max-w-[280px] sm:max-w-[400px]"
+                      title={item.defecto}
+                    >
+                      {item.defecto}
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className="inline-block px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold text-[11px] uppercase tracking-wide">
+                        {item.departamentoNombre || 'General'}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono font-extrabold text-amber-700">
+                      {item.defectos}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono font-bold text-slate-800">
+                      {item.pares ?? item.defectos}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* 6. DEBAJO DEL TOP 10: DEFECTOS ENCONTRADOS EN OTROS DEPARTAMENTOS (ORIGEN VS DETECCIÓN) */}
+      <div className="bg-white border border-border/80 rounded-xl p-4 shadow-2xs space-y-4">
+        {/* Encabezado limpio y ejecutivo */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/80 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-700 shrink-0">
+              <Icon name="compare_arrows" size="18px" />
             </div>
-            <div className="space-y-3">
-              {[1, 2].map((skL) => (
-                <div key={skL} className="rounded-lg bg-slate-50/60 border border-slate-200/80 p-3 space-y-2.5">
-                  <Skeleton className="h-4 w-28" />
-                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map((card) => (
-                      <Skeleton key={card} className="h-16 w-full rounded-lg" />
-                    ))}
+            <div>
+              <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-800">
+                Defectos Encontrados en Otros Departamentos
+              </h2>
+              <p className="text-2xs text-slate-500 mt-0.5">
+                Defectos generados en una etapa previa e interceptados en la inspección de un departamento posterior.
+              </p>
+            </div>
+          </div>
+
+          {!cargandoMetricas && (
+            <span className="text-2xs font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 shrink-0 self-start sm:self-auto">
+              {defectosCruzados.length} {defectosCruzados.length === 1 ? 'defecto cruzado' : 'defectos cruzados'}
+            </span>
+          )}
+        </div>
+
+        {/* Resumen visual de flujos de detección cruzada (Una sola línea por tarjeta, sin saltos feos) */}
+        {!cargandoMetricas && rutasCruzadas.length > 0 && (
+          <div className="space-y-2">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 block">
+              Principales flujos de detección cruzada:
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              {rutasCruzadas.map((ruta) => (
+                <div
+                  key={`${ruta.origenId}_${ruta.detectorId}`}
+                  className="rounded-lg border border-slate-200/90 bg-slate-50/70 hover:bg-white hover:border-slate-300 p-2.5 flex items-center justify-between gap-2 transition-all shadow-2xs"
+                >
+                  <div className="flex items-center gap-1.5 text-xs font-semibold whitespace-nowrap min-w-0">
+                    <span
+                      className="font-bold text-amber-800 uppercase text-[11px] truncate max-w-[90px]"
+                      title={ruta.origenNombre}
+                    >
+                      {ruta.origenNombre}
+                    </span>
+                    <span className="text-slate-400 text-xs font-bold shrink-0">→</span>
+                    <span
+                      className="font-bold text-blue-800 uppercase text-[11px] truncate max-w-[90px]"
+                      title={ruta.detectorNombre}
+                    >
+                      {ruta.detectorNombre}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-1 shrink-0 ml-1">
+                    <span className="font-mono text-xs font-extrabold text-amber-700">
+                      {ruta.defectos}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-medium">def</span>
+                    <span className="text-slate-300 mx-0.5">•</span>
+                    <span className="font-mono text-xs font-bold text-slate-700">
+                      {ruta.pares}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-medium">par</span>
                   </div>
                 </div>
               ))}
             </div>
           </div>
-        ) : tiposOperacion.length === 0 ? (
-          <div className="p-6 text-center text-xs text-slate-500 bg-white rounded-xl border border-border/80">
-            No se encontró ninguna operación registrada en la base de datos.
+        )}
+
+        {/* Tabla de defectos cruzados detallada y ordenada */}
+        {cargandoMetricas ? (
+          <div className="space-y-2 p-2">
+            {[1, 2, 3, 4].map((row) => (
+              <div key={row} className="flex items-center justify-between gap-3">
+                <Skeleton className="h-4 w-8" />
+                <Skeleton className="h-4 w-14" />
+                <Skeleton className="h-4 flex-1" />
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-4 w-12" />
+                <Skeleton className="h-4 w-12" />
+              </div>
+            ))}
+          </div>
+        ) : defectosCruzados.length === 0 ? (
+          <div className="py-6 text-center text-xs text-slate-400 italic bg-slate-50/40 rounded-lg border border-dashed border-slate-200">
+            No se detectaron defectos de otros departamentos en este período.
           </div>
         ) : (
-          tiposOperacion.map((tipo) => (
-            <div
-              key={tipo.id}
-              className="bg-white border border-border/80 rounded-xl p-4 shadow-2xs space-y-3.5"
-            >
-              {/* Nivel 1: Tipo de Operación registrado */}
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  {/* <Icon name="precision_manufacturing" size="16px" className="text-brand-primary" /> */}
-                  <span>Operación: {tipo.nombre}</span>
-                </span>
-              </div>
-
-              {/* Nivel 2: Líneas dentro de la Operación */}
-              <div className="space-y-3">
-                {tipo.lineas && tipo.lineas.length > 0 ? (
-                  tipo.lineas.map((linea) => {
-                    const deptos = linea.departamentos || [];
-
-                    return (
-                      <div
-                        key={linea.id}
-                        className="rounded-lg bg-slate-50/60 border border-slate-200/80 p-3 space-y-2.5"
-                      >
-                        {/* Cabecera de Línea */}
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-marca-primario" />
-                            <span>Línea: {linea.nombre}</span>
-                          </span>
-                        </div>
-
-                        {/* Nivel 3: Contadores de departamentos de esta línea */}
-                        {deptos.length === 0 ? (
-                          <p className="text-2xs text-slate-400 italic py-1">
-                            Sin departamentos asignados a esta línea.
-                          </p>
-                        ) : (
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2">
-                            {deptos.map((asoc) => {
-                              const depto = asoc.departamento;
-                              const conteo = contadoresDeptoHoy[depto.id] || { pares: 0, incidencias: 0 };
-                              const tieneDefectos = conteo.incidencias > 0;
-
-                              return (
-                                <div
-                                  key={depto.id}
-                                  title={`Defectos pertenecientes a ${depto.nombre}`}
-                                  className={`flex flex-col justify-between p-2.5 rounded-lg border text-left ${
-                                    tieneDefectos
-                                      ? 'bg-white border-amber-300 shadow-2xs'
-                                      : 'bg-white/80 border-slate-200'
-                                  }`}
-                                >
-                                  <span
-                                    className="text-[11px] font-bold text-slate-700 uppercase truncate block"
-                                    title={depto.nombre}
-                                  >
-                                    {depto.nombre}
-                                  </span>
-
-                                  <div className="mt-2 flex items-baseline justify-between">
-                                    <span
-                                      className={`font-mono text-base font-extrabold ${
-                                        tieneDefectos ? 'text-amber-700' : 'text-slate-400'
-                                      }`}
-                                    >
-                                      {conteo.incidencias}
-                                    </span>
-                                    <span className="text-[10px] text-slate-400 font-medium">
-                                      def
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                ) : (
-                  <p className="text-2xs text-slate-400 italic">
-                    Sin líneas configuradas en esta operación.
-                  </p>
-                )}
-              </div>
-            </div>
-          ))
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead className="text-[10px] font-extrabold text-slate-500 uppercase border-b border-slate-200">
+                <tr>
+                  <th className="py-2.5 px-2 w-[40px] text-center font-mono">Num</th>
+                  <th className="py-2.5 px-2 w-[65px] font-mono text-center">Clave</th>
+                  <th className="py-2.5 px-3">Defecto</th>
+                  <th className="py-2.5 px-3 w-[160px]">Origen (Responsable)</th>
+                  <th className="py-2.5 px-3 w-[160px]">Detectado En</th>
+                  <th className="py-2.5 px-3 w-[80px] text-right font-bold text-amber-800">
+                    Defectos
+                  </th>
+                  <th className="py-2.5 px-3 w-[70px] text-right font-bold text-slate-700">
+                    Pares
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium">
+                {defectosCruzados.map((item, idx) => (
+                  <tr
+                    key={`${item.clave}_${item.origenId}_${item.detectorId}_${idx}`}
+                    className="hover:bg-slate-50/80 transition-colors"
+                  >
+                    <td className="py-2 px-2 text-center font-mono font-bold text-slate-400">
+                      {idx + 1}
+                    </td>
+                    <td className="py-2 px-2 text-center font-mono font-bold text-brand-primary">
+                      {item.clave}
+                    </td>
+                    <td
+                      className="py-2 px-3 text-slate-800 font-medium truncate max-w-[240px] sm:max-w-[340px]"
+                      title={item.defecto}
+                    >
+                      {item.defecto}
+                    </td>
+                    <td className="py-2 px-3 whitespace-nowrap">
+                      <span className="inline-block px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200/80 font-bold text-[11px] uppercase tracking-wide">
+                        {item.origenNombre}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-sky-50 text-sky-800 border border-sky-200/80 font-bold text-[11px] uppercase tracking-wide">
+                        <span className="text-slate-400 font-normal">en</span>
+                        <span>{item.detectorNombre}</span>
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono font-extrabold text-amber-700">
+                      {item.defectos}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono font-bold text-slate-800">
+                      {item.pares}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

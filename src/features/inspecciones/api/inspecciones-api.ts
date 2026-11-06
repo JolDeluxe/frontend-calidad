@@ -51,6 +51,61 @@ function construirQueryStringInspecciones(params?: GetFilasInspeccionQueryParams
   return qs ? `?${qs}` : '';
 }
 
+export interface DashboardMetricasQueryParams {
+  periodo?: 'hoy' | 'dia' | 'semana' | 'mes' | 'anio';
+  dia?: string;
+  semana?: number;
+  anioIso?: number;
+  mes?: number;
+  anio?: number;
+}
+
+export interface ContadorDeptoMetrica {
+  departamentoId: number;
+  departamentoNombre: string;
+  pares: number;
+  incidencias: number;
+}
+
+export interface TopDefectoDashboardItem {
+  clave: number;
+  defecto: string;
+  defectos: number;
+  pares?: number;
+  departamentoId?: number;
+  departamentoNombre?: string;
+}
+
+export interface RutaCruzadaDashboardItem {
+  origenId: number;
+  origenNombre: string;
+  detectorId: number;
+  detectorNombre: string;
+  defectos: number;
+  pares: number;
+}
+
+export interface DefectoCruzadoDashboardItem {
+  clave: number;
+  defecto: string;
+  origenId: number;
+  origenNombre: string;
+  detectorId: number;
+  detectorNombre: string;
+  defectos: number;
+  pares: number;
+}
+
+export interface DashboardMetricasResponse {
+  periodo?: string;
+  rango?: { inicioUtc: string; finUtc: string };
+  contadoresDepto?: ContadorDeptoMetrica[];
+  contadoresDeptoHoy: Record<number, { pares: number; incidencias: number }>;
+  rutasCruzadas?: RutaCruzadaDashboardItem[];
+  defectosCruzados?: DefectoCruzadoDashboardItem[];
+  topSemanal: Record<string, TopDefectoDashboardItem[]>;
+}
+
 export const inspeccionesApi = {
   /**
    * Obtiene la información oficial de un lote maestro por su número.
@@ -179,18 +234,30 @@ export const inspeccionesApi = {
 
   /**
    * Obtiene las métricas generales del Dashboard de Inicio para todos los usuarios.
+   * Soporta filtros temporales (hoy, dia, semana, mes, anio), por defecto semana.
    */
-  getDashboardMetricas: async (): Promise<{
-    contadoresDeptoHoy: Record<number, { pares: number; incidencias: number }>;
-    topSemanal: Record<string, Array<{ clave: number; defecto: string; defectos: number }>>;
-  }> => {
-    const res = await httpClient.get<
-      ApiResponse<{
-        contadoresDeptoHoy: Record<number, { pares: number; incidencias: number }>;
-        topSemanal: Record<string, Array<{ clave: number; defecto: string; defectos: number }>>;
-      }>
-    >('/inspecciones/dashboard-metricas');
-    return res.data || { contadoresDeptoHoy: {}, topSemanal: {} };
+  getDashboardMetricas: async (
+    params?: DashboardMetricasQueryParams,
+  ): Promise<DashboardMetricasResponse> => {
+    const query = new URLSearchParams();
+    if (params?.periodo) query.set('periodo', params.periodo);
+    if (params?.dia) query.set('dia', params.dia);
+    if (params?.semana !== undefined) query.set('semana', params.semana.toString());
+    if (params?.anioIso !== undefined) query.set('anioIso', params.anioIso.toString());
+    if (params?.mes !== undefined) query.set('mes', params.mes.toString());
+    if (params?.anio !== undefined) query.set('anio', params.anio.toString());
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    const res = await httpClient.get<ApiResponse<DashboardMetricasResponse>>(
+      `/inspecciones/dashboard-metricas${qs}`,
+    );
+    return (
+      res.data || {
+        contadoresDepto: [],
+        contadoresDeptoHoy: {},
+        topSemanal: {},
+      }
+    );
   },
 
   /**
