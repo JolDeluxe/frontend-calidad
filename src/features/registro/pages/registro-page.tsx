@@ -42,7 +42,7 @@ import type {
 } from '../types/registro.types';
 import type { Departamento } from '@/features/departamentos/types/departamentos.types';
 
-const ROLES_CON_CAMBIO_DEPTO = ['SUPER_ADMIN', 'ADMIN', 'COORD'];
+const ROLES_CON_CAMBIO_DEPTO = ['SUPER_ADMIN', 'ADMIN', 'COORD', 'VISUALIZADOR'];
 
 export function RegistroPage() {
   const { user } = useAuthSession();
