@@ -1,4 +1,8 @@
-import { idbDatabase, type TerminalProfileStore } from '@/lib/db/idb-database';
+import {
+  idbDatabase,
+  type TerminalProfileStore,
+  type ColaInspeccionStore,
+} from '@/lib/db/idb-database';
 
 /**
  * Clave estandarizada en localStorage para la credencial física de terminal.
@@ -63,6 +67,58 @@ export const terminalStorage = {
   getProfileFromIdb: async (): Promise<TerminalProfileStore | null> => {
     if (!idbDatabase.getAvailable()) return null;
     return idbDatabase.get<TerminalProfileStore>('terminal_profile', 'local');
+  },
+  /**
+   * Obtiene el resumen de registros pendientes o en proceso en la cola local de inspecciones.
+   */
+  getPendingQueueSummary: async (): Promise<{
+    total: number;
+    pendientes: number;
+    sincronizando: number;
+    erroresReintentables: number;
+  }> => {
+    if (!idbDatabase.getAvailable()) {
+      return { total: 0, pendientes: 0, sincronizando: 0, erroresReintentables: 0 };
+    }
+    try {
+      const items = await idbDatabase.getAll<ColaInspeccionStore>('cola_inspecciones');
+      const pendientes = items.filter((i) => i.estado === 'PENDIENTE').length;
+      const sincronizando = items.filter((i) => i.estado === 'SINCRONIZANDO').length;
+      const erroresReintentables = items.filter((i) => i.estado === 'ERROR_REINTENTABLE').length;
+      return {
+        total: pendientes + sincronizando + erroresReintentables,
+        pendientes,
+        sincronizando,
+        erroresReintentables,
+      };
+    } catch {
+      return { total: 0, pendientes: 0, sincronizando: 0, erroresReintentables: 0 };
+    }
+  },
+  /**
+   * Indica si la estación tiene inspecciones pendientes en cola local que requieren protección.
+   */
+  hasPendingQueue: async (): Promise<boolean> => {
+    const summary = await terminalStorage.getPendingQueueSummary();
+    return summary.total > 0;
+  },
+  /**
+   * Valida si es seguro desvincular la estación sin riesgo de pérdida de datos.
+   */
+  canSafelyUnlink: async (): Promise<{
+    puede: boolean;
+    motivo?: string;
+    pendientes: number;
+  }> => {
+    const summary = await terminalStorage.getPendingQueueSummary();
+    if (summary.total > 0) {
+      return {
+        puede: false,
+        motivo: `No se puede desvincular: existen ${summary.total} inspección(es) pendiente(s) en la cola local. Exporte un respaldo .mbcbak o complete la sincronización.`,
+        pendientes: summary.total,
+      };
+    }
+    return { puede: true, pendientes: 0 };
   },
 };
 

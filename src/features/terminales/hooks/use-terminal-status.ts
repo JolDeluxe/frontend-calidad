@@ -3,7 +3,12 @@ import { terminalesApi } from '../api/terminales-api';
 import { terminalStorage, type TerminalPublicInfo } from '../services/terminal-storage';
 import { catalogoOfflineService } from '@/features/catalogo-offline/services/catalogo-offline.service';
 
-export type TerminalBindingState = 'cargando' | 'vinculada' | 'no_vinculada' | 'error_conexion';
+export type TerminalBindingState =
+  | 'cargando'
+  | 'vinculada'
+  | 'no_vinculada'
+  | 'error_conexion'
+  | 'desvinculada_con_cola';
 
 export interface UseTerminalStatusResult {
   estado: TerminalBindingState;
@@ -11,7 +16,7 @@ export interface UseTerminalStatusResult {
   esOffline: boolean;
   errorMensaje: string | null;
   recargar: () => Promise<void>;
-  desvincular: () => void;
+  desvincular: (forzar?: boolean) => Promise<boolean>;
   vincularConCredencial: (credencial: string) => Promise<boolean>;
 }
 
@@ -74,13 +79,36 @@ export function useTerminalStatus(): UseTerminalStatusResult {
         await terminalStorage.saveProfileToIdb(res.terminal);
         void catalogoOfflineService.sincronizarTodoEnBackground(res.terminal);
       } else {
-        // La credencial local fue rechazada por el servidor (revocada o inválida).
-        // Limpiamos los datos locales para evitar inconsistencias de estado.
-        terminalStorage.removeCredential();
-        setEstado('no_vinculada');
-        setTerminal(null);
-        setEsOffline(false);
-        setErrorMensaje('La credencial de esta terminal ha sido revocada o es inválida.');
+        // La credencial local no fue aceptada por el servidor (revocada o inactiva).
+        // BLINDAJE DE COLA: Verificar si existen registros locales pendientes antes de borrar la credencial
+        const queueSummary = await terminalStorage.getPendingQueueSummary();
+        if (queueSummary.total > 0) {
+          const cachedProfile = await terminalStorage.getProfileFromIdb();
+          setEstado('desvinculada_con_cola');
+          setTerminal(
+            cachedProfile
+              ? {
+                  id: cachedProfile.terminalId,
+                  nombre: cachedProfile.nombre,
+                  departamentoId: cachedProfile.departamentoId,
+                  departamentoCodigo: cachedProfile.departamentoCodigo,
+                  departamentoNombre: cachedProfile.departamentoNombre,
+                  numeroLineas: cachedProfile.numeroLineas,
+                  estado: 'REVOCADA_O_DESVINCULADA',
+                }
+              : null,
+          );
+          setEsOffline(true);
+          setErrorMensaje(
+            `La estación fue desvinculada o revocada en el servidor, pero tiene ${queueSummary.total} inspección(es) pendiente(s) de sincronizar. Exporte un respaldo de contingencia (.mbcbak) antes de desvincularla.`,
+          );
+        } else {
+          terminalStorage.removeCredential();
+          setEstado('no_vinculada');
+          setTerminal(null);
+          setEsOffline(false);
+          setErrorMensaje('La credencial de esta terminal ha sido revocada o es inválida.');
+        }
       }
     } catch (err: any) {
       // Si falla la red, verificar si contamos con un perfil de terminal válido en IndexedDB
@@ -108,15 +136,24 @@ export function useTerminalStatus(): UseTerminalStatusResult {
     };
   }, [consultar]);
 
-  const desvincular = useCallback(() => {
+  const desvincular = useCallback(async (forzar = false): Promise<boolean> => {
+    if (!forzar) {
+      const check = await terminalStorage.canSafelyUnlink();
+      if (!check.puede) {
+        setErrorMensaje(check.motivo || 'No se puede desvincular con registros pendientes.');
+        return false;
+      }
+    }
     terminalStorage.removeCredential();
     setTerminal(null);
     setEsOffline(false);
     setEstado('no_vinculada');
     setErrorMensaje('Estación desvinculada localmente.');
+    return true;
   }, []);
 
   const vincularConCredencial = useCallback(async (credencial: string): Promise<boolean> => {
+    const credencialAnterior = terminalStorage.getCredential();
     terminalStorage.setCredential(credencial);
     try {
       const res = await terminalesApi.consultarEstado();
@@ -129,17 +166,29 @@ export function useTerminalStatus(): UseTerminalStatusResult {
         void catalogoOfflineService.sincronizarTodoEnBackground(res.terminal);
         return true;
       } else {
-        terminalStorage.removeCredential();
-        setEstado('no_vinculada');
-        setTerminal(null);
+        const queueSummary = await terminalStorage.getPendingQueueSummary();
+        if (queueSummary.total > 0 && credencialAnterior) {
+          terminalStorage.setCredential(credencialAnterior);
+          setEstado('desvinculada_con_cola');
+        } else {
+          terminalStorage.removeCredential();
+          setEstado('no_vinculada');
+          setTerminal(null);
+        }
         setEsOffline(false);
         setErrorMensaje('La credencial provista no es válida o la terminal se encuentra inactiva.');
         return false;
       }
     } catch (err: any) {
-      terminalStorage.removeCredential();
-      setEstado('error_conexion');
-      setTerminal(null);
+      const queueSummary = await terminalStorage.getPendingQueueSummary();
+      if (queueSummary.total > 0 && credencialAnterior) {
+        terminalStorage.setCredential(credencialAnterior);
+        setEstado('desvinculada_con_cola');
+      } else {
+        terminalStorage.removeCredential();
+        setEstado('error_conexion');
+        setTerminal(null);
+      }
       setEsOffline(true);
       setErrorMensaje(err?.message || 'Error de conexión al verificar la credencial provista.');
       return false;

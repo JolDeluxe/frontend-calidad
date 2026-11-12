@@ -585,157 +585,183 @@ export class InspeccionesOfflineService {
     }
 
     this.syncInFlightPromise = (async () => {
-      const nowMs = Date.now();
-      const acquired = await this.tryAcquireSyncLock(nowMs);
-      if (!acquired) {
+      // Coordinación atómica nativa entre pestañas del navegador mediante Web Locks API
+      if (
+        typeof navigator !== 'undefined' &&
+        'locks' in navigator &&
+        typeof navigator.locks?.request === 'function'
+      ) {
+        return navigator.locks.request(
+          'mbc_offline_sync_lock',
+          { ifAvailable: true },
+          async (lock) => {
+            if (!lock) {
+              // Otra pestaña del navegador se encuentra sincronizando activamente
+              const res = await this.obtenerResumenCola();
+              return { sincronizadas: 0, pendientes: res.pendientes + res.erroresReintentables };
+            }
+            return this.ejecutarProcesoSyncConIdbLock(options);
+          },
+        );
+      }
+      return this.ejecutarProcesoSyncConIdbLock(options);
+    })();
+
+    return this.syncInFlightPromise;
+  }
+
+  private async ejecutarProcesoSyncConIdbLock(options: { forceIgnoreBackoff?: boolean }): Promise<{
+    sincronizadas: number;
+    pendientes: number;
+  }> {
+    const nowMs = Date.now();
+    const acquired = await this.tryAcquireSyncLock(nowMs);
+    if (!acquired) {
+      const res = await this.obtenerResumenCola();
+      return { sincronizadas: 0, pendientes: res.pendientes + res.erroresReintentables };
+    }
+
+    let totalSincronizadas = 0;
+    try {
+      const todos = await idbDatabase.getAll<ColaInspeccionStore>('cola_inspecciones');
+      const candidatos = todos
+        .filter((item) => {
+          if (item.estado === 'PENDIENTE') return true;
+          if (item.estado === 'ERROR_REINTENTABLE') {
+            if (options.forceIgnoreBackoff) return true;
+            return !item.proximoReintentoEn || item.proximoReintentoEn <= Date.now();
+          }
+          return false;
+        })
+        .sort((a, b) => a.fechaCapturaDispositivo.localeCompare(b.fechaCapturaDispositivo));
+
+      if (candidatos.length === 0) {
         const res = await this.obtenerResumenCola();
         return { sincronizadas: 0, pendientes: res.pendientes + res.erroresReintentables };
       }
 
-      let totalSincronizadas = 0;
-      try {
-        const todos = await idbDatabase.getAll<ColaInspeccionStore>('cola_inspecciones');
-        const candidatos = todos
-          .filter((item) => {
-            if (item.estado === 'PENDIENTE') return true;
-            if (item.estado === 'ERROR_REINTENTABLE') {
-              if (options.forceIgnoreBackoff) return true;
-              return !item.proximoReintentoEn || item.proximoReintentoEn <= Date.now();
+      // Marcar candidatos como SINCRONIZANDO antes de enviar
+      const ahoraIso = new Date().toISOString();
+      for (const item of candidatos) {
+        await idbDatabase.put<ColaInspeccionStore>('cola_inspecciones', {
+          ...item,
+          estado: 'SINCRONIZANDO',
+          actualizadoEn: ahoraIso,
+        });
+      }
+      await this.notifyListeners();
+
+      // Procesar en lotes de máximo 25 elementos
+      const TAM_LOTE = 25;
+      for (let i = 0; i < candidatos.length; i += TAM_LOTE) {
+        const loteItems = candidatos.slice(i, i + TAM_LOTE);
+        try {
+          const response = await httpClient.post<ApiResponse<SyncOfflineBatchResponse>>(
+            '/inspecciones/sync',
+            {
+              items: loteItems.map((c) => ({
+                idLocalCliente: c.idLocalCliente,
+                inspectorId: c.inspectorId,
+                offlineToken: c.offlineToken,
+                fechaCapturaDispositivo: c.fechaCapturaDispositivo,
+                esContingencia: c.esContingencia,
+                motivoContingencia: c.motivoContingencia,
+                payload: {
+                  lote: c.payload.lote,
+                  lineaId: c.payload.lineaId,
+                  lineaTexto: c.payload.lineaTexto,
+                  horma: c.payload.horma,
+                  notas: c.payload.notas,
+                  detalles: c.payload.detalles.map((d) => ({
+                    defectoId: d.defectoId,
+                    defDeptoId: d.defDeptoId,
+                    paresDefectuosos: d.paresDefectuosos,
+                    notas: d.notas,
+                  })),
+                },
+              })),
+            },
+          );
+
+          const resultados = response.data?.resultados || [];
+          const mapaResultados = new Map(resultados.map((r) => [r.idLocalCliente, r]));
+
+          for (const item of loteItems) {
+            const resItem = mapaResultados.get(item.idLocalCliente);
+            if (!resItem) {
+              await this.marcarErrorReintentable(
+                item,
+                'El servidor no devolvió confirmación para esta captura.',
+              );
+              continue;
             }
-            return false;
-          })
-          .sort((a, b) => a.fechaCapturaDispositivo.localeCompare(b.fechaCapturaDispositivo));
 
-        if (candidatos.length === 0) {
-          const res = await this.obtenerResumenCola();
-          return { sincronizadas: 0, pendientes: res.pendientes + res.erroresReintentables };
-        }
-
-        // Marcar candidatos como SINCRONIZANDO antes de enviar
-        const ahoraIso = new Date().toISOString();
-        for (const item of candidatos) {
-          await idbDatabase.put<ColaInspeccionStore>('cola_inspecciones', {
-            ...item,
-            estado: 'SINCRONIZANDO',
-            actualizadoEn: ahoraIso,
-          });
-        }
-        await this.notifyListeners();
-
-        // Procesar en lotes de máximo 25 elementos
-        const TAM_LOTE = 25;
-        for (let i = 0; i < candidatos.length; i += TAM_LOTE) {
-          const loteItems = candidatos.slice(i, i + TAM_LOTE);
-          try {
-            const response = await httpClient.post<ApiResponse<SyncOfflineBatchResponse>>(
-              '/inspecciones/sync',
-              {
-                items: loteItems.map((c) => ({
-                  idLocalCliente: c.idLocalCliente,
-                  inspectorId: c.inspectorId,
-                  offlineToken: c.offlineToken,
-                  fechaCapturaDispositivo: c.fechaCapturaDispositivo,
-                  esContingencia: c.esContingencia,
-                  motivoContingencia: c.motivoContingencia,
-                  payload: {
-                    lote: c.payload.lote,
-                    lineaId: c.payload.lineaId,
-                    lineaTexto: c.payload.lineaTexto,
-                    horma: c.payload.horma,
-                    notas: c.payload.notas,
-                    detalles: c.payload.detalles.map((d) => ({
-                      defectoId: d.defectoId,
-                      defDeptoId: d.defDeptoId,
-                      paresDefectuosos: d.paresDefectuosos,
-                      notas: d.notas,
-                    })),
-                  },
-                })),
-              },
-            );
-
-            const resultados = response.data?.resultados || [];
-            const mapaResultados = new Map(resultados.map((r) => [r.idLocalCliente, r]));
-
-            for (const item of loteItems) {
-              const resItem = mapaResultados.get(item.idLocalCliente);
-              if (!resItem) {
-                await this.marcarErrorReintentable(
-                  item,
-                  'El servidor no devolvió confirmación para esta captura.',
-                );
-                continue;
-              }
-
-              if (
-                resItem.estado === 'SINCRONIZADA' ||
-                resItem.estado === 'REPETIDA_IDEMPOTENTE'
-              ) {
-                // Confirmado en MySQL: eliminar de la cola pendiente
-                await idbDatabase.delete('cola_inspecciones', item.idLocalCliente);
-                totalSincronizadas += 1;
-              } else if (resItem.estado === 'ERROR_REINTENTABLE') {
-                await this.marcarErrorReintentable(
-                  item,
-                  resItem.mensaje || 'Error temporal al guardar en MySQL; pendiente de reintento.',
-                  resItem.folio,
-                  resItem.inspeccionId,
-                );
-              } else if (resItem.estado === 'REQUIERE_REVISION') {
-                await idbDatabase.put<ColaInspeccionStore>('cola_inspecciones', {
-                  ...item,
-                  estado: 'REQUIERE_REVISION',
-                  ultimoError: resItem.mensaje,
-                  folioServidor: resItem.folio ?? item.folioServidor,
-                  inspeccionIdServidor: resItem.inspeccionId ?? item.inspeccionIdServidor,
-                  actualizadoEn: new Date().toISOString(),
-                });
-              } else {
-                // RECHAZADA o CONFLICTO_IDEMPOTENCIA: conservar en contingencias_inspecciones para auditoría/revisión sin bloquear la cola
-                const contingencia: ContingenciaInspeccionStore = {
-                  idLocalCliente: item.idLocalCliente,
-                  inspectorId: item.inspectorId,
-                  inspectorUsuario: item.inspectorUsuario,
-                  inspectorNombre: item.inspectorNombre,
-                  terminalId: item.terminalId,
-                  departamentoAuditoriaId: item.departamentoAuditoriaId,
-                  fechaCapturaDispositivo: item.fechaCapturaDispositivo,
-                  codigoError: resItem.estado,
-                  mensajeError: resItem.mensaje,
-                  esContingencia: item.esContingencia,
-                  motivoContingencia: item.motivoContingencia,
-                  payload: item.payload,
-                  registradoEn: new Date().toISOString(),
-                };
-                await idbDatabase.put<ContingenciaInspeccionStore>(
-                  'contingencias_inspecciones',
-                  contingencia,
-                );
-                await idbDatabase.delete('cola_inspecciones', item.idLocalCliente);
-              }
-            }
-          } catch (batchErr: any) {
-            // Fallo de red o caída del servidor durante el envío del lote: conservar todas las capturas con backoff exponencial
-            const msg = batchErr?.message || 'Error de conexión al sincronizar con el servidor.';
-            for (const item of loteItems) {
-              await this.marcarErrorReintentable(item, msg);
+            if (
+              resItem.estado === 'SINCRONIZADA' ||
+              resItem.estado === 'REPETIDA_IDEMPOTENTE'
+            ) {
+              // Confirmado en MySQL: eliminar de la cola pendiente
+              await idbDatabase.delete('cola_inspecciones', item.idLocalCliente);
+              totalSincronizadas += 1;
+            } else if (resItem.estado === 'ERROR_REINTENTABLE') {
+              await this.marcarErrorReintentable(
+                item,
+                resItem.mensaje || 'Error temporal al guardar en MySQL; pendiente de reintento.',
+                resItem.folio,
+                resItem.inspeccionId,
+              );
+            } else if (resItem.estado === 'REQUIERE_REVISION') {
+              await idbDatabase.put<ColaInspeccionStore>('cola_inspecciones', {
+                ...item,
+                estado: 'REQUIERE_REVISION',
+                ultimoError: resItem.mensaje,
+                folioServidor: resItem.folio ?? item.folioServidor,
+                inspeccionIdServidor: resItem.inspeccionId ?? item.inspeccionIdServidor,
+                actualizadoEn: new Date().toISOString(),
+              });
+            } else {
+              // RECHAZADA o CONFLICTO_IDEMPOTENCIA: conservar en contingencias_inspecciones para auditoría/revisión sin bloquear la cola
+              const contingencia: ContingenciaInspeccionStore = {
+                idLocalCliente: item.idLocalCliente,
+                inspectorId: item.inspectorId,
+                inspectorUsuario: item.inspectorUsuario,
+                inspectorNombre: item.inspectorNombre,
+                terminalId: item.terminalId,
+                departamentoAuditoriaId: item.departamentoAuditoriaId,
+                fechaCapturaDispositivo: item.fechaCapturaDispositivo,
+                codigoError: resItem.estado,
+                mensajeError: resItem.mensaje,
+                esContingencia: item.esContingencia,
+                motivoContingencia: item.motivoContingencia,
+                payload: item.payload,
+                registradoEn: new Date().toISOString(),
+              };
+              await idbDatabase.put<ContingenciaInspeccionStore>(
+                'contingencias_inspecciones',
+                contingencia,
+              );
+              await idbDatabase.delete('cola_inspecciones', item.idLocalCliente);
             }
           }
+        } catch (batchErr: any) {
+          // Fallo de red o caída del servidor durante el envío del lote: conservar todas las capturas con backoff exponencial
+          const msg = batchErr?.message || 'Error de conexión al sincronizar con el servidor.';
+          for (const item of loteItems) {
+            await this.marcarErrorReintentable(item, msg);
+          }
         }
-      } finally {
-        await this.releaseSyncLock();
-        await this.notifyListeners();
-        this.syncInFlightPromise = null;
       }
+    } finally {
+      await this.releaseSyncLock();
+      await this.notifyListeners();
+      this.syncInFlightPromise = null;
+    }
 
-      const resumenFinal = await this.obtenerResumenCola();
-      return {
-        sincronizadas: totalSincronizadas,
-        pendientes: resumenFinal.pendientes + resumenFinal.erroresReintentables,
-      };
-    })();
-
-    return this.syncInFlightPromise;
+    const resumenFinal = await this.obtenerResumenCola();
+    return {
+      sincronizadas: totalSincronizadas,
+      pendientes: resumenFinal.pendientes + resumenFinal.erroresReintentables,
+    };
   }
 
   private async marcarErrorReintentable(

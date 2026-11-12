@@ -18,6 +18,7 @@ import { useAuthSession } from '@/providers/auth-provider';
 import { useTerminalStatus } from '@/features/terminales/hooks/use-terminal-status';
 import { terminalStorage } from '@/features/terminales/services/terminal-storage';
 import { TerminalVinculacionModal } from '@/features/terminales/components/terminal-vinculacion-modal';
+import { RespaldoOfflineModal } from '../components/respaldo-offline-modal';
 import type {
   InspeccionFilaResponse,
   LineaOperativa,
@@ -158,6 +159,7 @@ export function InspeccionesPage() {
     recargar: recargarTerminal,
   } = useTerminalStatus();
   const [modalVinculacionAbierto, setModalVinculacionAbierto] = useState(false);
+  const [modalRespaldoAbierto, setModalRespaldoAbierto] = useState(false);
 
   // Estado de la cola offline y conectividad
   const [resumenCola, setResumenCola] = useState<ResumenColaOffline>({
@@ -671,8 +673,63 @@ export function InspeccionesPage() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 space-y-3">
-      {/* VISTA BLOQUEANTE CUANDO EL INSPECTOR NO TIENE TERMINAL FÍSICA VINCULADA */}
-      {esInspector && terminalEstado === 'no_vinculada' ? (
+      {/* VISTA CUANDO LA TERMINAL FUE DESVINCULADA EN SERVIDOR PERO TIENE COLA PENDIENTE */}
+      {terminalEstado === 'desvinculada_con_cola' ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12 bg-white rounded-2xl border-2 border-amber-300 shadow-sm text-center my-auto min-h-[460px]">
+          <div className="h-20 w-20 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 mb-6 shadow-xs">
+            <Icon name="warning" size="40px" />
+          </div>
+
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold tracking-wide uppercase bg-amber-100 text-amber-900 border border-amber-200 mb-3">
+            <span className="h-2 w-2 rounded-full bg-amber-600 animate-pulse"></span>
+            Registros Locales Protegidos
+          </span>
+
+          <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight uppercase max-w-xl">
+            Estación Desvinculada con Cola Pendiente
+          </h2>
+
+          <p className="text-sm text-slate-600 max-w-lg mt-3 leading-relaxed">
+            {terminalError ||
+              'Esta estación fue desvinculada o revocada en el servidor, pero tiene capturas locales pendientes de sincronizar. Para evitar la pérdida de información, descargue un respaldo de contingencia (.mbcbak) o re-vincule la terminal.'}
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center gap-3 mt-8">
+            <Button
+              type="button"
+              variant="primary"
+              size="lg"
+              onClick={() => setModalRespaldoAbierto(true)}
+              className="font-bold text-sm h-11 px-6 shadow-md gap-2 cursor-pointer bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              <Icon name="download" size="18px" />
+              <span>Exportar Respaldo (.mbcbak)</span>
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              onClick={() => setModalVinculacionAbierto(true)}
+              className="text-sm h-11 px-5 border-slate-300 text-slate-700 hover:bg-slate-50 gap-2 cursor-pointer"
+            >
+              <Icon name="key" size="18px" />
+              <span>Re-vincular Estación</span>
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              onClick={recargarTerminal}
+              className="text-sm h-11 px-4 border-slate-300 text-slate-700 hover:bg-slate-50 gap-2 cursor-pointer"
+            >
+              <Icon name="refresh" size="18px" />
+              <span>Comprobar Estado</span>
+            </Button>
+          </div>
+        </div>
+      ) : esInspector && terminalEstado === 'no_vinculada' ? (
         <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12 bg-white rounded-2xl border border-slate-200 shadow-sm text-center my-auto min-h-[460px]">
           <div className="h-20 w-20 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 mb-6 shadow-xs">
             <Icon name="phonelink_erase" size="40px" />
@@ -768,21 +825,35 @@ export function InspeccionesPage() {
                 )}
               </div>
 
-              {totalColaPendiente > 0 && (
+              <div className="flex items-center gap-2">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={handleSincronizarManual}
-                  disabled={sincronizandoManual || resumenCola.sincronizando > 0}
-                  className="h-7 px-2.5 text-[11px] font-bold cursor-pointer"
+                  onClick={() => setModalRespaldoAbierto(true)}
+                  className="h-7 px-2.5 text-[11px] font-bold cursor-pointer bg-white text-slate-800 border-slate-300 hover:bg-slate-50"
+                  title="Exportar o importar archivo de contingencia (.mbcbak)"
                 >
-                  <Icon name="sync" size="14px" />
-                  <span className="ml-1">
-                    {sincronizandoManual ? 'Sincronizando...' : 'Sincronizar ahora'}
-                  </span>
+                  <Icon name="archive" size="14px" className="mr-1" />
+                  <span>Contingencia (.mbcbak)</span>
                 </Button>
-              )}
+
+                {totalColaPendiente > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSincronizarManual}
+                    disabled={sincronizandoManual || resumenCola.sincronizando > 0}
+                    className="h-7 px-2.5 text-[11px] font-bold cursor-pointer"
+                  >
+                    <Icon name="sync" size="14px" />
+                    <span className="ml-1">
+                      {sincronizandoManual ? 'Sincronizando...' : 'Sincronizar ahora'}
+                    </span>
+                  </Button>
+                )}
+              </div>
             </div>
           )}
 
@@ -1077,6 +1148,18 @@ export function InspeccionesPage() {
         onSuccess={() => {
           recargarTerminal();
           cargarRegistros();
+        }}
+      />
+
+      {/* MODAL DE RESPALDO Y CONTINGENCIA OFFLINE (.mbcbak) */}
+      <RespaldoOfflineModal
+        isOpen={modalRespaldoAbierto}
+        onClose={() => setModalRespaldoAbierto(false)}
+        totalPendientes={totalColaPendiente}
+        onRespaldoImportado={async () => {
+          const resumen = await inspeccionesOfflineService.obtenerResumenCola();
+          setResumenCola(resumen);
+          void cargarRegistros(1, false);
         }}
       />
 

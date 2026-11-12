@@ -12,6 +12,7 @@ import { inspeccionesApi } from '@/features/inspecciones/api/inspecciones-api';
 import type { Departamento } from '@/features/departamentos/types/departamentos.types';
 import { TerminalesToolbar } from '../components/terminales/terminales-toolbar';
 import { TerminalesTabla } from '../components/terminales/terminales-tabla';
+import { RespaldoOfflineModal } from '@/features/inspecciones/components/respaldo-offline-modal';
 
 export function TerminalesPage() {
   const [terminales, setTerminales] = useState<TerminalGestionItem[]>([]);
@@ -46,6 +47,9 @@ export function TerminalesPage() {
   // Modal Revocar
   const [terminalRevocar, setTerminalRevocar] = useState<TerminalGestionItem | null>(null);
   const [guardandoRevocar, setGuardandoRevocar] = useState(false);
+
+  // Modal Respaldo de Contingencia
+  const [modalRespaldoAbierto, setModalRespaldoAbierto] = useState(false);
 
   const cargarDatos = useCallback(async () => {
     try {
@@ -205,8 +209,20 @@ export function TerminalesPage() {
           </span>
         </div>
 
-        {/* Botón NUEVA TERMINAL */}
+        {/* Botones de Acción */}
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="md"
+            onClick={() => setModalRespaldoAbierto(true)}
+            className="h-9 px-3.5 font-bold text-xs uppercase tracking-wider gap-1.5 shadow-2xs touch-manipulation cursor-pointer border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center"
+            title="Herramientas de respaldo y recuperación offline (.mbcbak)"
+          >
+            <Icon name="archive" size="18px" />
+            <span>Contingencia (.mbcbak)</span>
+          </Button>
+
           <Button
             type="button"
             variant="primary"
@@ -398,6 +414,12 @@ export function TerminalesPage() {
           </ModalFooter>
         </form>
       </Modal>
+
+      {/* MODAL 6: RESPALDO Y CONTINGENCIA OFFLINE (.mbcbak) */}
+      <RespaldoOfflineModal
+        isOpen={modalRespaldoAbierto}
+        onClose={() => setModalRespaldoAbierto(false)}
+      />
     </div>
   );
 }

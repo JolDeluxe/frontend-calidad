@@ -29,6 +29,31 @@ export interface SolicitarRecuperacionResult {
   terminalNombre: string;
 }
 
+export interface SuperAdminItem {
+  id: number;
+  nombre: string;
+  usuario: string;
+}
+
+export interface VerificarAutorizacionSuperAdminParams {
+  superAdminId: number;
+  password: string;
+  accion: string;
+  motivo?: string;
+  terminalId?: number;
+}
+
+export interface VerificarAutorizacionSuperAdminResult {
+  autorizado: boolean;
+  fechaAutorizacion: string;
+  autorizador: {
+    id: number;
+    nombre: string;
+    usuario: string;
+  };
+  accion: string;
+}
+
 export const terminalesApi = {
   /**
    * Consulta el estado de vinculación física del navegador actual (/estado).
@@ -117,6 +142,28 @@ export const terminalesApi = {
       ApiResponse<{ terminal: TerminalPublicInfo; credencial: string }>
     >('/terminales', data);
     if (!res.data) throw new Error('Respuesta inválida al crear terminal');
+    return res.data;
+  },
+
+  /**
+   * Obtiene la lista de usuarios con rol SUPER_ADMIN activos para autorizaciones presenciales.
+   */
+  getSuperAdmins: async (): Promise<SuperAdminItem[]> => {
+    const res = await httpClient.get<ApiResponse<SuperAdminItem[]>>('/terminales/superadmins');
+    return res.data || [];
+  },
+
+  /**
+   * Verifica la contraseña de un Super Administrador para autorizar contingencias o desvinculación.
+   */
+  verificarAutorizacionSuperAdmin: async (
+    params: VerificarAutorizacionSuperAdminParams,
+  ): Promise<VerificarAutorizacionSuperAdminResult> => {
+    const res = await httpClient.post<ApiResponse<VerificarAutorizacionSuperAdminResult>>(
+      '/terminales/verificar-autorizacion-superadmin',
+      params,
+    );
+    if (!res.data) throw new Error('Respuesta inválida al verificar autorización de SuperAdmin');
     return res.data;
   },
 };

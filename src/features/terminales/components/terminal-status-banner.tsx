@@ -9,6 +9,7 @@ export interface TerminalStatusBannerProps {
   errorMensaje?: string | null;
   onAbrirVinculacion: () => void;
   onReintentar?: () => void;
+  onExportarRespaldo?: () => void;
 }
 
 export function TerminalStatusBanner({
@@ -17,6 +18,7 @@ export function TerminalStatusBanner({
   errorMensaje,
   onAbrirVinculacion,
   onReintentar,
+  onExportarRespaldo,
 }: TerminalStatusBannerProps) {
   if (estado === 'vinculada' && terminal) {
     return (
@@ -48,6 +50,54 @@ export function TerminalStatusBanner({
         <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
           <Icon name="verified" size="14px" className="text-emerald-600" />
           <span>Activa para captura</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (estado === 'desvinculada_con_cola') {
+    return (
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 bg-amber-500/10 border-2 border-amber-500/80 rounded-xl mb-3 shadow-sm">
+        <div className="flex items-start sm:items-center gap-3">
+          <div className="p-2 bg-amber-100 rounded-lg text-amber-800 shrink-0">
+            <Icon name="warning" size="22px" />
+          </div>
+          <div>
+            <h4 className="text-xs font-black text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+              <span>Terminal Desvinculada con Registros Pendientes en Cola</span>
+              {terminal && (
+                <span className="font-mono text-[11px] bg-amber-200/80 text-amber-900 px-1.5 py-0.2 rounded font-bold">
+                  {terminal.nombre}
+                </span>
+              )}
+            </h4>
+            <p className="text-xs text-amber-900/90 mt-0.5 font-medium leading-relaxed">
+              {errorMensaje ||
+                'Esta estación fue desvinculada o revocada, pero contiene capturas locales que no se han guardado en MySQL. No borre los datos del navegador.'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {onExportarRespaldo && (
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={onExportarRespaldo}
+              className="font-bold h-8 text-xs px-3 bg-amber-600 hover:bg-amber-700 text-white shadow-xs"
+            >
+              <Icon name="download" size="14px" className="mr-1.5" />
+              Exportar Respaldo (.mbcbak)
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onAbrirVinculacion}
+            className="font-semibold h-8 text-xs px-2.5 bg-white border-amber-300 text-amber-950 hover:bg-amber-50"
+          >
+            <Icon name="key" size="14px" className="mr-1" />
+            Re-vincular
+          </Button>
         </div>
       </div>
     );
