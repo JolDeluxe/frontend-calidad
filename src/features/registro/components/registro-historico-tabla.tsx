@@ -160,7 +160,7 @@ export function RegistroHistoricoTabla({
               <th className="py-2 px-1 xl:px-1.5 w-[8%] truncate">Depto</th>
               <th className="py-2 px-1 xl:px-1.5 w-[7.5%] truncate">Fecha</th>
               <th className="py-2 px-1 xl:px-1.5 w-[4.5%] truncate">Lista</th>
-              <th className="py-2 px-1 xl:px-1.5 w-[7%] truncate">Lote</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[7%] truncate ">Lote</th>
               <th className="py-2 px-0.5 xl:px-1 w-[48px] text-center">Línea</th>
               <th className="py-2 px-1 xl:px-1.5 w-[6.5%] truncate">Modelo</th>
               <th className="py-2 px-1.5 xl:px-2.5 w-[35%]">Descripción</th>
@@ -242,7 +242,7 @@ export function RegistroHistoricoTabla({
             <th className="py-2 px-1 xl:px-1.5 w-[8%] truncate">Depto</th>
             <th className="py-2 px-1 xl:px-1.5 w-[7.5%] truncate">Fecha</th>
             <th className="py-2 px-1 xl:px-1.5 w-[4.5%] truncate">Lista</th>
-            <th className="py-2 px-1 xl:px-1.5 w-[7%] truncate">Lote</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[7%] truncate text-center">Lote</th>
             <th className="py-2 px-0.5 xl:px-1 w-[48px] text-center">Línea</th>
             <th className="py-2 px-1 xl:px-1.5 w-[6.5%] truncate">Modelo</th>
             <th className="py-2 px-1.5 xl:px-2.5 w-[35%]">Descripción</th>
@@ -311,7 +311,7 @@ export function RegistroHistoricoTabla({
                   </td>
 
                   {/* Lote */}
-                  <td className="py-2 px-1 xl:px-1.5 font-mono font-extrabold text-sm text-marca-primario truncate" title={row.lote}>
+                  <td className="py-2 px-3 xl:px-4 font-mono font-extrabold text-sm text-marca-primario truncate text-center" title={row.lote}>
                     <HighlightText text={row.lote} highlight={busqueda} />
                   </td>
 
@@ -337,7 +337,7 @@ export function RegistroHistoricoTabla({
                   </td>
 
                   {/* Clave de Defecto */}
-                  <td className="py-2 px-0.5 text-center font-mono font-extrabold text-sm text-brand-primary truncate" title={`Clave ${row.defectoClave}`}>
+                  <td className="py-2 px-5 text-center font-mono font-extrabold text-3 text-brand-primary truncate" title={`Clave ${row.defectoClave}`}>
                     <HighlightText text={row.defectoClave} highlight={busqueda} />
                   </td>
 

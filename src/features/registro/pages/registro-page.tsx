@@ -762,6 +762,43 @@ export function RegistroPage() {
                 </div>
               )}
 
+              {/* Selector Dependiente: Modalidad RANGO personalizado (Desde y Hasta) */}
+              {filtros.periodo === 'rango' && (
+                <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in duration-150">
+                  <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-lg px-2.5 h-8 shadow-2xs">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Del</span>
+                    <input
+                      type="date"
+                      value={filtros.fechaDesde || ''}
+                      max={filtros.fechaHasta || periodosDisponibles?.rangoTotal.hoy || hoyIso}
+                      onChange={(e) =>
+                        aplicarNuevosFiltros((prev) => ({
+                          ...prev,
+                          fechaDesde: e.target.value || undefined,
+                        }))
+                      }
+                      className="text-xs text-slate-800 font-semibold bg-transparent focus:outline-none cursor-pointer"
+                      title="Fecha inicial"
+                    />
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">al</span>
+                    <input
+                      type="date"
+                      value={filtros.fechaHasta || ''}
+                      min={filtros.fechaDesde || undefined}
+                      max={periodosDisponibles?.rangoTotal.hoy || hoyIso}
+                      onChange={(e) =>
+                        aplicarNuevosFiltros((prev) => ({
+                          ...prev,
+                          fechaHasta: e.target.value || undefined,
+                        }))
+                      }
+                      className="text-xs text-slate-800 font-semibold bg-transparent focus:outline-none cursor-pointer"
+                      title="Fecha final"
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Selector de Línea: Solo aplica si el departamento seleccionado tiene más de 1 línea */}
               {tieneMultiplesLineas && deptoSeleccionado && (
                 <div className="flex items-center gap-1 shrink-0 animate-in fade-in duration-150">

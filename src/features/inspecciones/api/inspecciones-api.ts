@@ -53,12 +53,14 @@ function construirQueryStringInspecciones(params?: GetFilasInspeccionQueryParams
 }
 
 export interface DashboardMetricasQueryParams {
-  periodo?: 'hoy' | 'dia' | 'semana' | 'mes' | 'anio';
+  periodo?: 'hoy' | 'dia' | 'semana' | 'mes' | 'anio' | 'rango';
   dia?: string;
   semana?: number;
   anioIso?: number;
   mes?: number;
   anio?: number;
+  fechaDesde?: string;
+  fechaHasta?: string;
 }
 
 export interface ContadorDeptoMetrica {
@@ -250,6 +252,8 @@ export const inspeccionesApi = {
     if (params?.anioIso !== undefined) query.set('anioIso', params.anioIso.toString());
     if (params?.mes !== undefined) query.set('mes', params.mes.toString());
     if (params?.anio !== undefined) query.set('anio', params.anio.toString());
+    if (params?.fechaDesde) query.set('fechaDesde', params.fechaDesde);
+    if (params?.fechaHasta) query.set('fechaHasta', params.fechaHasta);
 
     const qs = query.toString() ? `?${query.toString()}` : '';
     const res = await httpClient.get<ApiResponse<DashboardMetricasResponse>>(

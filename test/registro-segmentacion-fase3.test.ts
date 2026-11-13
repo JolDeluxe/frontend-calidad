@@ -350,27 +350,33 @@ describe('Fase 3.1 Frontend — Ajustes UX y simplificación de segmentación en
     expect('defectoClave' in queryPeriodos).toBe(false);
   });
 
-  it('7. No existe la modalidad Rango personalizado', () => {
+  it('7. Soporta la modalidad Rango personalizado con fechas desde y hasta', () => {
     const idsModalidades = MODALIDADES_PERIODO_OPCIONES.map((m) => m.id as string);
-    expect(idsModalidades).not.toContain('rango');
+    expect(idsModalidades).toContain('rango');
 
-    // Si llega una URL con periodo=rango&desde=2025-01-01&hasta=2025-01-10, se normaliza a modo acotado seguro
+    // Al recibir parámetros de rango personalizado, se leen y preservan correctamente
     const paramsRango = new URLSearchParams(
       'periodo=rango&desde=2025-01-01&hasta=2025-01-10'
     );
     const leido = leerFiltrosDesdeSearchParams(paramsRango);
-    expect(leido.periodo as string).not.toBe('rango');
-    expect('fechaDesde' in leido).toBe(false);
-    expect('fechaHasta' in leido).toBe(false);
+    expect(leido.periodo).toBe('rango');
+    expect(leido.fechaDesde).toBe('2025-01-01');
+    expect(leido.fechaHasta).toBe('2025-01-10');
 
     const serializado = serializarFiltrosASearchParams(leido);
-    expect(serializado.has('desde')).toBe(false);
-    expect(serializado.has('hasta')).toBe(false);
+    expect(serializado.get('periodo')).toBe('rango');
+    expect(serializado.get('desde')).toBe('2025-01-01');
+    expect(serializado.get('hasta')).toBe('2025-01-10');
+
+    const query = construirQueryInspecciones(leido);
+    expect(query.periodo).toBe('rango');
+    expect(query.fechaDesde).toBe('2025-01-01');
+    expect(query.fechaHasta).toBe('2025-01-10');
   });
 
   it('8. No existe la modalidad Todos ni se envía periodo=todos al backend', () => {
     const idsModalidades = MODALIDADES_PERIODO_OPCIONES.map((m) => m.id as string);
-    expect(idsModalidades).toEqual(['hoy', 'dia', 'semana', 'mes', 'anio']);
+    expect(idsModalidades).toEqual(['hoy', 'dia', 'semana', 'mes', 'anio', 'rango']);
     expect(idsModalidades).not.toContain('todos');
 
     // Incluso si se forzara un objeto inválido en runtime, construirQueryInspecciones nunca emite 'todos'

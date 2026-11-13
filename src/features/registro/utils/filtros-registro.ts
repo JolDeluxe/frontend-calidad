@@ -22,6 +22,7 @@ export const MODALIDADES_PERIODO_OPCIONES: Array<{
   { id: 'semana', label: 'Semana', shortLabel: 'Semana' },
   { id: 'mes', label: 'Mes', shortLabel: 'Mes' },
   { id: 'anio', label: 'Año', shortLabel: 'Año' },
+  { id: 'rango', label: 'Rango Personalizado', shortLabel: 'Rango' },
 ];
 
 /**
@@ -306,6 +307,11 @@ export function leerFiltrosDesdeSearchParams(searchParams: URLSearchParams): Fil
       : undefined;
   const diaValido = rawDia && esFechaCalendarioValida(rawDia) ? rawDia : undefined;
 
+  const rawDesde = searchParams.get('desde') || searchParams.get('fechaDesde');
+  const rawHasta = searchParams.get('hasta') || searchParams.get('fechaHasta');
+  const fechaDesdeValida = rawDesde && esFechaCalendarioValida(rawDesde) ? rawDesde : undefined;
+  const fechaHastaValida = rawHasta && esFechaCalendarioValida(rawHasta) ? rawHasta : undefined;
+
   let periodo: ModalidadPeriodoRegistro = 'hoy';
   let esSeleccionInicial = false;
 
@@ -314,7 +320,8 @@ export function leerFiltrosDesdeSearchParams(searchParams: URLSearchParams): Fil
     rawPeriodo === 'anio' ||
     rawPeriodo === 'mes' ||
     rawPeriodo === 'semana' ||
-    rawPeriodo === 'dia'
+    rawPeriodo === 'dia' ||
+    rawPeriodo === 'rango'
   ) {
     periodo = rawPeriodo;
   } else if (rawPeriodo === 'todos') {
@@ -327,6 +334,8 @@ export function leerFiltrosDesdeSearchParams(searchParams: URLSearchParams): Fil
       periodo = 'hoy';
       esSeleccionInicial = true;
     }
+  } else if (fechaDesdeValida || fechaHastaValida) {
+    periodo = 'rango';
   } else if (diaValido) {
     periodo = 'dia';
   } else if (semanaNum || parsedSemanaCodigo) {
@@ -336,8 +345,7 @@ export function leerFiltrosDesdeSearchParams(searchParams: URLSearchParams): Fil
   } else if (anioNum) {
     periodo = 'anio';
   } else {
-    // Entrada limpia al módulo o modalidad obsoleta (`rango`, etc.):
-    // iniciar en modo seguro acotado (`hoy` si tiene registros, o el más reciente disponible)
+    // Entrada limpia al módulo: iniciar en modo seguro acotado
     periodo = 'hoy';
     esSeleccionInicial = true;
   }
@@ -366,6 +374,8 @@ export function leerFiltrosDesdeSearchParams(searchParams: URLSearchParams): Fil
       anioIsoNum && semanaNum ? formatearSemanaIsoCodigo(anioIsoNum, semanaNum) : undefined,
     mes: mesFinal,
     dia: diaValido,
+    fechaDesde: fechaDesdeValida,
+    fechaHasta: fechaHastaValida,
     busqueda: busquedaRaw?.trim() || undefined,
     departamentoId: deptoRaw && /^\d+$/.test(deptoRaw) ? Number(deptoRaw) : undefined,
     inspectorId: inspectorRaw && /^\d+$/.test(inspectorRaw) ? Number(inspectorRaw) : undefined,
@@ -376,7 +386,7 @@ export function leerFiltrosDesdeSearchParams(searchParams: URLSearchParams): Fil
 
 /**
  * Serializa `FiltrosRegistroState` hacia `URLSearchParams` manteniendo limpia la URL.
- * Nunca serializa `periodo=todos`, `periodo=rango` ni parámetros de defectos.
+ * Nunca serializa `periodo=todos` ni parámetros de defectos.
  */
 export function serializarFiltrosASearchParams(filtros: FiltrosRegistroState): URLSearchParams {
   const params = new URLSearchParams();
@@ -386,7 +396,8 @@ export function serializarFiltrosASearchParams(filtros: FiltrosRegistroState): U
     filtros.periodo === 'dia' ||
     filtros.periodo === 'semana' ||
     filtros.periodo === 'mes' ||
-    filtros.periodo === 'anio'
+    filtros.periodo === 'anio' ||
+    filtros.periodo === 'rango'
       ? filtros.periodo
       : 'hoy';
 
@@ -410,6 +421,9 @@ export function serializarFiltrosASearchParams(filtros: FiltrosRegistroState): U
     if (filtros.anio) params.set('anio', String(filtros.anio));
     if (filtros.mes) params.set('mes', String(filtros.mes));
     if (filtros.dia) params.set('dia', filtros.dia);
+  } else if (periodoSeguro === 'rango') {
+    if (filtros.fechaDesde) params.set('desde', filtros.fechaDesde);
+    if (filtros.fechaHasta) params.set('hasta', filtros.fechaHasta);
   }
 
   if (filtros.busqueda?.trim()) params.set('q', filtros.busqueda.trim());
@@ -594,6 +608,15 @@ export function sincronizarFiltrosConPeriodosDisponibles(
       const primerDiaDisponible = diasDelMesActivo[0];
       siguiente.dia = primerDiaDisponible?.fecha ?? undefined;
     }
+  } else if (siguiente.periodo === 'rango') {
+    if (!siguiente.fechaHasta) {
+      siguiente.fechaHasta = periodos.rangoTotal.fechaMaxima || hoy;
+    }
+    if (!siguiente.fechaDesde) {
+      const dt = new Date(siguiente.fechaHasta + 'T12:00:00Z');
+      dt.setUTCDate(dt.getUTCDate() - 6);
+      siguiente.fechaDesde = dt.toISOString().slice(0, 10);
+    }
   }
 
   return siguiente;
@@ -621,7 +644,7 @@ export function construirQueryPeriodosDisponibles(
 /**
  * Construye los parámetros exactos para `GET /api/v1/inspecciones` y `GET /api/v1/inspecciones/exportar`.
  * Garantiza que la tabla y la exportación utilicen exactamente la misma lógica de filtrado
- * y que nunca se envíe `periodo=todos`, `periodo=rango` ni `defectoClave`.
+ * y que nunca se envíe `periodo=todos` ni `defectoClave`.
  */
 export function construirQueryInspecciones(
   filtros: FiltrosRegistroState
@@ -631,7 +654,8 @@ export function construirQueryInspecciones(
     filtros.periodo === 'dia' ||
     filtros.periodo === 'semana' ||
     filtros.periodo === 'mes' ||
-    filtros.periodo === 'anio'
+    filtros.periodo === 'anio' ||
+    filtros.periodo === 'rango'
       ? filtros.periodo
       : 'hoy';
 
@@ -660,6 +684,10 @@ export function construirQueryInspecciones(
       break;
     case 'dia':
       base.dia = filtros.dia;
+      break;
+    case 'rango':
+      base.fechaDesde = filtros.fechaDesde;
+      base.fechaHasta = filtros.fechaHasta;
       break;
   }
 
@@ -722,6 +750,34 @@ export function puedeEjecutarConsultaTemporal(
     return { listo: true };
   }
 
+  if (filtros.periodo === 'rango') {
+    if (!filtros.fechaDesde && !filtros.fechaHasta) {
+      return { listo: false, sinRegistrosEnPeriodo: true, errorValidacion: 'Seleccione un rango de fechas' };
+    }
+    if (filtros.fechaDesde && !esFechaCalendarioValida(filtros.fechaDesde)) {
+      return { listo: false, errorValidacion: 'Fecha inicial no válida' };
+    }
+    if (filtros.fechaHasta && !esFechaCalendarioValida(filtros.fechaHasta)) {
+      return { listo: false, errorValidacion: 'Fecha final no válida' };
+    }
+    if (filtros.fechaDesde && filtros.fechaHasta && filtros.fechaDesde > filtros.fechaHasta) {
+      return { listo: false, errorValidacion: 'La fecha inicial no puede ser posterior a la fecha final' };
+    }
+    if (filtros.fechaHasta && filtros.fechaHasta > hoyIso) {
+      return {
+        listo: false,
+        errorValidacion: `La fecha final no puede ser futura (máximo: ${formatearFechaCortaIso(hoyIso)})`,
+      };
+    }
+    if (filtros.fechaDesde && filtros.fechaDesde > hoyIso) {
+      return {
+        listo: false,
+        errorValidacion: `La fecha inicial no puede ser futura (máximo: ${formatearFechaCortaIso(hoyIso)})`,
+      };
+    }
+    return { listo: true };
+  }
+
   return { listo: true };
 }
 
@@ -764,6 +820,18 @@ export function describirPeriodoActivo(
       const diaObj = periodos?.dias.find((d) => d.fecha === filtros.dia);
       if (diaObj) return formatearFechaCortaIso(diaObj.fecha);
       return 'Por Día';
+    }
+    case 'rango': {
+      if (filtros.fechaDesde && filtros.fechaHasta) {
+        return `${formatearFechaCortaIso(filtros.fechaDesde)} – ${formatearFechaCortaIso(filtros.fechaHasta)}`;
+      }
+      if (filtros.fechaDesde) {
+        return `Desde ${formatearFechaCortaIso(filtros.fechaDesde)}`;
+      }
+      if (filtros.fechaHasta) {
+        return `Hasta ${formatearFechaCortaIso(filtros.fechaHasta)}`;
+      }
+      return 'Rango Personalizado';
     }
   }
 }
@@ -813,6 +881,20 @@ export function obtenerConteoPeriodoSeleccionado(
     return d
       ? { totalDefectos: d.totalDefectos, totalInspecciones: d.totalInspecciones }
       : { totalDefectos: 0, totalInspecciones: 0 };
+  }
+  if (filtros.periodo === 'rango') {
+    const desde = filtros.fechaDesde;
+    const hasta = filtros.fechaHasta;
+    if (!desde && !hasta) return null;
+    let totalDefectos = 0;
+    let totalInspecciones = 0;
+    for (const d of periodos.dias) {
+      if ((!desde || d.fecha >= desde) && (!hasta || d.fecha <= hasta)) {
+        totalDefectos += d.totalDefectos;
+        totalInspecciones += d.totalInspecciones;
+      }
+    }
+    return { totalDefectos, totalInspecciones };
   }
 
   return null;

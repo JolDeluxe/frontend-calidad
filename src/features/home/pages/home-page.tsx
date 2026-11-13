@@ -49,7 +49,7 @@ export function HomePage() {
   // 2. Estado de filtros temporales (Por defecto: SEMANA)
   const [periodo, setPeriodo] = useState<ModalidadPeriodoRegistro>(() => {
     const raw = searchParams.get('periodo');
-    if (raw === 'hoy' || raw === 'dia' || raw === 'semana' || raw === 'mes' || raw === 'anio') {
+    if (raw === 'hoy' || raw === 'dia' || raw === 'semana' || raw === 'mes' || raw === 'anio' || raw === 'rango') {
       return raw;
     }
     return 'semana'; // Requisito: por defecto Semana
@@ -77,6 +77,16 @@ export function HomePage() {
 
   const [dia, setDia] = useState<string | undefined>(() => {
     const raw = searchParams.get('dia');
+    return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : undefined;
+  });
+
+  const [fechaDesde, setFechaDesde] = useState<string | undefined>(() => {
+    const raw = searchParams.get('desde') || searchParams.get('fechaDesde');
+    return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : undefined;
+  });
+
+  const [fechaHasta, setFechaHasta] = useState<string | undefined>(() => {
+    const raw = searchParams.get('hasta') || searchParams.get('fechaHasta');
     return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : undefined;
   });
 
@@ -138,6 +148,8 @@ export function HomePage() {
         anioIso: periodo === 'semana' ? anioIso : undefined,
         mes: periodo === 'mes' ? mes : undefined,
         anio: periodo === 'mes' || periodo === 'anio' ? anio : undefined,
+        fechaDesde: periodo === 'rango' ? fechaDesde : undefined,
+        fechaHasta: periodo === 'rango' ? fechaHasta : undefined,
       });
 
       // 1. Departamentos con registros
@@ -190,7 +202,7 @@ export function HomePage() {
     } finally {
       setCargandoMetricas(false);
     }
-  }, [periodo, dia, semana, anioIso, mes, anio]);
+  }, [periodo, dia, semana, anioIso, mes, anio, fechaDesde, fechaHasta]);
 
   useEffect(() => {
     // Si estamos en semana pero aún no se define la semana y hay periodos cargados, esperar
@@ -222,6 +234,8 @@ export function HomePage() {
         semana?: number;
         mes?: number;
         dia?: string;
+        fechaDesde?: string;
+        fechaHasta?: string;
       }
     ) => {
       const p = new URLSearchParams();
@@ -243,11 +257,16 @@ export function HomePage() {
       } else if (nuevoPeriodo === 'dia') {
         const d = valores?.dia ?? dia;
         if (d) p.set('dia', d);
+      } else if (nuevoPeriodo === 'rango') {
+        const fd = valores?.fechaDesde ?? fechaDesde;
+        const fh = valores?.fechaHasta ?? fechaHasta;
+        if (fd) p.set('desde', fd);
+        if (fh) p.set('hasta', fh);
       }
 
       setSearchParams(p, { replace: true });
     },
-    [anioIso, semana, anio, mes, dia, setSearchParams]
+    [anioIso, semana, anio, mes, dia, fechaDesde, fechaHasta, setSearchParams]
   );
 
   // Cambiar modalidad de período
@@ -278,6 +297,18 @@ export function HomePage() {
       const ultDia = periodosDisponibles?.dias?.[0]?.fecha || hoyIso;
       setDia(ultDia);
       actualizarFiltrosUrl('dia', { dia: ultDia });
+    } else if (nuevaModalidad === 'rango') {
+      const hoy = periodosDisponibles?.rangoTotal.hoy || hoyIso;
+      const fHasta = fechaHasta || hoy;
+      let fDesde = fechaDesde;
+      if (!fDesde) {
+        const dt = new Date(fHasta + 'T12:00:00Z');
+        dt.setUTCDate(dt.getUTCDate() - 6);
+        fDesde = dt.toISOString().slice(0, 10);
+      }
+      setFechaDesde(fDesde);
+      setFechaHasta(fHasta);
+      actualizarFiltrosUrl('rango', { fechaDesde: fDesde, fechaHasta: fHasta });
     }
   };
 
@@ -295,9 +326,11 @@ export function HomePage() {
       semana,
       mes,
       dia,
+      fechaDesde,
+      fechaHasta,
     };
     return describirPeriodoActivo(estadoFiltros, periodosDisponibles);
-  }, [periodo, anio, anioIso, semana, mes, dia, periodosDisponibles]);
+  }, [periodo, anio, anioIso, semana, mes, dia, fechaDesde, fechaHasta, periodosDisponibles]);
 
   // Defectos cruzados filtrados por ruta (si se hizo clic en un flujo) y límite visual
   const defectosCruzadosFiltrados = useMemo(() => {
@@ -587,6 +620,41 @@ export function HomePage() {
                   setMes(nuevoMes);
                 }}
               />
+            </div>
+          )}
+
+          {/* Modalidad RANGO personalizado */}
+          {periodo === 'rango' && (
+            <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in duration-150">
+              <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-lg px-2.5 h-8 shadow-2xs">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Del</span>
+                <input
+                  type="date"
+                  value={fechaDesde || ''}
+                  max={fechaHasta || periodosDisponibles?.rangoTotal.hoy || hoyIso}
+                  onChange={(e) => {
+                    const val = e.target.value || undefined;
+                    setFechaDesde(val);
+                    actualizarFiltrosUrl('rango', { fechaDesde: val, fechaHasta });
+                  }}
+                  className="text-xs text-slate-800 font-semibold bg-transparent focus:outline-none cursor-pointer"
+                  title="Fecha inicial"
+                />
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">al</span>
+                <input
+                  type="date"
+                  value={fechaHasta || ''}
+                  min={fechaDesde || undefined}
+                  max={periodosDisponibles?.rangoTotal.hoy || hoyIso}
+                  onChange={(e) => {
+                    const val = e.target.value || undefined;
+                    setFechaHasta(val);
+                    actualizarFiltrosUrl('rango', { fechaDesde, fechaHasta: val });
+                  }}
+                  className="text-xs text-slate-800 font-semibold bg-transparent focus:outline-none cursor-pointer"
+                  title="Fecha final"
+                />
+              </div>
             </div>
           )}
         </div>

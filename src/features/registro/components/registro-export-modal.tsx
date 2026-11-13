@@ -574,6 +574,47 @@ export function RegistroExportModal({
               />
             </div>
           )}
+
+          {/* Selector de Rango Personalizado (Desde y Hasta) */}
+          {filtros.periodo === 'rango' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 animate-in fade-in duration-150">
+              <div>
+                <span className="text-[10px] font-semibold text-slate-500 block mb-0.5">
+                  Fecha Desde:
+                </span>
+                <input
+                  type="date"
+                  value={filtros.fechaDesde || ''}
+                  max={filtros.fechaHasta || periodos?.rangoTotal.hoy || hoyIso}
+                  onChange={(e) =>
+                    setFiltros((prev) => ({
+                      ...prev,
+                      fechaDesde: e.target.value || undefined,
+                    }))
+                  }
+                  className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer"
+                />
+              </div>
+              <div>
+                <span className="text-[10px] font-semibold text-slate-500 block mb-0.5">
+                  Fecha Hasta:
+                </span>
+                <input
+                  type="date"
+                  value={filtros.fechaHasta || ''}
+                  min={filtros.fechaDesde || undefined}
+                  max={periodos?.rangoTotal.hoy || hoyIso}
+                  onChange={(e) =>
+                    setFiltros((prev) => ({
+                      ...prev,
+                      fechaHasta: e.target.value || undefined,
+                    }))
+                  }
+                  className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 3. Filtros de Alcance: Departamento, Inspector y Línea */}

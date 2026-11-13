@@ -5,13 +5,14 @@ export type ModalidadPeriodoRegistro =
   | 'dia'
   | 'semana'
   | 'mes'
-  | 'anio';
+  | 'anio'
+  | 'rango';
 
 export interface FiltrosRegistroState {
   periodo: ModalidadPeriodoRegistro;
   /**
    * Indica que el período provino de la entrada inicial sin modalidad explícita
-   * (o de una URL antigua con `periodo=todos` / `periodo=rango`), por lo que debe
+   * (o de una URL antigua con `periodo=todos`), por lo que debe
    * preferir `hoy` si existen registros hoy o el período disponible más reciente.
    */
   esSeleccionInicial?: boolean;
@@ -21,6 +22,8 @@ export interface FiltrosRegistroState {
   semanaIsoCodigo?: string;
   mes?: number;
   dia?: string;
+  fechaDesde?: string;
+  fechaHasta?: string;
   busqueda?: string;
   departamentoId?: number;
   lineaTexto?: string;
