@@ -95,6 +95,14 @@ export interface GetFilasInspeccionResponse {
   totalPages: number;
 }
 
+export interface ProgresoExportacion {
+  cargados: number;
+  total: number;
+  porcentaje: number;
+  paginaActual: number;
+  totalPaginas: number;
+}
+
 export interface ExportarFilasInspeccionResponse {
   items: InspeccionFilaResponse[];
   total: number;
@@ -102,6 +110,9 @@ export interface ExportarFilasInspeccionResponse {
   totalInspecciones: number;
   totalParesDefectuosos: number;
   periodo: ModalidadPeriodoInspeccion;
+  page?: number;
+  limit?: number;
+  totalPages?: number;
 }
 
 export interface PeriodoAnioDisponible {

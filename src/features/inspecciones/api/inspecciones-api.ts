@@ -4,6 +4,7 @@ import type {
   CreateInspeccionPayload,
   GetFilasInspeccionResponse,
   ExportarFilasInspeccionResponse,
+  ProgresoExportacion,
   PeriodosDisponiblesResponse,
   InspectorActivoItem,
   DefectoCatalogoFiltroItem,
@@ -308,6 +309,97 @@ export const inspeccionesApi = {
         periodo: params?.periodo || 'todos',
       }
     );
+  },
+
+  /**
+   * Consulta la totalidad de las filas de defectos mediante descargas paginadas secuenciales seguras,
+   * informando el progreso en tiempo real y evitando saturación de memoria en API y navegador.
+   */
+  exportarFilasInspeccionPaginado: async (
+    params?: FiltrosInspeccionesQueryParams,
+    onProgreso?: (progreso: ProgresoExportacion) => void,
+    chunkLimit = 2500,
+    signal?: AbortSignal,
+  ): Promise<ExportarFilasInspeccionResponse> => {
+    const primeraPaginaParams = { ...params, page: 1, limit: chunkLimit };
+    const qs1 = construirQueryStringInspecciones(primeraPaginaParams);
+    const res1 = await httpClient.get<ApiResponse<ExportarFilasInspeccionResponse>>(
+      `/inspecciones/exportar${qs1}`,
+      { signal },
+    );
+
+    const data1 = res1.data;
+    if (!data1) {
+      return {
+        items: [],
+        total: 0,
+        totalDefectos: 0,
+        totalInspecciones: 0,
+        totalParesDefectuosos: 0,
+        periodo: params?.periodo || 'todos',
+      };
+    }
+
+    const totalDefectos = data1.totalDefectos ?? data1.total ?? data1.items.length;
+    const totalPaginas =
+      data1.totalPages ?? (totalDefectos > 0 ? Math.ceil(totalDefectos / chunkLimit) : 1);
+    let acumulados = [...(data1.items || [])];
+
+    onProgreso?.({
+      cargados: acumulados.length,
+      total: totalDefectos,
+      porcentaje:
+        totalDefectos > 0
+          ? Math.min(100, Math.round((acumulados.length / totalDefectos) * 100))
+          : 100,
+      paginaActual: 1,
+      totalPaginas,
+    });
+
+    if (totalPaginas > 1) {
+      for (let p = 2; p <= totalPaginas; p++) {
+        if (signal?.aborted) {
+          throw new Error('Exportación cancelada por el usuario');
+        }
+        const pagParams = { ...params, page: p, limit: chunkLimit };
+        const qsP = construirQueryStringInspecciones(pagParams);
+        const resP = await httpClient.get<ApiResponse<ExportarFilasInspeccionResponse>>(
+          `/inspecciones/exportar${qsP}`,
+          { signal },
+        );
+        const itemsP = resP.data?.items || [];
+        acumulados = acumulados.concat(itemsP);
+
+        onProgreso?.({
+          cargados: acumulados.length,
+          total: totalDefectos,
+          porcentaje:
+            totalDefectos > 0
+              ? Math.min(100, Math.round((acumulados.length / totalDefectos) * 100))
+              : 100,
+          paginaActual: p,
+          totalPaginas,
+        });
+      }
+    }
+
+    const inspeccionesUnicas = new Set(acumulados.map((i) => i.inspeccionId)).size;
+    const totalPares = acumulados.reduce(
+      (acc, i) => acc + (Number(i.paresDefectuosos) || 0),
+      0,
+    );
+
+    return {
+      items: acumulados,
+      total: acumulados.length,
+      totalDefectos: acumulados.length,
+      totalInspecciones: inspeccionesUnicas,
+      totalParesDefectuosos: totalPares,
+      periodo: data1.periodo,
+      page: 1,
+      limit: chunkLimit,
+      totalPages: totalPaginas,
+    };
   },
 
   /**

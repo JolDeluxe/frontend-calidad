@@ -412,14 +412,19 @@ export function RegistroPage() {
 
   const hayFiltrosActivos = useMemo(() => tieneFiltrosActivos(filtros), [filtros]);
 
-  // Procesar la exportación completa sin truncamiento mediante GET /api/v1/inspecciones/exportar
+  // Procesar la exportación completa sin truncamiento mediante descarga por bloques seguros
   const handleProcesarExportacion = async (cfg: ExportModalConfig) => {
     const deptoObj = departamentos.find((d) => d.id === cfg.filtros.departamentoId);
     const inspectorObj = inspectores.find((i) => i.id === cfg.filtros.inspectorId);
     const periodoNombre = describirPeriodoActivo(cfg.filtros, periodosDisponibles);
 
     const queryExport = construirQueryInspecciones(cfg.filtros);
-    const res = await inspeccionesApi.exportarFilasInspeccion(queryExport);
+    const res = await inspeccionesApi.exportarFilasInspeccionPaginado(
+      queryExport,
+      cfg.onProgreso,
+      2500,
+      cfg.signal,
+    );
 
     const datosAExportar = res.items || [];
     const totalDefectosExport = res.totalDefectos ?? datosAExportar.length;
@@ -454,11 +459,15 @@ export function RegistroPage() {
       totalInspecciones: totalInspeccionesExport,
     };
 
+    const nombreArchivoBase = deptoObj
+      ? `defectos_${deptoObj.codigo.toLowerCase()}`
+      : 'defectos_planta_completa';
+
     if (cfg.formato === 'excel') {
       const resultado = exportarRegistrosAExcel(
         datosAExportar,
         configReporte,
-        `defectos_${deptoObj?.codigo?.toLowerCase() || 'general'}`
+        nombreArchivoBase
       );
       toast.success(
         `Reporte Excel (.csv) generado: ${resultado.totalDefectos.toLocaleString('es-MX')} registros`

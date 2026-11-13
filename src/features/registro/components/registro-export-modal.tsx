@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
@@ -20,6 +20,7 @@ import {
   sincronizarFiltrosConPeriodosDisponibles,
 } from '../utils/filtros-registro';
 import { UMBRAL_ADVERTENCIA_PDF } from '../utils/exportar-reporte';
+import type { ProgresoExportacion } from '@/features/inspecciones/types/inspecciones.types';
 import type {
   FiltrosRegistroState,
   InspectorActivoItem,
@@ -32,6 +33,8 @@ export interface ExportModalConfig {
   formato: 'excel' | 'pdf';
   filtros: FiltrosRegistroState;
   confirmarPdfVolumenAlto?: boolean;
+  onProgreso?: (progreso: ProgresoExportacion) => void;
+  signal?: AbortSignal;
 }
 
 export interface RegistroExportModalProps {
@@ -72,12 +75,14 @@ export function RegistroExportModal({
   const [periodos, setPeriodos] = useState<PeriodosDisponiblesResponse | null>(periodosIniciales);
   const [cargandoPeriodos, setCargandoPeriodos] = useState(false);
   const [exportando, setExportando] = useState(false);
+  const [progreso, setProgreso] = useState<ProgresoExportacion | null>(null);
   const [confirmarPdfVolumenAlto, setConfirmarPdfVolumenAlto] = useState(false);
   const [volumenDetectadoServidor, setVolumenDetectadoServidor] = useState<{
     totalDefectos: number;
     totalInspecciones: number;
   } | null>(null);
 
+  const abortControllerRef = useRef<AbortController | null>(null);
   const hoyIso = useMemo(() => getHoyMexicoIso(), []);
 
   // Inicializar con los filtros activos de la tabla al abrir el modal
@@ -86,6 +91,7 @@ export function RegistroExportModal({
       setFiltros({ ...filtrosActivos, esSeleccionInicial: false });
       setPeriodos(periodosIniciales);
       setExportando(false);
+      setProgreso(null);
       setConfirmarPdfVolumenAlto(false);
       setVolumenDetectadoServidor(null);
     }
@@ -226,15 +232,34 @@ export function RegistroExportModal({
     }));
   };
 
+  const handleCloseSeguro = () => {
+    if (exportando) {
+      abortControllerRef.current?.abort();
+    }
+    onClose();
+  };
+
   const handleSubmit = async (forzarFormato?: 'excel' | 'pdf', confirmarAltoVolumen = false) => {
     if (!estadoConsulta.listo) return;
     const formatoFinal = forzarFormato || formato;
     setExportando(true);
+    setProgreso({
+      cargados: 0,
+      total: conteoEstimado?.totalDefectos || 0,
+      porcentaje: 0,
+      paginaActual: 1,
+      totalPaginas: 1,
+    });
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       const resultado = await onExportar({
         formato: formatoFinal,
         filtros,
         confirmarPdfVolumenAlto: confirmarAltoVolumen || confirmarPdfVolumenAlto,
+        onProgreso: (p) => setProgreso(p),
+        signal: controller.signal,
       });
 
       if (resultado && resultado.requiereConfirmacionPdf) {
@@ -246,10 +271,16 @@ export function RegistroExportModal({
       }
 
       onClose();
-    } catch (err) {
-      console.error('Error al exportar:', err);
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || err?.message?.includes('cancelada')) {
+        console.warn('Exportación cancelada por el usuario');
+      } else {
+        console.error('Error al exportar:', err);
+      }
     } finally {
       setExportando(false);
+      setProgreso(null);
+      abortControllerRef.current = null;
     }
   };
 
@@ -267,8 +298,8 @@ export function RegistroExportModal({
   );
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="lg">
-      <ModalHeader title="Exportar Reporte de Defectos" onClose={onClose} />
+    <Modal isOpen={isOpen} onClose={handleCloseSeguro} size="lg">
+      <ModalHeader title="Exportar Reporte de Defectos" onClose={handleCloseSeguro} />
       <ModalBody className="space-y-4 text-xs">
         {/* 1. Selección de Formato */}
         <div>
@@ -634,26 +665,80 @@ export function RegistroExportModal({
         </div>
 
         {/* Resumen de alcance */}
-        <div className="p-3 rounded-xl bg-slate-100/80 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="min-w-0">
+        <div className="p-3.5 rounded-xl bg-slate-100/90 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="min-w-0 space-y-0.5">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-              Alcance seleccionado
+              Alcance de la Exportación
             </span>
-            <strong className="text-xs font-bold text-slate-900 truncate block">
-              {periodoActivoTexto}
-            </strong>
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <strong className="font-extrabold text-slate-900">{periodoActivoTexto}</strong>
+              <span className="text-slate-400">•</span>
+              <span className="font-bold text-marca-primario">
+                {deptoSeleccionado ? `Depto: ${deptoSeleccionado.nombre}` : 'Planta Completa (Todos los Deptos)'}
+              </span>
+              {filtros.lineaTexto && (
+                <>
+                  <span className="text-slate-400">•</span>
+                  <span className="text-slate-600 font-semibold">Línea {filtros.lineaTexto}</span>
+                </>
+              )}
+            </div>
           </div>
-          {conteoEstimado && (
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-marca-primario/10 text-marca-primario">
+          <div className="flex items-center gap-2 shrink-0">
+            {cargandoPeriodos ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-slate-200 text-slate-600 animate-pulse">
+                <Spinner size="xs" />
+                <span>Calculando registros...</span>
+              </span>
+            ) : conteoEstimado ? (
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-extrabold bg-marca-primario/10 text-marca-primario shadow-2xs">
                 {conteoEstimado.totalDefectos.toLocaleString('es-MX')} registros
               </span>
-            </div>
-          )}
+            ) : (
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-bold bg-slate-200 text-slate-600">
+                0 registros
+              </span>
+            )}
+          </div>
         </div>
 
+        {/* Barra de progreso interactiva para exportaciones de cualquier volumen */}
+        {exportando && (
+          <div className="p-4 rounded-xl bg-blue-50/90 border border-blue-200 text-blue-950 space-y-3 animate-in fade-in duration-200 shadow-xs">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold flex items-center gap-2 text-blue-950">
+                <Spinner size="xs" className="text-blue-700" />
+                <span>Descargando registros ({progreso?.porcentaje ?? 0}%)</span>
+              </span>
+              <span className="font-mono font-extrabold text-blue-800">
+                {progreso?.cargados.toLocaleString('es-MX') || 0} /{' '}
+                {(progreso?.total || conteoEstimado?.totalDefectos || 0).toLocaleString('es-MX')}
+              </span>
+            </div>
+
+            {/* Barra animada de progreso */}
+            <div className="w-full bg-blue-200/80 rounded-full h-3 overflow-hidden shadow-inner">
+              <div
+                className="bg-blue-600 h-full rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${Math.max(4, progreso?.porcentaje || 0)}%` }}
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-blue-900 gap-1 leading-snug">
+              <span>
+                {progreso && progreso.totalPaginas > 1
+                  ? `Recuperando bloque ${progreso.paginaActual} de ${progreso.totalPaginas} de forma segura...`
+                  : 'Iniciando descarga segura por bloques desde el servidor...'}
+              </span>
+              <span className="text-[10px] font-semibold text-blue-700">
+                Por favor, no cierre esta ventana.
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Advertencia preventiva no bloqueante cuando PDF supera 2,500 registros */}
-        {superaUmbralPdf && conteoEstimado && (
+        {superaUmbralPdf && conteoEstimado && !exportando && (
           <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 space-y-2 animate-in fade-in duration-150">
             <div className="flex items-start gap-2">
               <Icon name="warning" size="18px" className="text-amber-700 shrink-0 mt-0.5" />
@@ -707,7 +792,7 @@ export function RegistroExportModal({
           variant="outline"
           size="sm"
           disabled={exportando}
-          onClick={onClose}
+          onClick={handleCloseSeguro}
           className="text-xs font-semibold cursor-pointer"
         >
           Cancelar
@@ -724,7 +809,9 @@ export function RegistroExportModal({
           {exportando ? (
             <>
               <Spinner size="xs" />
-              <span>Generando {formato.toUpperCase()}...</span>
+              <span>
+                Exportando {progreso ? `${progreso.porcentaje}%` : '...'}
+              </span>
             </>
           ) : (
             <>
