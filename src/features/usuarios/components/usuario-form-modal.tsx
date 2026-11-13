@@ -67,13 +67,13 @@ export function UsuarioFormModal({
       return;
     }
 
-    if (!isEditing && (!password || password.length < 6)) {
-      setError('La contraseña debe tener al menos 6 caracteres.');
+    if (!isEditing && (!password || password.length < 3)) {
+      setError('La contraseña debe tener al menos 3 dígitos.');
       return;
     }
 
-    if (isEditing && password && password.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres.');
+    if (isEditing && password && password.length < 3) {
+      setError('La contraseña debe tener al menos 3 dígitos.');
       return;
     }
 
@@ -163,7 +163,7 @@ export function UsuarioFormModal({
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={isEditing ? 'Dejar en blanco si no desea cambiarla' : 'Mínimo 6 caracteres'}
+                placeholder={isEditing ? 'Dejar en blanco si no desea cambiarla' : 'Mínimo 3 dígitos'}
                 disabled={isSubmitting}
                 className="h-10 rounded-xl font-mono text-xs pr-10"
                 autoComplete="new-password"
