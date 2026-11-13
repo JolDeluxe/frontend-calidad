@@ -194,21 +194,21 @@ export function InspeccionesTabla({
               </tr>
             )}
             <tr className="bg-slate-100 border-b border-border text-text-secondary uppercase tracking-wider font-semibold text-2xs select-none">
-              <th className="py-2 px-1.5 xl:px-2.5 w-[4%] text-center">No</th>
-              <th className="py-2 px-1.5 xl:px-2.5 w-[9%] truncate">Depto</th>
-              <th className="py-2 px-1.5 xl:px-2.5 w-[8%] truncate">Fecha</th>
-              <th className="py-2 px-1.5 xl:px-2.5 w-[6%] truncate">Lista</th>
-              <th className="py-2 px-1.5 xl:px-2.5 w-[6%] truncate">Lote</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[3%] text-center">No</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[8%] truncate">Depto</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[7.5%] truncate">Fecha</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[4.5%] truncate">Lista</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[7%] truncate">Lote</th>
               {mostrarColumnaLinea && (
-                <th className="py-2 px-1.5 xl:px-2.5 w-[5%] text-center">Línea</th>
+                <th className="py-2 px-0.5 xl:px-1 w-[3.5%] text-center">Línea</th>
               )}
-              <th className="py-2 px-1.5 xl:px-2.5 w-[7%] truncate">Modelo</th>
-              <th className={`py-2 px-1.5 xl:px-2.5 ${mostrarColumnaLinea ? 'w-[18%]' : 'w-[20%]'}`}>Descripción</th>
-              <th className="py-2 px-1.5 xl:px-2.5 w-[5%] text-center font-mono">Clave</th>
-              <th className={`py-2 px-1.5 xl:px-2.5 ${mostrarColumnaLinea ? 'w-[16%]' : 'w-[19%]'}`}>Defecto</th>
-              <th className="py-2 px-1.5 xl:px-2.5 w-[6%]">Clasif.</th>
-              <th className="py-2 px-1.5 xl:px-2.5 w-[4%] text-center">Prs</th>
-              <th className="py-2 px-1.5 xl:px-2.5 w-[6%] truncate">Inspector</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[6.5%] truncate">Modelo</th>
+              <th className={`py-2 px-1.5 xl:px-2.5 ${mostrarColumnaLinea ? 'w-[23%]' : 'w-[25%]'}`}>Descripción</th>
+              <th className="py-2 px-0.5 xl:px-1 w-[3.5%] text-center font-mono">Clave</th>
+              <th className={`py-2 px-1.5 xl:px-2.5 ${mostrarColumnaLinea ? 'w-[20%]' : 'w-[21.5%]'}`}>Defecto</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[5%]">Clasif.</th>
+              <th className="py-2 px-0.5 xl:px-1 w-[2.5%] text-center">Prs</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[6%] truncate">Inspector</th>
               <th className="py-2 px-1 w-[32px] text-center"></th>
             </tr>
           </thead>
@@ -290,21 +290,21 @@ export function InspeccionesTabla({
 
           {/* Fila 2: Títulos de Columnas Proporcionales (suman 100% con table-fixed) */}
           <tr className="bg-slate-100 border-b border-border text-text-secondary uppercase tracking-wider font-semibold text-2xs select-none">
-            <th className="py-2 px-1.5 xl:px-2.5 w-[4%] text-center">No</th>
-            <th className="py-2 px-1.5 xl:px-2.5 w-[9%] truncate">Depto</th>
-            <th className="py-2 px-1.5 xl:px-2.5 w-[8%] truncate">Fecha</th>
-            <th className="py-2 px-1.5 xl:px-2.5 w-[6%] truncate">Lista</th>
-            <th className="py-2 px-1.5 xl:px-2.5 w-[6%] truncate">Lote</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[3%] text-center">No</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[8%] truncate">Depto</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[7.5%] truncate">Fecha</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[4.5%] truncate">Lista</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[7%] truncate">Lote</th>
             {mostrarColumnaLinea && (
-              <th className="py-2 px-1.5 xl:px-2.5 w-[5%] text-center">Línea</th>
+              <th className="py-2 px-0.5 xl:px-1 w-[3.5%] text-center">Línea</th>
             )}
-            <th className="py-2 px-1.5 xl:px-2.5 w-[7%] truncate">Modelo</th>
-            <th className={`py-2 px-1.5 xl:px-2.5 ${mostrarColumnaLinea ? 'w-[18%]' : 'w-[20%]'}`}>Descripción</th>
-            <th className="py-2 px-1.5 xl:px-2.5 w-[5%] text-center font-mono">Clave</th>
-            <th className={`py-2 px-1.5 xl:px-2.5 ${mostrarColumnaLinea ? 'w-[16%]' : 'w-[19%]'}`}>Defecto</th>
-            <th className="py-2 px-1.5 xl:px-2.5 w-[6%]">Clasif.</th>
-            <th className="py-2 px-1.5 xl:px-2.5 w-[4%] text-center">Prs</th>
-            <th className="py-2 px-1.5 xl:px-2.5 w-[6%] truncate">Inspector</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[6.5%] truncate">Modelo</th>
+            <th className={`py-2 px-1.5 xl:px-2.5 ${mostrarColumnaLinea ? 'w-[23%]' : 'w-[25%]'}`}>Descripción</th>
+            <th className="py-2 px-0.5 xl:px-1 w-[3.5%] text-center font-mono">Clave</th>
+            <th className={`py-2 px-1.5 xl:px-2.5 ${mostrarColumnaLinea ? 'w-[20%]' : 'w-[21.5%]'}`}>Defecto</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[5%]">Clasif.</th>
+            <th className="py-2 px-0.5 xl:px-1 w-[2.5%] text-center">Prs</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[6%] truncate">Inspector</th>
             <th className="py-2 px-1 w-[32px] text-center"></th>
           </tr>
         </thead>
@@ -396,13 +396,15 @@ export function InspeccionesTabla({
                   </td>
 
                   {/* Lote */}
-                  <td className="py-2 px-1 xl:px-2 font-extrabold text-sm text-marca-primario font-mono truncate" title={row.lote}>
-                    <HighlightText text={row.lote} highlight={busqueda} />
+                  <td className="py-2 px-1 xl:px-1.5 truncate" title={row.lote}>
+                    <span className="inline-block px-1.5 py-0.5 rounded font-mono font-black text-xs xl:text-sm text-marca-primario bg-marca-primario/10 border border-marca-primario/20 tracking-tight truncate max-w-full">
+                      <HighlightText text={row.lote} highlight={busqueda} />
+                    </span>
                   </td>
 
                   {/* Línea */}
                   {mostrarColumnaLinea && (
-                    <td className="py-2 px-1 text-center">
+                    <td className="py-2 px-0.5 text-center">
                       <span className="inline-block px-1 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 truncate">
                         {row.linea}
                       </span>
@@ -424,8 +426,10 @@ export function InspeccionesTabla({
                   </td>
 
                   {/* Clave de Defecto */}
-                  <td className="py-2 px-1 text-center font-mono font-extrabold text-brand-primary">
-                    <HighlightText text={row.defectoClave} highlight={busqueda} />
+                  <td className="py-2 px-0.5 text-center font-mono" title={`Clave ${row.defectoClave}`}>
+                    <span className="inline-block px-1.5 py-0.5 rounded font-mono font-black text-xs xl:text-sm text-brand-primary bg-brand-primary/10 border border-brand-primary/20 tracking-wider">
+                      <HighlightText text={row.defectoClave} highlight={busqueda} />
+                    </span>
                   </td>
 
                   {/* Defecto (Nombre / Descripción) */}
@@ -439,7 +443,7 @@ export function InspeccionesTabla({
                   </td>
 
                   {/* Prs */}
-                  <td className="py-2 px-1 text-center">
+                  <td className="py-2 px-0.5 text-center">
                     <span className="inline-flex items-center justify-center font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-900 text-xs">
                       {row.paresDefectuosos}
                     </span>
