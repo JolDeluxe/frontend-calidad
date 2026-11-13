@@ -585,26 +585,30 @@ export class InspeccionesOfflineService {
     }
 
     this.syncInFlightPromise = (async () => {
-      // Coordinación atómica nativa entre pestañas del navegador mediante Web Locks API
-      if (
-        typeof navigator !== 'undefined' &&
-        'locks' in navigator &&
-        typeof navigator.locks?.request === 'function'
-      ) {
-        return navigator.locks.request(
-          'mbc_offline_sync_lock',
-          { ifAvailable: true },
-          async (lock) => {
-            if (!lock) {
-              // Otra pestaña del navegador se encuentra sincronizando activamente
-              const res = await this.obtenerResumenCola();
-              return { sincronizadas: 0, pendientes: res.pendientes + res.erroresReintentables };
-            }
-            return this.ejecutarProcesoSyncConIdbLock(options);
-          },
-        );
+      try {
+        // Coordinación atómica nativa entre pestañas del navegador mediante Web Locks API
+        if (
+          typeof navigator !== 'undefined' &&
+          'locks' in navigator &&
+          typeof navigator.locks?.request === 'function'
+        ) {
+          return await navigator.locks.request(
+            'mbc_offline_sync_lock',
+            { ifAvailable: true },
+            async (lock) => {
+              if (!lock) {
+                // Otra pestaña del navegador se encuentra sincronizando activamente
+                const res = await this.obtenerResumenCola();
+                return { sincronizadas: 0, pendientes: res.pendientes + res.erroresReintentables };
+              }
+              return this.ejecutarProcesoSyncConIdbLock(options);
+            },
+          );
+        }
+        return await this.ejecutarProcesoSyncConIdbLock(options);
+      } finally {
+        this.syncInFlightPromise = null;
       }
-      return this.ejecutarProcesoSyncConIdbLock(options);
     })();
 
     return this.syncInFlightPromise;
@@ -617,8 +621,12 @@ export class InspeccionesOfflineService {
     const nowMs = Date.now();
     const acquired = await this.tryAcquireSyncLock(nowMs);
     if (!acquired) {
-      const res = await this.obtenerResumenCola();
-      return { sincronizadas: 0, pendientes: res.pendientes + res.erroresReintentables };
+      if (options.forceIgnoreBackoff) {
+        await this.releaseSyncLock();
+      } else {
+        const res = await this.obtenerResumenCola();
+        return { sincronizadas: 0, pendientes: res.pendientes + res.erroresReintentables };
+      }
     }
 
     let totalSincronizadas = 0;
@@ -627,6 +635,12 @@ export class InspeccionesOfflineService {
       const candidatos = todos
         .filter((item) => {
           if (item.estado === 'PENDIENTE') return true;
+          if (item.estado === 'SINCRONIZANDO') {
+            // Recuperar capturas estancadas en sincronizando (por caída o crash previo)
+            if (options.forceIgnoreBackoff) return true;
+            const actualizadoMs = item.actualizadoEn ? Date.parse(item.actualizadoEn) : 0;
+            return Date.now() - actualizadoMs > 15_000;
+          }
           if (item.estado === 'ERROR_REINTENTABLE') {
             if (options.forceIgnoreBackoff) return true;
             return !item.proximoReintentoEn || item.proximoReintentoEn <= Date.now();
@@ -664,19 +678,19 @@ export class InspeccionesOfflineService {
                 inspectorId: c.inspectorId,
                 offlineToken: c.offlineToken,
                 fechaCapturaDispositivo: c.fechaCapturaDispositivo,
-                esContingencia: c.esContingencia,
-                motivoContingencia: c.motivoContingencia,
+                esContingencia: Boolean(c.esContingencia),
+                motivoContingencia: c.motivoContingencia?.trim() || null,
                 payload: {
-                  lote: c.payload.lote,
-                  lineaId: c.payload.lineaId,
-                  lineaTexto: c.payload.lineaTexto,
-                  horma: c.payload.horma,
-                  notas: c.payload.notas,
+                  lote: c.payload.lote.trim(),
+                  lineaId: typeof c.payload.lineaId === 'number' && c.payload.lineaId > 0 ? c.payload.lineaId : null,
+                  lineaTexto: c.payload.lineaTexto?.trim() || null,
+                  horma: c.payload.horma?.trim() || null,
+                  notas: c.payload.notas?.trim() || null,
                   detalles: c.payload.detalles.map((d) => ({
                     defectoId: d.defectoId,
-                    defDeptoId: d.defDeptoId,
+                    defDeptoId: typeof d.defDeptoId === 'number' && d.defDeptoId > 0 ? d.defDeptoId : undefined,
                     paresDefectuosos: d.paresDefectuosos,
-                    notas: d.notas,
+                    notas: d.notas ? d.notas.trim() : undefined,
                   })),
                 },
               })),
@@ -754,7 +768,6 @@ export class InspeccionesOfflineService {
     } finally {
       await this.releaseSyncLock();
       await this.notifyListeners();
-      this.syncInFlightPromise = null;
     }
 
     const resumenFinal = await this.obtenerResumenCola();

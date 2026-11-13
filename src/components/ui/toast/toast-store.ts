@@ -10,6 +10,12 @@ export interface ToastItem {
   duration?: number;
 }
 
+export interface ToastOptions {
+  id?: string;
+  title?: string;
+  duration?: number;
+}
+
 let toasts: ToastItem[] = [];
 const listeners = new Set<() => void>();
 
@@ -23,14 +29,19 @@ export const toastStore = {
     listeners.add(listener);
     return () => listeners.delete(listener);
   },
-  add: (toast: Omit<ToastItem, 'id'>): string => {
-    const id = `toast-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  add: (toast: Omit<ToastItem, 'id'> & { id?: string }): string => {
+    const id = toast.id || `toast-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const newItem: ToastItem = {
       ...toast,
       id,
       duration: toast.duration ?? 4000,
     };
-    toasts = [...toasts, newItem];
+    const existingIndex = toasts.findIndex((t) => t.id === id);
+    if (existingIndex >= 0) {
+      toasts = toasts.map((t, idx) => (idx === existingIndex ? newItem : t));
+    } else {
+      toasts = [...toasts, newItem];
+    }
     notify();
     return id;
   },
@@ -45,15 +56,15 @@ export const toastStore = {
 };
 
 export const toast = {
-  success: (message: string, options?: { title?: string; duration?: number }) =>
+  success: (message: string, options?: ToastOptions) =>
     toastStore.add({ type: 'success', message, ...options }),
-  error: (message: string, options?: { title?: string; duration?: number }) =>
+  error: (message: string, options?: ToastOptions) =>
     toastStore.add({ type: 'error', message, ...options }),
-  warning: (message: string, options?: { title?: string; duration?: number }) =>
+  warning: (message: string, options?: ToastOptions) =>
     toastStore.add({ type: 'warning', message, ...options }),
-  info: (message: string, options?: { title?: string; duration?: number }) =>
+  info: (message: string, options?: ToastOptions) =>
     toastStore.add({ type: 'info', message, ...options }),
-  custom: (item: Omit<ToastItem, 'id'>) => toastStore.add(item),
+  custom: (item: Omit<ToastItem, 'id'> & { id?: string }) => toastStore.add(item),
   dismiss: (id: string) => toastStore.remove(id),
 };
 

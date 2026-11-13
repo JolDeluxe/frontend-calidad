@@ -26,6 +26,7 @@ import type {
 import type { Departamento } from '@/features/departamentos/types/departamentos.types';
 
 const ROLES_CON_CAMBIO_DEPTO = ['SUPER_ADMIN', 'ADMIN', 'COORD'];
+const TOAST_SYNC_PENDIENTE_ID = 'toast-sync-pendiente';
 const CACHE_FILAS_KEY_PREFIX = 'mbc_inspecciones_filas_cache_v1_';
 
 function leerCacheFilasServidor(deptoId?: number, verEliminados?: boolean): InspeccionFilaResponse[] {
@@ -522,11 +523,15 @@ export function InspeccionesPage() {
       prevReachableRef.current = reachable;
       setBackendReachable(reachable);
       if (pasoDeOfflineAOnline) {
+        toast.dismiss(TOAST_SYNC_PENDIENTE_ID);
         void refreshSession();
         recargarTerminal();
         void inspeccionesOfflineService
           .sincronizarCola({ forceIgnoreBackoff: true })
-          .then(() => {
+          .then((res) => {
+            if (res.sincronizadas > 0 || res.pendientes === 0) {
+              toast.dismiss(TOAST_SYNC_PENDIENTE_ID);
+            }
             void cargarRegistros(1, false);
           });
       }
@@ -544,12 +549,27 @@ export function InspeccionesPage() {
     };
   }, [cargarRegistros]);
 
+  // Limpieza reactiva del Toast de advertencia cuando la cola baja a 0 o se restablece la conexión
+  useEffect(() => {
+    const totalPendientes =
+      resumenCola.pendientes + resumenCola.sincronizando + resumenCola.erroresReintentables;
+    if (totalPendientes === 0 || backendReachable) {
+      toast.dismiss(TOAST_SYNC_PENDIENTE_ID);
+    }
+  }, [
+    resumenCola.pendientes,
+    resumenCola.sincronizando,
+    resumenCola.erroresReintentables,
+    backendReachable,
+  ]);
+
   // Sincronización automática oportunista al recuperar conectividad o volver a la pestaña (sin polling cada segundo)
   const prevPendientesRef = useRef<number>(0);
   useEffect(() => {
     const pendientesActuales =
       resumenCola.pendientes + resumenCola.sincronizando + resumenCola.erroresReintentables;
     if (prevPendientesRef.current > 0 && pendientesActuales === 0 && backendReachable) {
+      toast.dismiss(TOAST_SYNC_PENDIENTE_ID);
       void cargarRegistros(1, false);
     }
     prevPendientesRef.current = pendientesActuales;
@@ -565,7 +585,10 @@ export function InspeccionesPage() {
     const intentarSincronizarAlVolver = async () => {
       if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
       const res = await inspeccionesOfflineService.sincronizarCola({ forceIgnoreBackoff: true });
-      if (res.sincronizadas > 0 || connectivityState.isBackendReachable()) {
+      if (res.sincronizadas > 0) {
+        toast.dismiss(TOAST_SYNC_PENDIENTE_ID);
+        void cargarRegistros(1, false);
+      } else if (connectivityState.isBackendReachable()) {
         void cargarRegistros(1, false);
       }
     };
@@ -645,6 +668,7 @@ export function InspeccionesPage() {
     try {
       const res = await inspeccionesOfflineService.sincronizarCola({ forceIgnoreBackoff: true });
       if (res.sincronizadas > 0) {
+        toast.dismiss(TOAST_SYNC_PENDIENTE_ID);
         toast.success(`Se sincronizaron ${res.sincronizadas} capturas pendientes con el servidor.`, {
           title: 'Sincronización Completada',
         });
@@ -652,9 +676,10 @@ export function InspeccionesPage() {
       } else if (res.pendientes > 0) {
         toast.warning(
           `Aún quedan ${res.pendientes} capturas pendientes de sincronización. Verifique la conexión con el servidor.`,
-          { title: 'Sincronización Pendiente' },
+          { id: TOAST_SYNC_PENDIENTE_ID, title: 'Sincronización Pendiente' },
         );
       } else {
+        toast.dismiss(TOAST_SYNC_PENDIENTE_ID);
         toast.info('No hay capturas pendientes por sincronizar.');
       }
     } finally {
