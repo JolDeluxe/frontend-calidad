@@ -25,7 +25,7 @@ export function TerminalesPage() {
   // Modal Alta
   const [modalAltaAbierto, setModalAltaAbierto] = useState(false);
   const [nuevoNombre, setNuevoNombre] = useState('');
-  const [nuevoDeptoId, setNuevoDeptoId] = useState<number | ''>('');
+  const [nuevosDeptosIds, setNuevosDeptosIds] = useState<number[]>([]);
   const [cargandoSugerencia, setCargandoSugerencia] = useState(false);
   const [guardandoAlta, setGuardandoAlta] = useState(false);
 
@@ -39,9 +39,10 @@ export function TerminalesPage() {
   const [otpGenerado, setOtpGenerado] = useState<SolicitarRecuperacionResult | null>(null);
   const [generandoOtpId, setGenerandoOtpId] = useState<number | null>(null);
 
-  // Modal Reasignar
+  // Modal Configurar (Nombre personalizado + Departamentos donde opera)
   const [terminalReasignar, setTerminalReasignar] = useState<TerminalGestionItem | null>(null);
-  const [reasignarDeptoId, setReasignarDeptoId] = useState<number | ''>('');
+  const [editarNombre, setEditarNombre] = useState('');
+  const [editarDeptosIds, setEditarDeptosIds] = useState<number[]>([]);
   const [guardandoReasignar, setGuardandoReasignar] = useState(false);
 
   // Modal Revocar
@@ -71,20 +72,26 @@ export function TerminalesPage() {
     cargarDatos();
   }, [cargarDatos]);
 
-  const handleDeptoAltaChange = async (deptoIdNum: number | '') => {
-    setNuevoDeptoId(deptoIdNum);
-    if (!deptoIdNum) {
-      setNuevoNombre('');
-      return;
-    }
+  const toggleDeptoAlta = async (deptoId: number) => {
+    setNuevosDeptosIds((prev) => {
+      const existe = prev.includes(deptoId);
+      const next = existe ? prev.filter((id) => id !== deptoId) : [...prev, deptoId];
 
+      // Si seleccionó al menos un departamento y no ha escrito nombre manual, sugerir automáticamente
+      if (!existe && next.length === 1 && !nuevoNombre.trim()) {
+        void sugerirNombreParaAlta(next[0]);
+      }
+      return next;
+    });
+  };
+
+  const sugerirNombreParaAlta = async (deptoId: number) => {
     try {
       setCargandoSugerencia(true);
-      const nombreAuto = await terminalesApi.sugerirNombre(Number(deptoIdNum));
+      const nombreAuto = await terminalesApi.sugerirNombre(deptoId);
       setNuevoNombre(nombreAuto);
-    } catch (err) {
-      console.error('Error al sugerir nombre de terminal:', err);
-      const dep = departamentos.find((d) => d.id === deptoIdNum);
+    } catch {
+      const dep = departamentos.find((d) => d.id === deptoId);
       const cod = dep ? dep.codigo.toUpperCase() : 'TERMINAL';
       setNuevoNombre(`PC-${cod}-01`);
     } finally {
@@ -94,17 +101,21 @@ export function TerminalesPage() {
 
   const handleCrearTerminal = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nuevoDeptoId) return;
+    if (nuevosDeptosIds.length === 0) {
+      toast.error('Debe seleccionar al menos un departamento para la terminal');
+      return;
+    }
 
     setGuardandoAlta(true);
     try {
       const res = await terminalesApi.crearTerminal({
         nombre: nuevoNombre.trim() || undefined,
-        departamentoId: Number(nuevoDeptoId),
+        departamentoId: nuevosDeptosIds[0],
+        departamentosIds: nuevosDeptosIds,
       });
       setModalAltaAbierto(false);
       setNuevoNombre('');
-      setNuevoDeptoId('');
+      setNuevosDeptosIds([]);
       setCredencialCreada({
         nombre: res.terminal.nombre,
         credencial: res.credencial,
@@ -131,21 +142,52 @@ export function TerminalesPage() {
     }
   };
 
+  const toggleEditarDepto = (deptoId: number) => {
+    setEditarDeptosIds((prev) => {
+      if (prev.includes(deptoId)) {
+        if (prev.length <= 1) {
+          toast.warning('La terminal debe tener al menos un departamento asignado');
+          return prev;
+        }
+        return prev.filter((id) => id !== deptoId);
+      }
+      return [...prev, deptoId];
+    });
+  };
+
   const handleReasignar = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!terminalReasignar || !reasignarDeptoId) return;
+    if (!terminalReasignar || editarDeptosIds.length === 0) {
+      toast.error('Debe seleccionar al menos un departamento');
+      return;
+    }
+
+    const nombreLimpio = editarNombre.trim();
+    if (nombreLimpio.length < 2) {
+      toast.error('El nombre de la terminal debe tener al menos 2 caracteres');
+      return;
+    }
 
     setGuardandoReasignar(true);
     try {
-      await terminalesApi.reasignarDepartamento(terminalReasignar.id, {
-        departamentoId: Number(reasignarDeptoId),
+      if (nombreLimpio !== terminalReasignar.nombre) {
+        await terminalesApi.renombrarTerminal(terminalReasignar.id, {
+          nombre: nombreLimpio,
+        });
+      }
+
+      await terminalesApi.actualizarDepartamentosTerminal(terminalReasignar.id, {
+        departamentosIds: editarDeptosIds,
+        departamentoPrincipalId: editarDeptosIds[0],
       });
+
       setTerminalReasignar(null);
-      setReasignarDeptoId('');
+      setEditarNombre('');
+      setEditarDeptosIds([]);
       cargarDatos();
-      toast.success('Departamento reasignado exitosamente');
+      toast.success('Configuración de la terminal actualizada exitosamente');
     } catch (err: any) {
-      toast.error(err.message || 'Error al reasignar departamento');
+      toast.error(err.message || 'Error al actualizar configuración de la terminal');
     } finally {
       setGuardandoReasignar(false);
     }
@@ -187,8 +229,12 @@ export function TerminalesPage() {
         return false;
       }
 
-      if (deptoFiltro && t.departamentoId !== Number(deptoFiltro)) {
-        return false;
+      if (deptoFiltro) {
+        const deptoNum = Number(deptoFiltro);
+        const pertenece =
+          t.departamentoId === deptoNum ||
+          (Array.isArray(t.departamentosIds) && t.departamentosIds.includes(deptoNum));
+        if (!pertenece) return false;
       }
 
       return true;
@@ -245,7 +291,12 @@ export function TerminalesPage() {
         onSolicitarOtp={handleSolicitarOtp}
         onAbrirReasignar={(t) => {
           setTerminalReasignar(t);
-          setReasignarDeptoId(t.departamentoId);
+          setEditarNombre(t.nombre);
+          const ids =
+            t.departamentosIds && t.departamentosIds.length > 0
+              ? t.departamentosIds
+              : [t.departamentoId];
+          setEditarDeptosIds(ids);
         }}
         onAbrirRevocar={(t) => setTerminalRevocar(t)}
         toolbar={
@@ -263,40 +314,28 @@ export function TerminalesPage() {
       />
 
       {/* MODAL 1: ALTA DE TERMINAL */}
-      <Modal isOpen={modalAltaAbierto} onClose={() => setModalAltaAbierto(false)} className="max-w-md w-full">
+      <Modal isOpen={modalAltaAbierto} onClose={() => setModalAltaAbierto(false)} className="max-w-lg w-full">
         <ModalHeader title="Nueva Terminal de Captura" onClose={() => setModalAltaAbierto(false)} />
         <form onSubmit={handleCrearTerminal}>
           <ModalBody className="space-y-4 pt-1 text-xs">
+            {/* Nombre de la terminal */}
             <div>
-              <label className="block text-slate-700 font-bold mb-1">Departamento de Captura Asignado *</label>
-              <select
-                required
-                value={nuevoDeptoId}
-                onChange={(e) => handleDeptoAltaChange(e.target.value ? Number(e.target.value) : '')}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 focus:ring-brand-accent/50 text-slate-800"
-              >
-                <option value="">Seleccione un departamento</option>
-                {departamentos.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-slate-700 font-bold mb-1">
-                Nombre de la PC / Terminal
-                <span className="text-[11px] font-normal text-slate-400 ml-1.5">(Autogenerado por departamento)</span>
+              <label className="block text-slate-800 font-bold mb-1">
+                Nombre Visible de la Estación / Terminal *
+                <span className="text-[11px] font-normal text-slate-500 ml-1.5">
+                  (Ej. SIGMA, PC-CORTE-01, MESA-CONTROL)
+                </span>
               </label>
               <div className="relative">
                 <input
                   type="text"
-                  readOnly
-                  disabled
-                  value={cargandoSugerencia ? 'Calculando correlativo...' : nuevoNombre}
-                  placeholder="Seleccione un departamento para generar..."
-                  className="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-800 cursor-not-allowed select-none"
+                  required
+                  minLength={2}
+                  maxLength={60}
+                  value={cargandoSugerencia ? 'Calculando sugerencia...' : nuevoNombre}
+                  onChange={(e) => setNuevoNombre(e.target.value)}
+                  placeholder="Escriba un nombre o seleccione departamentos..."
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-accent/50"
                 />
                 {cargandoSugerencia && (
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
@@ -305,12 +344,113 @@ export function TerminalesPage() {
                 )}
               </div>
             </div>
+
+            {/* Departamentos donde opera */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-slate-800 font-bold">
+                  Departamentos asignados a esta estación *
+                </label>
+                <span className="text-[11px] font-semibold text-slate-500">
+                  {nuevosDeptosIds.length}{' '}
+                  {nuevosDeptosIds.length === 1 ? 'departamento' : 'departamentos'}
+                </span>
+              </div>
+              <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-slate-50/50 p-1">
+                {departamentos.map((d) => {
+                  const seleccionado = nuevosDeptosIds.includes(d.id);
+                  return (
+                    <label
+                      key={d.id}
+                      className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                        seleccionado
+                          ? 'bg-brand-primary/10 text-slate-900 font-bold'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={seleccionado}
+                          onChange={() => toggleDeptoAlta(d.id)}
+                          className="rounded border-slate-300 text-brand-primary focus:ring-brand-primary w-4 h-4 cursor-pointer"
+                        />
+                        <span className="uppercase text-xs tracking-wide">{d.nombre}</span>
+                      </div>
+                      {seleccionado && (
+                        <span className="text-[10px] font-bold text-brand-primary uppercase">
+                          Asignado
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Tarjeta explicativa de detección inteligente */}
+            {nuevosDeptosIds.length === 1 && (
+              <div className="p-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-slate-900 text-xs">
+                  <Icon name="check_circle" size="16px" className="text-emerald-600" />
+                  <span>
+                    Estación individual:{' '}
+                    {departamentos.find((d) => d.id === nuevosDeptosIds[0])?.nombre}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 pl-5">
+                  Todos los defectos capturados se registrarán como encontrados en{' '}
+                  <strong className="text-slate-900 uppercase">
+                    {departamentos.find((d) => d.id === nuevosDeptosIds[0])?.nombre}
+                  </strong>
+                  .
+                </p>
+              </div>
+            )}
+
+            {nuevosDeptosIds.length >= 2 && (
+              <div className="p-3 rounded-xl bg-indigo-50/70 border border-indigo-200 text-slate-800 space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-indigo-950 text-xs">
+                  <Icon name="hub" size="16px" className="text-indigo-600" />
+                  <span>Estación compartida ({nuevosDeptosIds.length} departamentos)</span>
+                </div>
+                <div className="text-[11px] text-slate-700 pl-5 space-y-1">
+                  <p>
+                    • Defectos propios de{' '}
+                    <strong className="text-slate-900 uppercase">
+                      {departamentos
+                        .filter((d) => nuevosDeptosIds.includes(d.id))
+                        .map((d) => d.nombre)
+                        .join(', ')}
+                    </strong>
+                    : se registrarán como encontrados en su respectivo departamento.
+                  </p>
+                  <p>
+                    • Defectos externos (de otros departamentos): se registrarán como encontrados en{' '}
+                    <strong className="text-indigo-900 uppercase font-mono">
+                      {nuevoNombre.trim() || 'esta terminal'}
+                    </strong>
+                    .
+                  </p>
+                </div>
+              </div>
+            )}
           </ModalBody>
           <ModalFooter className="flex justify-end gap-2 border-t border-border pt-3">
-            <Button variant="outline" size="sm" type="button" onClick={() => setModalAltaAbierto(false)}>
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={() => setModalAltaAbierto(false)}
+            >
               Cancelar
             </Button>
-            <Button variant="primary" size="sm" type="submit" disabled={guardandoAlta || !nuevoDeptoId || cargandoSugerencia}>
+            <Button
+              variant="primary"
+              size="sm"
+              type="submit"
+              disabled={guardandoAlta || nuevosDeptosIds.length === 0 || cargandoSugerencia}
+            >
               {guardandoAlta ? 'Guardando...' : 'Crear Terminal'}
             </Button>
           </ModalFooter>
@@ -359,34 +499,134 @@ export function TerminalesPage() {
         </ModalFooter>
       </Modal>
 
-      {/* MODAL 4: REASIGNAR DEPARTAMENTO */}
-      <Modal isOpen={Boolean(terminalReasignar)} onClose={() => setTerminalReasignar(null)} className="max-w-md w-full">
-        <ModalHeader title={`Reasignar ${terminalReasignar?.nombre}`} onClose={() => setTerminalReasignar(null)} />
+      {/* MODAL 4: CONFIGURAR NOMBRE VISIBLE Y DEPARTAMENTOS ASOCIADOS */}
+      <Modal isOpen={Boolean(terminalReasignar)} onClose={() => setTerminalReasignar(null)} className="max-w-lg w-full">
+        <ModalHeader title={`Configurar ${terminalReasignar?.nombre}`} onClose={() => setTerminalReasignar(null)} />
         <form onSubmit={handleReasignar}>
           <ModalBody className="space-y-4 pt-1 text-xs">
+            {/* Nombre de la terminal */}
             <div>
-              <label className="block text-slate-700 font-bold mb-1">Nuevo Departamento *</label>
-              <select
+              <label className="block text-slate-800 font-bold mb-1">
+                Nombre Visible de la Estación / Terminal *
+                <span className="text-[11px] font-normal text-slate-500 ml-1.5">
+                  (Ej. SIGMA, PC-CORTE-01, MESA-CONTROL)
+                </span>
+              </label>
+              <input
+                type="text"
                 required
-                value={reasignarDeptoId}
-                onChange={(e) => setReasignarDeptoId(Number(e.target.value))}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 focus:ring-brand-accent/50 text-slate-800"
-              >
-                <option value="">Seleccione departamento</option>
-                {departamentos.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.nombre}
-                  </option>
-                ))}
-              </select>
+                minLength={2}
+                maxLength={60}
+                value={editarNombre}
+                onChange={(e) => setEditarNombre(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-brand-accent/50 text-slate-800"
+              />
             </div>
+
+            {/* Departamentos donde opera */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-slate-800 font-bold">
+                  Departamentos asignados a esta estación *
+                </label>
+                <span className="text-[11px] font-semibold text-slate-500">
+                  {editarDeptosIds.length}{' '}
+                  {editarDeptosIds.length === 1 ? 'departamento' : 'departamentos'}
+                </span>
+              </div>
+              <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-slate-50/50 p-1">
+                {departamentos.map((d) => {
+                  const seleccionado = editarDeptosIds.includes(d.id);
+                  return (
+                    <label
+                      key={d.id}
+                      className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                        seleccionado
+                          ? 'bg-brand-primary/10 text-slate-900 font-bold'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={seleccionado}
+                          onChange={() => toggleEditarDepto(d.id)}
+                          className="rounded border-slate-300 text-brand-primary focus:ring-brand-primary w-4 h-4 cursor-pointer"
+                        />
+                        <span className="uppercase text-xs tracking-wide">{d.nombre}</span>
+                      </div>
+                      {seleccionado && (
+                        <span className="text-[10px] font-bold text-brand-primary uppercase">
+                          Asignado
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Tarjeta explicativa de detección inteligente */}
+            {editarDeptosIds.length === 1 && (
+              <div className="p-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-slate-900 text-xs">
+                  <Icon name="check_circle" size="16px" className="text-emerald-600" />
+                  <span>
+                    Estación individual:{' '}
+                    {departamentos.find((d) => d.id === editarDeptosIds[0])?.nombre ||
+                      terminalReasignar?.departamento?.nombre}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 pl-5">
+                  Todos los defectos capturados se registrarán como encontrados en{' '}
+                  <strong className="text-slate-900 uppercase">
+                    {departamentos.find((d) => d.id === editarDeptosIds[0])?.nombre ||
+                      terminalReasignar?.departamento?.nombre}
+                  </strong>
+                  .
+                </p>
+              </div>
+            )}
+
+            {editarDeptosIds.length >= 2 && (
+              <div className="p-3 rounded-xl bg-indigo-50/70 border border-indigo-200 text-slate-800 space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-indigo-950 text-xs">
+                  <Icon name="hub" size="16px" className="text-indigo-600" />
+                  <span>Estación compartida ({editarDeptosIds.length} departamentos)</span>
+                </div>
+                <div className="text-[11px] text-slate-700 pl-5 space-y-1">
+                  <p>
+                    • Defectos propios de{' '}
+                    <strong className="text-slate-900 uppercase">
+                      {departamentos
+                        .filter((d) => editarDeptosIds.includes(d.id))
+                        .map((d) => d.nombre)
+                        .join(', ')}
+                    </strong>
+                    : se registrarán como encontrados en su respectivo departamento.
+                  </p>
+                  <p>
+                    • Defectos externos (de otros departamentos): se registrarán como encontrados en{' '}
+                    <strong className="text-indigo-900 uppercase font-mono">
+                      {editarNombre.trim() || terminalReasignar?.nombre}
+                    </strong>
+                    .
+                  </p>
+                </div>
+              </div>
+            )}
           </ModalBody>
           <ModalFooter className="flex justify-end gap-2 border-t border-border pt-3">
             <Button variant="outline" size="sm" type="button" onClick={() => setTerminalReasignar(null)}>
               Cancelar
             </Button>
-            <Button variant="primary" size="sm" type="submit" disabled={guardandoReasignar}>
-              {guardandoReasignar ? 'Guardando...' : 'Confirmar Reasignación'}
+            <Button
+              variant="primary"
+              size="sm"
+              type="submit"
+              disabled={guardandoReasignar || editarDeptosIds.length === 0}
+            >
+              {guardandoReasignar ? 'Guardando...' : 'Guardar Cambios'}
             </Button>
           </ModalFooter>
         </form>

@@ -50,6 +50,9 @@ export function useTerminalStatus(): UseTerminalStatusResult {
           numeroLineas:
             cachedProfile.numeroLineas ??
             (cachedProfile.departamentoCodigo === 'MONTADO' ? 2 : 1),
+          departamentos: cachedProfile.departamentos,
+          departamentosIds: cachedProfile.departamentosIds,
+          lugarDeteccion: cachedProfile.lugarDeteccion,
           estado: 'ACTIVO',
         });
         setErrorMensaje(null);

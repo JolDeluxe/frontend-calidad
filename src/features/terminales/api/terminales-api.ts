@@ -1,5 +1,6 @@
 import { httpClient, type ApiResponse } from '@/lib/api/http-client';
 import type { TerminalEstadoResponse, TerminalPublicInfo } from '../services/terminal-storage';
+import type { TerminalDepartamentoProfileItem } from '@/lib/db/idb-database';
 
 export interface TerminalGestionItem {
   id: number;
@@ -10,6 +11,9 @@ export interface TerminalGestionItem {
     codigo: string;
     nombre: string;
   };
+  departamentosActivos?: TerminalDepartamentoProfileItem[];
+  departamentosIds?: number[];
+  lugarDeteccion?: string;
   estado: string;
   motivoBloqueo?: string | null;
   fechaCreacion: string;
@@ -110,6 +114,40 @@ export const terminalesApi = {
   },
 
   /**
+   * Cambiar nombre visible personalizado de una terminal (SUPER_ADMIN).
+   */
+  renombrarTerminal: async (
+    terminalId: number,
+    data: { nombre: string; motivo?: string },
+  ): Promise<TerminalGestionItem> => {
+    const res = await httpClient.patch<ApiResponse<TerminalGestionItem>>(
+      `/terminales/${terminalId}/nombre`,
+      data,
+    );
+    if (!res.data) throw new Error('Respuesta inválida al renombrar terminal');
+    return res.data;
+  },
+
+  /**
+   * Actualizar departamentos asociados y departamento principal de una terminal (SUPER_ADMIN).
+   */
+  actualizarDepartamentosTerminal: async (
+    terminalId: number,
+    data: {
+      departamentosIds: number[];
+      departamentoPrincipalId: number;
+      motivo?: string;
+    },
+  ): Promise<TerminalGestionItem> => {
+    const res = await httpClient.put<ApiResponse<TerminalGestionItem>>(
+      `/terminales/${terminalId}/departamentos`,
+      data,
+    );
+    if (!res.data) throw new Error('Respuesta inválida al actualizar departamentos de la terminal');
+    return res.data;
+  },
+
+  /**
    * Revocar / bloquear una terminal física (SUPER_ADMIN).
    */
   revocarTerminal: async (terminalId: number, motivo?: string): Promise<TerminalGestionItem> => {
@@ -137,6 +175,7 @@ export const terminalesApi = {
   crearTerminal: async (data: {
     nombre?: string;
     departamentoId: number;
+    departamentosIds?: number[];
   }): Promise<{ terminal: TerminalPublicInfo; credencial: string }> => {
     const res = await httpClient.post<
       ApiResponse<{ terminal: TerminalPublicInfo; credencial: string }>

@@ -259,9 +259,18 @@ export function RegistroHistoricoTabla({
             <TableRowsSkeleton columns={14} rows={10} />
           ) : (
             items.map((row, idx) => {
-              // Resaltar si el departamento de origen/responsable es diferente del auditado
+              // Resaltar si el defecto es externo a los departamentos activos de la terminal
               const esDeptoExterno =
-                row.defDepto.trim().toUpperCase() !== row.departamentoAuditoria.trim().toUpperCase();
+                typeof row.esDeptoExterno === 'boolean'
+                  ? row.esDeptoExterno
+                  : row.defDepto.trim().toUpperCase() !== row.departamentoAuditoria.trim().toUpperCase();
+              const leyendaDeteccion =
+                row.nomenclatura ||
+                `DEFECTO DE ${row.defDepto.trim().toUpperCase()} ENCONTRADO EN ${(
+                  row.lugarDeteccion || row.departamentoAuditoria
+                )
+                  .trim()
+                  .toUpperCase()}`;
 
               return (
                 <tr
@@ -291,7 +300,7 @@ export function RegistroHistoricoTabla({
                           />
                           <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 hidden group-hover:flex group-focus:flex flex-col items-center z-50 pointer-events-none">
                             <div className="bg-slate-900 text-white text-[11px] font-medium py-1 px-2.5 rounded shadow-lg whitespace-nowrap">
-                              Defecto de {row.defDepto} encontrado en {row.departamentoAuditoria}
+                              {leyendaDeteccion}
                             </div>
                             <div className="w-2 h-1 bg-slate-900 rotate-45 -mt-0.5" />
                           </div>

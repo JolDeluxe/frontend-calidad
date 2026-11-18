@@ -8,6 +8,8 @@ export interface CapturaDefectosTablaProps {
   defectosCapturados: DefectoItemCapturado[];
   totalParesFalla: number;
   departamentoAuditorId?: number;
+  departamentosTerminalIds?: number[];
+  terminalNombre?: string;
   catalogoDefectos: Defecto[];
   setClaveDefecto: (val: string) => void;
   setDefectoSeleccionado: (d: Defecto | null) => void;
@@ -20,6 +22,8 @@ export function CapturaDefectosTabla({
   defectosCapturados,
   totalParesFalla,
   departamentoAuditorId,
+  departamentosTerminalIds,
+  terminalNombre,
   catalogoDefectos,
   setClaveDefecto,
   setDefectoSeleccionado,
@@ -30,12 +34,27 @@ export function CapturaDefectosTabla({
   // Estado para confirmación rápida en línea del botón de eliminar
   const [confirmandoEliminarId, setConfirmandoEliminarId] = useState<string | null>(null);
 
-  // Determinar si hay defectos de otros departamentos en la lista capturada
+  // Conjunto de departamentos que pertenecen a esta terminal / estación
+  const terminalDeptosSet = new Set(
+    departamentosTerminalIds && departamentosTerminalIds.length > 0
+      ? departamentosTerminalIds
+      : departamentoAuditorId
+      ? [departamentoAuditorId]
+      : []
+  );
+
+  const esTerminalCompartida = (departamentosTerminalIds?.length ?? 0) >= 2;
+
+  // Determinar si hay defectos de otros departamentos (externos a la terminal) en la lista capturada
   const hayDefectosExternos =
-    Boolean(departamentoAuditorId) &&
+    terminalDeptosSet.size > 0 &&
     defectosCapturados.some(
-      (item) => item.departamentoResponsableId && item.departamentoResponsableId !== departamentoAuditorId
+      (item) =>
+        item.departamentoResponsableId && !terminalDeptosSet.has(item.departamentoResponsableId)
     );
+
+  // La columna Depto se muestra siempre que la terminal sea compartida o si hay defectos externos
+  const mostrarColumnaDepto = esTerminalCompartida || hayDefectosExternos;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -64,8 +83,8 @@ export function CapturaDefectosTabla({
                 <th className="py-2.5 px-2 w-10 text-center">No.</th>
                 <th className="py-2.5 px-3 w-16 text-center">Clave</th>
                 <th className="py-2.5 px-3">Defecto</th>
-                {/* Columna Depto condicional: Solo aparece si hay defectos de otros departamentos */}
-                {hayDefectosExternos && (
+                {/* Columna Depto: Se muestra si la terminal es compartida o si hay defectos externos */}
+                {mostrarColumnaDepto && (
                   <th className="py-2.5 px-3 w-28 text-center">Depto</th>
                 )}
                 <th className="py-2.5 px-3 w-24 text-center">Clasif.</th>
@@ -78,9 +97,9 @@ export function CapturaDefectosTabla({
               {defectosCapturados.map((item, index) => {
                 const estaConfirmando = confirmandoEliminarId === item.idTemporal;
                 const esDeptoExterno =
-                  departamentoAuditorId &&
-                  item.departamentoResponsableId &&
-                  item.departamentoResponsableId !== departamentoAuditorId;
+                  terminalDeptosSet.size > 0 &&
+                  Boolean(item.departamentoResponsableId) &&
+                  !terminalDeptosSet.has(item.departamentoResponsableId);
 
                 return (
                   <tr
@@ -111,16 +130,20 @@ export function CapturaDefectosTabla({
                         </div>
                       </div>
                     </td>
-                    {/* Celda Depto condicional */}
-                    {hayDefectosExternos && (
+                    {/* Celda Depto */}
+                    {mostrarColumnaDepto && (
                       <td className="py-2.5 px-3 text-center truncate">
                         <span
-                          className={`text-xs font-semibold ${
+                          className={`text-xs ${
                             esDeptoExterno
-                              ? 'text-amber-800 dark:text-amber-300 font-bold'
-                              : 'text-text-secondary'
+                              ? 'text-amber-800 dark:text-amber-300 font-bold bg-amber-100/60 dark:bg-amber-900/40 px-1.5 py-0.5 rounded'
+                              : 'text-text-secondary font-semibold'
                           }`}
-                          title={item.departamentoResponsableNombre}
+                          title={
+                            esDeptoExterno
+                              ? `${item.departamentoResponsableNombre} (Externo: se registrará en ${terminalNombre || 'esta terminal'})`
+                              : `${item.departamentoResponsableNombre} (Propio de la estación)`
+                          }
                         >
                           {item.departamentoResponsableNombre}
                         </span>
@@ -202,9 +225,10 @@ export function CapturaDefectosTabla({
       {hayDefectosExternos && (
         <div className="mt-1 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 rounded-xl flex items-center justify-between text-xs text-amber-900 dark:text-amber-200 shrink-0 animate-in fade-in duration-150">
           <div className="flex items-center gap-2">
-            <Icon name="info" size="13px" className="text-amber-600 dark:text-amber-400 shrink-0" />
+            <Icon name="info" size="14px" className="text-amber-600 dark:text-amber-400 shrink-0" />
             <span className="font-medium">
-              Hay defectos registrados que pertenecen a otro departamento.
+              Defectos externos detectados (se registrarán como encontrados en{' '}
+              <strong className="font-bold uppercase font-mono">{terminalNombre || 'esta terminal'}</strong>).
             </span>
           </div>
         </div>

@@ -9,6 +9,7 @@ import type { Defecto } from '@/features/defectos/types/defectos.types';
 export interface CapturaDefectoFormProps {
   loteActivo: boolean;
   departamentoAuditorId?: number;
+  departamentosTerminalIds?: number[];
   claveDefecto: string;
   setClaveDefecto: (val: string) => void;
   claveInputRef: RefObject<HTMLInputElement | null>;
@@ -37,6 +38,7 @@ export interface CapturaDefectoFormProps {
 export function CapturaDefectoForm({
   loteActivo,
   departamentoAuditorId,
+  departamentosTerminalIds,
   claveDefecto,
   setClaveDefecto,
   claveInputRef,
@@ -62,6 +64,15 @@ export function CapturaDefectoForm({
   tecladoActivo,
 }: CapturaDefectoFormProps) {
   const paresInputRef = useRef<HTMLInputElement>(null);
+
+  // Conjunto de departamentos que pertenecen a esta terminal / estación
+  const terminalDeptosSet = new Set(
+    departamentosTerminalIds && departamentosTerminalIds.length > 0
+      ? departamentosTerminalIds
+      : departamentoAuditorId
+      ? [departamentoAuditorId]
+      : []
+  );
   return (
     <div
       className={cn(
@@ -237,19 +248,19 @@ export function CapturaDefectoForm({
                         );
                       })
                       .sort((a, b) => {
-                        // Priorizar primero los defectos que pertenecen al departamento auditor actual
-                        if (departamentoAuditorId) {
-                          const aEsMismoDepto = a.departamentoId === departamentoAuditorId ? 1 : 0;
-                          const bEsMismoDepto = b.departamentoId === departamentoAuditorId ? 1 : 0;
-                          if (aEsMismoDepto !== bEsMismoDepto) {
-                            return bEsMismoDepto - aEsMismoDepto;
+                        // Priorizar primero los defectos que pertenecen a los departamentos de esta terminal
+                        if (terminalDeptosSet.size > 0) {
+                          const aEsPropio = a.departamentoId && terminalDeptosSet.has(a.departamentoId) ? 1 : 0;
+                          const bEsPropio = b.departamentoId && terminalDeptosSet.has(b.departamentoId) ? 1 : 0;
+                          if (aEsPropio !== bEsPropio) {
+                            return bEsPropio - aEsPropio;
                           }
                         }
                         return a.clave - b.clave;
                       })
                       .map((d) => {
                         const esDeptoExterno =
-                          departamentoAuditorId && d.departamentoId && d.departamentoId !== departamentoAuditorId;
+                          terminalDeptosSet.size > 0 && d.departamentoId && !terminalDeptosSet.has(d.departamentoId);
                         const nombreDepto = d.departamento?.nombre || d.departamento?.codigo;
 
                         return (

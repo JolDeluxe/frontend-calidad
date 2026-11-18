@@ -43,6 +43,14 @@ export interface InspectorOfflineStore {
   actualizadoEn: string;
 }
 
+export interface TerminalDepartamentoProfileItem {
+  departamentoId: number;
+  codigo: string;
+  nombre: string;
+  numeroLineas: number;
+  esPrincipal: boolean;
+}
+
 export interface TerminalProfileStore {
   id: string; // Fijo "local"
   terminalId: number;
@@ -51,6 +59,9 @@ export interface TerminalProfileStore {
   departamentoCodigo: string;
   departamentoNombre: string;
   numeroLineas?: number;
+  departamentos?: TerminalDepartamentoProfileItem[];
+  departamentosIds?: number[];
+  lugarDeteccion?: string;
   guardadoEn: string;
 }
 

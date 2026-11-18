@@ -16,9 +16,20 @@ export interface ValidacionDefectoCaptura {
 }
 
 export const defectosApi = {
-  validarCaptura: async (clave: number, etapaId: number): Promise<ValidacionDefectoCaptura> => {
+  validarCaptura: async (
+    clave: number,
+    etapaId: number,
+    etapasIds?: number[],
+  ): Promise<ValidacionDefectoCaptura> => {
+    const query = new URLSearchParams();
+    query.set('clave', String(clave));
+    if (etapasIds && etapasIds.length > 1) {
+      query.set('etapasIds', etapasIds.join(','));
+    } else if (etapaId) {
+      query.set('etapaId', String(etapaId));
+    }
     const res = await httpClient.get<ApiResponse<ValidacionDefectoCaptura>>(
-      `/defectos/validar-captura?clave=${clave}&etapaId=${etapaId}`,
+      `/defectos/validar-captura?${query.toString()}`,
     );
     return res.data!;
   },
@@ -30,6 +41,7 @@ export const defectosApi = {
     clasificacion?: string;
     departamentoId?: number;
     etapaId?: number;
+    etapasIds?: number[];
     categoriaDepartamentoId?: number;
     lineaId?: number;
     lineasIds?: number[];
@@ -45,7 +57,11 @@ export const defectosApi = {
     if (params?.busqueda) query.set('busqueda', params.busqueda);
     if (params?.clasificacion) query.set('clasificacion', params.clasificacion);
     if (params?.departamentoId) query.set('departamentoId', params.departamentoId.toString());
-    if (params?.etapaId) query.set('etapaId', params.etapaId.toString());
+    if (params?.etapasIds && params.etapasIds.length > 1) {
+      query.set('etapasIds', params.etapasIds.join(','));
+    } else if (params?.etapaId) {
+      query.set('etapaId', params.etapaId.toString());
+    }
     if (params?.categoriaDepartamentoId) query.set('categoriaDepartamentoId', params.categoriaDepartamentoId.toString());
     if (params?.lineaId) query.set('lineaId', params.lineaId.toString());
     if (params?.lineasIds && params.lineasIds.length > 0) query.set('lineasIds', params.lineasIds.join(','));

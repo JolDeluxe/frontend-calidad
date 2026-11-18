@@ -60,15 +60,62 @@ export function TerminalesTabla({
                 </td>
               </tr>
             ) : (
-              items.map((t) => (
+              items.map((t) => {
+                const deptosActivos =
+                  t.departamentosActivos && t.departamentosActivos.length > 0
+                    ? t.departamentosActivos
+                    : t.departamento
+                    ? [
+                        {
+                          departamentoId: t.departamento.id,
+                          codigo: t.departamento.codigo,
+                          nombre: t.departamento.nombre,
+                          numeroLineas: 1,
+                          esPrincipal: true,
+                        },
+                      ]
+                    : [];
+                const esCompartida = deptosActivos.length >= 2;
+                const lugarDeteccion =
+                  t.lugarDeteccion ||
+                  (esCompartida ? t.nombre : deptosActivos[0]?.nombre || t.departamento?.nombre);
+
+                return (
                 <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
                   <td className="py-2.5 px-4">
-                    <div className="font-bold text-slate-900 font-mono text-xs">{t.nombre}</div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-slate-900 font-mono text-xs">{t.nombre}</span>
+                      {esCompartida && (
+                        <span
+                          className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 uppercase"
+                          title={`Estación compartida (${deptosActivos.length} departamentos). Lugar de detección: ${lugarDeteccion}`}
+                        >
+                          Compartida
+                        </span>
+                      )}
+                    </div>
+                    {lugarDeteccion && (
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        Lugar de detección: <strong className="text-slate-700 uppercase">{lugarDeteccion}</strong>
+                      </div>
+                    )}
                   </td>
                   <td className="py-2.5 px-4">
-                    <span className="font-bold text-marca-primario uppercase text-xs">
-                      {t.departamento?.nombre || 'Sin Asignar'}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {deptosActivos.length === 0 ? (
+                        <span className="font-bold text-slate-400 uppercase text-xs">Sin Asignar</span>
+                      ) : (
+                        deptosActivos.map((d) => (
+                          <span
+                            key={d.departamentoId}
+                            className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold uppercase text-slate-800 bg-slate-100 border border-slate-200"
+                            title={`Departamento asignado a la estación: ${d.nombre}`}
+                          >
+                            <span>{d.nombre}</span>
+                          </span>
+                        ))
+                      )}
+                    </div>
                   </td>
                   <td className="py-2.5 px-4">
                     {t.estado === 'ACTIVO' && !t.fechaRevocacion ? (
@@ -117,10 +164,10 @@ export function TerminalesTabla({
                             variant="outline"
                             onClick={() => onAbrirReasignar(t)}
                             className="h-7 text-xs px-2 text-slate-700 bg-white border-slate-300 hover:bg-slate-50 cursor-pointer"
-                            title="Reasignar departamento de captura"
+                            title="Configurar nombre visible y departamentos asociados"
                           >
                             <Icon name="swap_horiz" size="14px" className="mr-1 text-slate-500" />
-                            <span>Reasignar</span>
+                            <span>Configurar</span>
                           </Button>
                           <Button
                             size="sm"
@@ -139,7 +186,8 @@ export function TerminalesTabla({
                     </div>
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>

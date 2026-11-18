@@ -67,6 +67,9 @@ export interface InspeccionFilaResponse {
   usuario: string;
   terminal?: string | null;
   terminalId?: number | null;
+  lugarDeteccion?: string | null;
+  esDeptoExterno?: boolean;
+  nomenclatura?: string | null;
   eliminadoEn?: string | null;
   eliminadoPor?: number | null;
   eliminadoPorNombre?: string | null;

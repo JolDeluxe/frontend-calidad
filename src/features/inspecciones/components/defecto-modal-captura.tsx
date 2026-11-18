@@ -96,6 +96,8 @@ export interface DefectoModalCapturaProps {
   onClose: () => void;
   onSuccess: (nuevosDetallesIds?: number[]) => void;
   departamentoAuditor: Departamento | null;
+  etapasTerminalIds?: number[];
+  terminalNombre?: string;
   lineas?: LineaOperativa[];
   departamentos: Departamento[];
 }
@@ -105,6 +107,8 @@ export function DefectoModalCaptura({
   onClose,
   onSuccess,
   departamentoAuditor,
+  etapasTerminalIds,
+  terminalNombre,
   departamentos = [],
 }: DefectoModalCapturaProps) {
   const { user, isOfflineMode } = useAuthSession();
@@ -167,10 +171,17 @@ export function DefectoModalCaptura({
     const cargarCatalogo = async () => {
       setAvisoCatalogoOffline(null);
       const etapaTargetId = departamentoAuditor?.id;
+      const etapasEfectivasIds =
+        etapasTerminalIds && etapasTerminalIds.length > 0
+          ? etapasTerminalIds
+          : etapaTargetId
+          ? [etapaTargetId]
+          : undefined;
 
       const cargarDesdeLocal = async () => {
         const resLocal = await catalogoOfflineService.consultarDefectosLocales({
           etapaId: etapaTargetId,
+          etapasIds: etapasEfectivasIds,
           activo: true,
           limit: 1000,
         });
@@ -192,6 +203,7 @@ export function DefectoModalCaptura({
       try {
         const resp = await defectosApi.getDefectos({
           etapaId: etapaTargetId,
+          etapasIds: etapasEfectivasIds,
           activo: true,
           limit: 1000,
         });
@@ -211,7 +223,7 @@ export function DefectoModalCaptura({
     return () => {
       cancelado = true;
     };
-  }, [isOpen, departamentoAuditor, isOfflineMode]);
+  }, [isOpen, departamentoAuditor, etapasTerminalIds, isOfflineMode]);
 
   // Limpiar campos cada vez que se abre el modal
   useEffect(() => {
@@ -442,10 +454,17 @@ export function DefectoModalCaptura({
       return enCatalogoLocal;
     }
 
+    const etapasEfectivasIds =
+      etapasTerminalIds && etapasTerminalIds.length > 0
+        ? etapasTerminalIds
+        : departamentoAuditor?.id
+        ? [departamentoAuditor.id]
+        : undefined;
+
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       const validacionLocal = await catalogoOfflineService.validarDefectoLocalParaCaptura(
         num,
-        departamentoAuditor?.id,
+        etapasEfectivasIds ?? departamentoAuditor?.id,
       );
       if (validacionLocal.estado === 'VALIDO' && validacionLocal.defecto) {
         setDefectoSeleccionado(validacionLocal.defecto);
@@ -462,8 +481,12 @@ export function DefectoModalCaptura({
     setErrorDefecto(null);
 
     try {
-      if (departamentoAuditor?.id) {
-        const validacion = await defectosApi.validarCaptura(num, departamentoAuditor.id);
+      if (departamentoAuditor?.id || (etapasEfectivasIds && etapasEfectivasIds.length > 0)) {
+        const validacion = await defectosApi.validarCaptura(
+          num,
+          departamentoAuditor?.id || etapasEfectivasIds![0],
+          etapasEfectivasIds,
+        );
         if (validacion.estado === 'VALIDO' && validacion.defecto) {
           setDefectoSeleccionado(validacion.defecto);
           setErrorDefecto(null);
@@ -495,7 +518,7 @@ export function DefectoModalCaptura({
     } catch {
       const validacionLocal = await catalogoOfflineService.validarDefectoLocalParaCaptura(
         num,
-        departamentoAuditor?.id,
+        etapasEfectivasIds ?? departamentoAuditor?.id,
       );
       if (validacionLocal.estado === 'VALIDO' && validacionLocal.defecto) {
         setDefectoSeleccionado(validacionLocal.defecto);
@@ -761,7 +784,21 @@ export function DefectoModalCaptura({
 
   const totalParesFalla = defectosCapturados.reduce((acc, d) => acc + d.pares, 0);
   const inspectorNombre = (user?.nombre || user?.usuario || 'INSPECTOR CALIDAD').toUpperCase();
-  const deptoNombre = (departamentoAuditor?.nombre || 'MONTADO').toUpperCase();
+
+  const deptosTerminalActivos = departamentos.filter(
+    (d) => etapasTerminalIds && etapasTerminalIds.includes(d.id)
+  );
+  const esTerminalCompartida = deptosTerminalActivos.length >= 2;
+
+  const estacionVisibleTexto =
+    esTerminalCompartida && terminalNombre
+      ? terminalNombre.toUpperCase()
+      : (departamentoAuditor?.nombre || 'CALIDAD').toUpperCase();
+
+  const deptoSelloAuditoria =
+    esTerminalCompartida && terminalNombre
+      ? `${terminalNombre} (${deptosTerminalActivos.map((d) => d.nombre).join(' / ')})`
+      : (departamentoAuditor?.nombre || 'CALIDAD').toUpperCase();
 
   return (
     <>
@@ -772,7 +809,7 @@ export function DefectoModalCaptura({
         className="w-full h-[96vh] max-h-[96vh] border-border shadow-2xl bg-app-surface"
       >
         <ModalHeader
-          title={`Captura de Defectos — ${departamentoAuditor?.nombre || 'Calidad'}`}
+          title={`Captura de Defectos — ${estacionVisibleTexto}`}
           onClose={handleCerrarDirecto}
           className="px-6 py-4"
         />
@@ -818,8 +855,8 @@ export function DefectoModalCaptura({
 
               {/* SELLO DE AUDITORÍA */}
               <div className="shrink-0 pt-2 border-t border-border-subtle flex items-center justify-between text-[10px] xl:text-xs text-text-muted opacity-75">
-                <span className="font-semibold uppercase tracking-wider truncate mr-2" title={deptoNombre}>
-                  {deptoNombre}
+                <span className="font-semibold uppercase tracking-wider truncate mr-2" title={deptoSelloAuditoria}>
+                  {deptoSelloAuditoria}
                 </span>
                 <span className="font-mono truncate" title={inspectorNombre}>
                   {inspectorNombre}
@@ -840,6 +877,7 @@ export function DefectoModalCaptura({
               <CapturaDefectoForm
                 loteActivo={!!loteActivo}
                 departamentoAuditorId={departamentoAuditor?.id}
+                departamentosTerminalIds={etapasTerminalIds}
                 claveDefecto={claveDefecto}
                 setClaveDefecto={setClaveDefecto}
                 claveInputRef={claveInputRef}
@@ -872,6 +910,8 @@ export function DefectoModalCaptura({
                 defectosCapturados={defectosCapturados}
                 totalParesFalla={totalParesFalla}
                 departamentoAuditorId={departamentoAuditor?.id}
+                departamentosTerminalIds={etapasTerminalIds}
+                terminalNombre={estacionVisibleTexto}
                 catalogoDefectos={catalogoDefectos}
                 setClaveDefecto={setClaveDefecto}
                 setDefectoSeleccionado={setDefectoSeleccionado}

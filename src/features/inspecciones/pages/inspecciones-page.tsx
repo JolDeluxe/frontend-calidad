@@ -912,14 +912,28 @@ export function InspeccionesPage() {
             </div>
           )}
 
-          {/* Encabezado Principal: Nombre de Departamento en Grande y Botón de Captura */}
+          {/* Encabezado Principal: Nombre de Departamento / Estación en Grande y Botón de Captura */}
           <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-border/80">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 uppercase">
                 {terminalEstado === 'vinculada' && terminal
-                  ? terminal.departamentoNombre
+                  ? terminal.lugarDeteccion || terminal.departamentoNombre
                   : deptoAuditor?.nombre || 'Inspección de Calidad'}
               </h1>
+              {terminalEstado === 'vinculada' &&
+                terminal?.departamentos &&
+                terminal.departamentos.length > 1 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {terminal.departamentos.map((d) => (
+                      <span
+                        key={d.departamentoId}
+                        className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold uppercase bg-brand-primary/10 text-brand-primary border border-brand-primary/20"
+                      >
+                        {d.nombre}
+                      </span>
+                    ))}
+                  </div>
+                )}
             </div>
 
             <div className="flex items-center gap-2">
@@ -1141,6 +1155,12 @@ export function InspeccionesPage() {
           void cargarRegistros(1, false, { skipServerIfUnreachable: true });
         }}
         departamentoAuditor={deptoAuditor}
+        etapasTerminalIds={
+          terminalEstado === 'vinculada' && terminal?.departamentosIds && terminal.departamentosIds.length > 0
+            ? terminal.departamentosIds
+            : undefined
+        }
+        terminalNombre={terminalEstado === 'vinculada' ? terminal?.nombre : undefined}
         lineas={lineas}
         departamentos={departamentos}
       />

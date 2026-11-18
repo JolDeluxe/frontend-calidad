@@ -178,6 +178,10 @@ export class CatalogoOfflineService {
       departamentoId: term.departamentoId,
       departamentoCodigo: term.departamentoCodigo,
       departamentoNombre: term.departamentoNombre,
+      numeroLineas: term.numeroLineas,
+      departamentos: term.departamentos,
+      departamentosIds: term.departamentosIds,
+      lugarDeteccion: term.lugarDeteccion,
       guardadoEn: new Date().toISOString(),
     };
 
@@ -779,7 +783,7 @@ export class CatalogoOfflineService {
    */
   async validarDefectoLocalParaCaptura(
     clave: number,
-    etapaId?: number,
+    etapaIdOrIds?: number | number[],
   ): Promise<{
     estado: 'VALIDO' | 'INEXISTENTE' | 'INACTIVO' | 'NO_PERMITIDO' | 'SIN_CATALOGO';
     mensaje: string;
@@ -824,28 +828,45 @@ export class CatalogoOfflineService {
       };
     }
 
-    if (etapaId && etapaId > 0) {
-      const etapaSincronizadaId = typeof metaEtapa?.valor === 'number' ? metaEtapa.valor : null;
-      let permiteEtapa =
-        (Array.isArray(encontrado.etapasPermitidasIds) &&
-          encontrado.etapasPermitidasIds.includes(etapaId)) ||
-        encontrado.etapaId === etapaId ||
-        (etapaSincronizadaId === etapaId && encontrado.permitidoEnEtapa);
+    const etapasEvaluarIds = Array.from(
+      new Set(
+        (Array.isArray(etapaIdOrIds) ? etapaIdOrIds : etapaIdOrIds ? [etapaIdOrIds] : [])
+          .map(Number)
+          .filter((id) => Number.isInteger(id) && id > 0),
+      ),
+    );
 
-      // Si no tiene excepción local explícita en cat_defectos, consultar la matriz maestra en IndexedDB
-      if (!permiteEtapa && encontrado.departamentoId) {
-        const reglaLocal = await idbDatabase.get<MatrizVisibilidadOfflineStore>(
-          'matriz_visibilidad',
-          `${encontrado.departamentoId}_${etapaId}`,
-        );
-        if (reglaLocal) {
-          permiteEtapa = reglaLocal.permitido;
-        } else if (encontrado.departamentoId === etapaId) {
-          permiteEtapa = true; // Compatibilidad por defecto en su propio departamento
+    if (etapasEvaluarIds.length > 0) {
+      const etapaSincronizadaId = typeof metaEtapa?.valor === 'number' ? metaEtapa.valor : null;
+      let permiteAlgunaEtapa = false;
+
+      for (const etapaId of etapasEvaluarIds) {
+        let permiteEtapa =
+          (Array.isArray(encontrado.etapasPermitidasIds) &&
+            encontrado.etapasPermitidasIds.includes(etapaId)) ||
+          encontrado.etapaId === etapaId ||
+          (etapaSincronizadaId === etapaId && encontrado.permitidoEnEtapa);
+
+        // Si no tiene excepción local explícita en cat_defectos, consultar la matriz maestra en IndexedDB
+        if (!permiteEtapa && encontrado.departamentoId) {
+          const reglaLocal = await idbDatabase.get<MatrizVisibilidadOfflineStore>(
+            'matriz_visibilidad',
+            `${encontrado.departamentoId}_${etapaId}`,
+          );
+          if (reglaLocal) {
+            permiteEtapa = reglaLocal.permitido;
+          } else if (encontrado.departamentoId === etapaId) {
+            permiteEtapa = true; // Compatibilidad por defecto en su propio departamento
+          }
+        }
+
+        if (permiteEtapa) {
+          permiteAlgunaEtapa = true;
+          break;
         }
       }
 
-      if (!permiteEtapa) {
+      if (!permiteAlgunaEtapa) {
         return {
           estado: 'NO_PERMITIDO',
           mensaje: 'Defecto no permitido',
@@ -907,6 +928,7 @@ export class CatalogoOfflineService {
    */
   async consultarDefectosLocales(filtros: {
     etapaId?: number;
+    etapasIds?: number[];
     clave?: number;
     busqueda?: string;
     clasificacion?: string;
@@ -977,7 +999,14 @@ export class CatalogoOfflineService {
         if (filtros.activo !== false && d.activo === false) return false;
         if (!d.permitidoEnEtapa) return false;
 
-        if (filtros.etapaId && filtros.etapaId > 0) {
+        if (filtros.etapasIds && filtros.etapasIds.length > 0) {
+          const permiteAlguna = filtros.etapasIds.some(
+            (etId) =>
+              (Array.isArray(d.etapasPermitidasIds) && d.etapasPermitidasIds.includes(etId)) ||
+              d.etapaId === etId,
+          );
+          if (!permiteAlguna) return false;
+        } else if (filtros.etapaId && filtros.etapaId > 0) {
           const permiteEtapa =
             (Array.isArray(d.etapasPermitidasIds) &&
               d.etapasPermitidasIds.includes(filtros.etapaId)) ||

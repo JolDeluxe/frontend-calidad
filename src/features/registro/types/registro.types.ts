@@ -1,4 +1,4 @@
-export * from '@/features/inspecciones/types/inspecciones.types';
+export * from '../../inspecciones/types/inspecciones.types';
 
 export type ModalidadPeriodoRegistro =
   | 'hoy'

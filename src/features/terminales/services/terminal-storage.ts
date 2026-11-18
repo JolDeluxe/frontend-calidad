@@ -1,6 +1,7 @@
 import {
   idbDatabase,
   type TerminalProfileStore,
+  type TerminalDepartamentoProfileItem,
   type ColaInspeccionStore,
 } from '@/lib/db/idb-database';
 
@@ -16,6 +17,9 @@ export interface TerminalPublicInfo {
   departamentoNombre: string;
   departamentoCodigo: string;
   numeroLineas?: number;
+  departamentos?: TerminalDepartamentoProfileItem[];
+  departamentosIds?: number[];
+  lugarDeteccion?: string;
   estado: string;
 }
 
@@ -60,6 +64,9 @@ export const terminalStorage = {
       departamentoCodigo: terminal.departamentoCodigo,
       departamentoNombre: terminal.departamentoNombre,
       numeroLineas: terminal.numeroLineas ?? (terminal.departamentoCodigo === 'MONTADO' ? 2 : 1),
+      departamentos: terminal.departamentos,
+      departamentosIds: terminal.departamentosIds,
+      lugarDeteccion: terminal.lugarDeteccion,
       guardadoEn: new Date().toISOString(),
     };
     await idbDatabase.put('terminal_profile', profile);

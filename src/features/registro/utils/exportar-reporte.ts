@@ -135,6 +135,8 @@ export function construirBloquesCsvExportacion(
     'Clasificación',
     'Pares Defectuosos',
     'Inspector',
+    'Lugar de Detección',
+    'Nomenclatura',
   ];
 
   const chunks: string[] = [
@@ -143,8 +145,13 @@ export function construirBloquesCsvExportacion(
 
   for (let i = 0; i < filasUnicas.length; i += chunkSize) {
     const slice = filasUnicas.slice(i, i + chunkSize);
-    const lineas = slice.map((item, idx) =>
-      [
+    const lineas = slice.map((item, idx) => {
+      const lugarDeteccion = (item.lugarDeteccion || item.departamentoAuditoria || '').trim();
+      const nomenclatura =
+        item.nomenclatura ||
+        `DEFECTO DE ${(item.defDepto || '').trim().toUpperCase()} ENCONTRADO EN ${lugarDeteccion.toUpperCase()}`;
+
+      return [
         i + idx + 1,
         escaparCsv(item.departamentoAuditoria),
         escaparCsv(item.defDepto),
@@ -159,8 +166,10 @@ export function construirBloquesCsvExportacion(
         escaparCsv(item.clasificacion),
         item.paresDefectuosos,
         escaparCsv(item.usuario),
-      ].join(',')
-    );
+        escaparCsv(lugarDeteccion),
+        escaparCsv(nomenclatura),
+      ].join(',');
+    });
     chunks.push(lineas.join('\r\n') + (i + chunkSize < filasUnicas.length ? '\r\n' : ''));
   }
 
