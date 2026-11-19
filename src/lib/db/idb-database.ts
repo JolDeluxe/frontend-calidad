@@ -5,7 +5,7 @@
  */
 
 export const IDB_NAME = 'mbc_calidad_offline_v1';
-export const IDB_VERSION = 3;
+export const IDB_VERSION = 4;
 
 export interface SesionOfflineStore {
   id: string; // Fijo "activa"
@@ -81,8 +81,9 @@ export interface DefectoOfflineStore {
 }
 
 export interface LoteOfflineStore {
-  lote: string; // Clave primaria natural
-  id: number;
+  id: number; // Clave primaria interna estable
+  listaLote: string; // Identificador canónico [L]listaLote
+  lote: string;
   lista: string;
   idProducto: string;
   modelo: string;
@@ -292,18 +293,26 @@ export class IdbDatabase {
             }
           }
 
-          // 4. Catálogo de Lotes Activos
+          // 4. Catálogo de Lotes Activos (Migración a keyPath: 'id' para soportar lotes homónimos en listas diferentes)
+          if (event.oldVersion < 4 && db.objectStoreNames.contains('cat_lotes')) {
+            db.deleteObjectStore('cat_lotes');
+          }
+
           if (!db.objectStoreNames.contains('cat_lotes')) {
-            const loteStore = db.createObjectStore('cat_lotes', { keyPath: 'lote' });
+            const loteStore = db.createObjectStore('cat_lotes', { keyPath: 'id' });
+            loteStore.createIndex('by_lote', 'lote', { unique: false });
+            loteStore.createIndex('by_lista_lote', 'listaLote', { unique: true });
             loteStore.createIndex('by_modelo', 'modelo', { unique: false });
-            loteStore.createIndex('by_id', 'id', { unique: true });
           } else if (upgradeTx) {
             const loteStore = upgradeTx.objectStore('cat_lotes');
+            if (!loteStore.indexNames.contains('by_lote')) {
+              loteStore.createIndex('by_lote', 'lote', { unique: false });
+            }
+            if (!loteStore.indexNames.contains('by_lista_lote')) {
+              loteStore.createIndex('by_lista_lote', 'listaLote', { unique: true });
+            }
             if (!loteStore.indexNames.contains('by_modelo')) {
               loteStore.createIndex('by_modelo', 'modelo', { unique: false });
-            }
-            if (!loteStore.indexNames.contains('by_id')) {
-              loteStore.createIndex('by_id', 'id', { unique: true });
             }
           }
 
@@ -455,6 +464,24 @@ export class IdbDatabase {
         const index = store.index(indexName);
         const req = index.get(key);
         req.onsuccess = () => resolve((req.result as T) || null);
+        req.onerror = () => reject(this.normalizeDomError(req.error, storeName));
+      } catch (err) {
+        reject(this.normalizeDomError(err, storeName));
+      }
+    });
+  }
+
+  public async getAllByIndex<T>(storeName: string, indexName: string, query?: IDBValidKey | IDBKeyRange): Promise<T[]> {
+    const db = await this.getDb();
+    if (!db) return [];
+
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = db.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        const index = store.index(indexName);
+        const req = query !== undefined ? index.getAll(query) : index.getAll();
+        req.onsuccess = () => resolve((req.result as T[]) || []);
         req.onerror = () => reject(this.normalizeDomError(req.error, storeName));
       } catch (err) {
         reject(this.normalizeDomError(err, storeName));

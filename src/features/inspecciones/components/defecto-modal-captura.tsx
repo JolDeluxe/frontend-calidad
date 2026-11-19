@@ -378,10 +378,10 @@ export function DefectoModalCaptura({
         claveInputRef.current?.focus();
       }, 100);
     } catch (err: any) {
-      // Si fue un 404 explícito del servidor en línea, el lote no existe en MySQL
-      if (err instanceof ApiError && err.statusCode === 404) {
+      // Si fue un 404 o 409 (ambigüedad) o 400 del servidor en línea
+      if (err instanceof ApiError && (err.statusCode === 404 || err.statusCode === 409 || err.statusCode === 400)) {
         setLoteActivo(null);
-        setErrorLote(`El lote '${cod}' no existe o no está disponible`);
+        setErrorLote(err.message || `El lote '${cod}' no existe o no está disponible`);
         return;
       }
 

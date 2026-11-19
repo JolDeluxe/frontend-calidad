@@ -17,6 +17,7 @@ import {
 export interface LotesOfflineResponse {
   items: Array<{
     id: number;
+    listaLote: string;
     lote: string;
     lista: string;
     idProducto: string;
@@ -642,17 +643,18 @@ export class CatalogoOfflineService {
 
         // Separar altas/modificaciones de bajas/inactivaciones
         const paraGuardar: LoteOfflineStore[] = [];
-        const paraEliminar: string[] = [];
+        const paraEliminar: number[] = [];
 
         for (const item of loteItems) {
-          if (!item || typeof item.lote !== 'string' || !item.lote.trim()) continue;
-          const loteNormalizado = item.lote.trim().toUpperCase();
+          if (!item || !item.id) continue;
+          const loteNormalizado = String(item.lote || '').trim().toUpperCase();
 
           if (item.activo) {
             paraGuardar.push({
-              lote: loteNormalizado,
               id: Number(item.id),
-              lista: String(item.lista || ''),
+              listaLote: String(item.listaLote || `[L]${item.lista}${item.lote}`).trim().toUpperCase(),
+              lote: loteNormalizado,
+              lista: String(item.lista || '').trim().toUpperCase(),
               idProducto: String(item.idProducto || ''),
               modelo: String(item.modelo || ''),
               descripcion: item.descripcion ?? null,
@@ -662,7 +664,7 @@ export class CatalogoOfflineService {
               actualizadoEn: String(item.actualizadoEn || new Date().toISOString()),
             });
           } else {
-            paraEliminar.push(loteNormalizado);
+            paraEliminar.push(Number(item.id));
           }
         }
 
@@ -671,8 +673,8 @@ export class CatalogoOfflineService {
           totalDescargados += paraGuardar.length;
         }
 
-        for (const loteKey of paraEliminar) {
-          await idbDatabase.delete('cat_lotes', loteKey);
+        for (const loteId of paraEliminar) {
+          await idbDatabase.delete('cat_lotes', loteId);
           totalEliminados += 1;
         }
 
@@ -744,14 +746,37 @@ export class CatalogoOfflineService {
 
   /**
    * Consulta rápida de un lote en la base local IndexedDB.
+   * Soporta escaneo directo [L]listaLote, lista+lote o lote simple no ambiguo.
    */
-  async getLoteLocal(codigoLote: string): Promise<LoteOfflineStore | null> {
+  async getLoteLocal(codigoLote: string, lista?: string): Promise<LoteOfflineStore | null> {
     if (!idbDatabase.getAvailable()) return null;
-    const key = codigoLote.trim().toUpperCase();
-    const directo = await idbDatabase.get<LoteOfflineStore>('cat_lotes', key);
-    if (directo) return directo;
-    // Fallback por si el lote fue almacenado con casing original
-    return idbDatabase.get<LoteOfflineStore>('cat_lotes', codigoLote.trim());
+    const term = codigoLote.trim().toUpperCase();
+
+    // 1. Coincidencia directa por formato canónico [L]listaLote o coincidencia con listaLote
+    if (term.startsWith('[L]') || term.length > 10) {
+      const directo = await idbDatabase.getByIndex<LoteOfflineStore>('cat_lotes', 'by_lista_lote', term);
+      if (directo) return directo;
+
+      const alt = term.startsWith('[L]') ? term.slice(3) : `[L]${term}`;
+      const porAlt = await idbDatabase.getByIndex<LoteOfflineStore>('cat_lotes', 'by_lista_lote', alt);
+      if (porAlt) return porAlt;
+    }
+
+    // 2. Consulta con Lista explícita
+    if (lista && lista.trim()) {
+      const listaNorm = lista.trim().toUpperCase();
+      const coincidentes = await idbDatabase.getAllByIndex<LoteOfflineStore>('cat_lotes', 'by_lote', term);
+      return coincidentes.find((c) => c.lista.toUpperCase() === listaNorm) || null;
+    }
+
+    // 3. Consulta únicamente por número de Lote
+    const coincidentes = await idbDatabase.getAllByIndex<LoteOfflineStore>('cat_lotes', 'by_lote', term);
+    if (coincidentes.length === 1) {
+      return coincidentes[0];
+    }
+
+    // Si hay colisión/ambigüedad (mismo lote en varias listas), no seleccionar arbitrariamente
+    return null;
   }
 
   /**
