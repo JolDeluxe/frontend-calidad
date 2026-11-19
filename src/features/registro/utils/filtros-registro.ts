@@ -459,6 +459,8 @@ export function leerFiltrosDesdeSearchParams(searchParams: URLSearchParams): Fil
 
   const deptoRaw = searchParams.get('depto');
   const deptosRaw = searchParams.get('deptos');
+  const deptoRespRaw = searchParams.get('deptoResponsable');
+  const deptoAuditRaw = searchParams.get('deptoAuditoria');
   const inspectorRaw = searchParams.get('inspector');
   const lineaRaw = searchParams.get('linea');
   const busquedaRaw = searchParams.get('q');
@@ -487,6 +489,10 @@ export function leerFiltrosDesdeSearchParams(searchParams: URLSearchParams): Fil
     departamentoId: deptoRaw && /^\d+$/.test(deptoRaw) ? Number(deptoRaw) : undefined,
     departamentosIds:
       departamentosIds && departamentosIds.length > 0 ? departamentosIds : undefined,
+    departamentoResponsableId:
+      deptoRespRaw && /^\d+$/.test(deptoRespRaw) ? Number(deptoRespRaw) : undefined,
+    departamentoAuditoriaId:
+      deptoAuditRaw && /^\d+$/.test(deptoAuditRaw) ? Number(deptoAuditRaw) : undefined,
     inspectorId: inspectorRaw && /^\d+$/.test(inspectorRaw) ? Number(inspectorRaw) : undefined,
     lineaTexto: lineaRaw?.trim() || undefined,
     soloEliminados: eliminadosRaw,
@@ -540,6 +546,12 @@ export function serializarFiltrosASearchParams(filtros: FiltrosRegistroState): U
     params.set('deptos', filtros.departamentosIds.join(','));
   } else if (filtros.departamentoId) {
     params.set('depto', String(filtros.departamentoId));
+  }
+  if (filtros.departamentoResponsableId) {
+    params.set('deptoResponsable', String(filtros.departamentoResponsableId));
+  }
+  if (filtros.departamentoAuditoriaId) {
+    params.set('deptoAuditoria', String(filtros.departamentoAuditoriaId));
   }
   if (filtros.inspectorId) params.set('inspector', String(filtros.inspectorId));
   if (filtros.lineaTexto?.trim()) params.set('linea', filtros.lineaTexto.trim());
@@ -742,23 +754,33 @@ export function sincronizarFiltrosConPeriodosDisponibles(
 export function construirQueryPeriodosDisponibles(
   filtros: FiltrosRegistroState
 ): GetPeriodosDisponiblesQueryParams {
-  return {
+  const res: GetPeriodosDisponiblesQueryParams = {
     anio: filtros.anio,
     anioIso: filtros.anioIso ?? filtros.anio,
     mes: filtros.mes,
     departamentoId:
-      filtros.departamentosIds && filtros.departamentosIds.length === 1
-        ? filtros.departamentosIds[0]
-        : filtros.departamentoId,
-    departamentosIds:
       filtros.departamentosIds && filtros.departamentosIds.length > 0
-        ? filtros.departamentosIds
-        : undefined,
+        ? filtros.departamentosIds.length === 1
+          ? filtros.departamentosIds[0]
+          : undefined
+        : filtros.departamentoId,
     inspectorId: filtros.inspectorId,
     lineaTexto: filtros.lineaTexto || undefined,
     busqueda: filtros.busqueda || undefined,
     soloEliminados: filtros.soloEliminados === true,
   };
+
+  if (filtros.departamentosIds && filtros.departamentosIds.length > 0) {
+    res.departamentosIds = filtros.departamentosIds;
+  }
+  if (filtros.departamentoResponsableId) {
+    res.departamentoResponsableId = filtros.departamentoResponsableId;
+  }
+  if (filtros.departamentoAuditoriaId) {
+    res.departamentoAuditoriaId = filtros.departamentoAuditoriaId;
+  }
+
+  return res;
 }
 
 /**
@@ -786,14 +808,20 @@ export function construirQueryInspecciones(
       filtros.departamentosIds && filtros.departamentosIds.length > 0
         ? undefined
         : filtros.departamentoId || undefined,
-    departamentosIds:
-      filtros.departamentosIds && filtros.departamentosIds.length > 0
-        ? filtros.departamentosIds
-        : undefined,
     lineaTexto: filtros.lineaTexto?.trim() || undefined,
     inspectorId: filtros.inspectorId || undefined,
     soloEliminados: filtros.soloEliminados === true,
   };
+
+  if (filtros.departamentosIds && filtros.departamentosIds.length > 0) {
+    base.departamentosIds = filtros.departamentosIds;
+  }
+  if (filtros.departamentoResponsableId) {
+    base.departamentoResponsableId = filtros.departamentoResponsableId;
+  }
+  if (filtros.departamentoAuditoriaId) {
+    base.departamentoAuditoriaId = filtros.departamentoAuditoriaId;
+  }
 
   switch (periodoSeguro) {
     case 'hoy':
@@ -1037,6 +1065,9 @@ export function tieneFiltrosActivos(filtros: FiltrosRegistroState): boolean {
   return Boolean(
     filtros.busqueda ||
       filtros.departamentoId ||
+      (filtros.departamentosIds && filtros.departamentosIds.length > 0) ||
+      filtros.departamentoResponsableId ||
+      filtros.departamentoAuditoriaId ||
       filtros.inspectorId ||
       filtros.lineaTexto ||
       filtros.soloEliminados

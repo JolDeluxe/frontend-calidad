@@ -27,6 +27,8 @@ export interface FiltrosRegistroState {
   busqueda?: string;
   departamentoId?: number;
   departamentosIds?: number[];
+  departamentoResponsableId?: number;
+  departamentoAuditoriaId?: number;
   lineaTexto?: string;
   inspectorId?: number;
   soloEliminados?: boolean;

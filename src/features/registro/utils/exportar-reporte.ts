@@ -120,8 +120,8 @@ export function construirBloquesCsvExportacion(
   chunkSize = 2000
 ): string[] {
   const filasUnicas = deduplicarFilasExportacion(items);
-  const mostrarColumnaLineaCsv = filasUnicas.some((i) => Boolean(i.linea && i.linea.trim()));
 
+  // Contrato invariable de 16 columnas para exportación CSV (las filas de departamentos mono-línea llevan Línea = "")
   const headers = [
     'No',
     'Departamento Auditado',
@@ -129,7 +129,7 @@ export function construirBloquesCsvExportacion(
     'Fecha',
     'Lista',
     'Lote',
-    ...(mostrarColumnaLineaCsv ? ['Línea'] : []),
+    'Línea',
     'Modelo',
     'Descripción Lote',
     'Clave Defecto',
@@ -160,7 +160,7 @@ export function construirBloquesCsvExportacion(
         escaparCsv(formatearFechaReporte(item.fecha)),
         escaparCsv(item.lista),
         escaparCsv(item.lote),
-        ...(mostrarColumnaLineaCsv ? [escaparCsv(item.linea || '')] : []),
+        escaparCsv(item.linea || ''),
         escaparCsv(item.modelo),
         escaparCsv(item.descripcion || ''),
         item.defectoClave,

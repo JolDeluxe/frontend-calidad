@@ -15,6 +15,13 @@ const ENCABEZADOS_DESCRIPCION = new Set([
   'defecto',
   'nombre',
 ]);
+const ENCABEZADOS_CLASIFICACION = new Set([
+  'clasificacion',
+  'clasif',
+  'clasif.',
+  'severidad',
+  'tipo',
+]);
 
 function sinAcentos(valor: string): string {
   return valor.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
@@ -109,10 +116,13 @@ export function aplicarPegado(
   if (
     ENCABEZADOS_CLAVE.has(primerCeldaNorm) ||
     ENCABEZADOS_DESCRIPCION.has(primerCeldaNorm) ||
-    ENCABEZADOS_DESCRIPCION.has(segundaCeldaNorm)
+    ENCABEZADOS_CLASIFICACION.has(primerCeldaNorm) ||
+    ENCABEZADOS_DESCRIPCION.has(segundaCeldaNorm) ||
+    ENCABEZADOS_CLASIFICACION.has(segundaCeldaNorm)
   ) {
     bloque = bloque.slice(1);
   }
+  if (bloque.length === 0) return filas.map((f) => ({ ...f }));
 
   const resultado = filas.map((f) => ({ ...f }));
 
@@ -139,10 +149,14 @@ export function aplicarPegado(
       const val = celda.trim();
       if (col === 0) {
         // Columna 0: Clave
-        resultado[destino].clave = val;
+        if (val !== '') {
+          resultado[destino].clave = val;
+        }
       } else if (col === 1) {
         // Columna 1: Descripción
-        resultado[destino].descripcion = val;
+        if (val !== '') {
+          resultado[destino].descripcion = val;
+        }
       } else if (col === 2) {
         // Columna 2: Clasificación
         if (val !== '') {

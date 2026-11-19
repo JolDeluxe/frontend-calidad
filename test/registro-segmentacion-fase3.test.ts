@@ -492,11 +492,12 @@ describe('Fase 3.1 Frontend — Ajustes UX y simplificación de segmentación en
     expect(resPdfSinWindow.error).toBeDefined();
   });
 
-  it('12. Los permisos, el borrado lógico y el alcance departamental permanecen intactos', () => {
-    const params = new URLSearchParams(
+  it('12. Los permisos, el borrado lógico y el alcance departamental permanecen intactos (unificado, responsable, auditoría, múltiple y combinaciones)', () => {
+    // A. Filtro unificado singular (depto=4 -> departamentoId: 4)
+    const paramsUnificado = new URLSearchParams(
       'periodo=mes&anio=2025&mes=1&depto=4&linea=L2&inspector=12&eliminados=true&q=89012'
     );
-    const leido = leerFiltrosDesdeSearchParams(params);
+    const leido = leerFiltrosDesdeSearchParams(paramsUnificado);
 
     expect(leido.departamentoId).toBe(4);
     expect(leido.lineaTexto).toBe('L2');
@@ -510,12 +511,57 @@ describe('Fase 3.1 Frontend — Ajustes UX y simplificación de segmentación en
       periodo: 'mes',
       anio: 2025,
       mes: 1,
-      departamentoResponsableId: 4,
+      departamentoId: 4,
       lineaTexto: 'L2',
       inspectorId: 12,
       busqueda: '89012',
       soloEliminados: true,
     });
+
+    // B. Filtro exclusivo por departamento responsable (deptoResponsable=4) y departamento auditoría (deptoAuditoria=5)
+    const paramsResponsable = new URLSearchParams(
+      'periodo=mes&anio=2025&mes=1&deptoResponsable=4&deptoAuditoria=5'
+    );
+    const leidoResp = leerFiltrosDesdeSearchParams(paramsResponsable);
+    expect(leidoResp.departamentoResponsableId).toBe(4);
+    expect(leidoResp.departamentoAuditoriaId).toBe(5);
+    expect(tieneFiltrosActivos(leidoResp)).toBe(true);
+
+    const queryResp = construirQueryInspecciones(leidoResp);
+    expect(queryResp).toEqual({
+      periodo: 'mes',
+      anio: 2025,
+      mes: 1,
+      departamentoId: undefined,
+      departamentoResponsableId: 4,
+      departamentoAuditoriaId: 5,
+      lineaTexto: undefined,
+      inspectorId: undefined,
+      busqueda: undefined,
+      soloEliminados: false,
+    });
+
+    // C. Filtro multidepartamental (deptos=2,3,4) y combinación con departamentoResponsableId
+    const paramsMulti = new URLSearchParams('periodo=hoy&deptos=2,3,4&deptoResponsable=2');
+    const leidoMulti = leerFiltrosDesdeSearchParams(paramsMulti);
+    expect(leidoMulti.departamentosIds).toEqual([2, 3, 4]);
+    expect(leidoMulti.departamentoResponsableId).toBe(2);
+    expect(tieneFiltrosActivos(leidoMulti)).toBe(true);
+
+    const queryMulti = construirQueryInspecciones(leidoMulti);
+    expect(queryMulti.departamentoId).toBeUndefined();
+    expect(queryMulti.departamentosIds).toEqual([2, 3, 4]);
+    expect(queryMulti.departamentoResponsableId).toBe(2);
+
+    // D. Ausencia de filtros departamentales
+    const paramsVacio = new URLSearchParams('periodo=hoy');
+    const leidoVacio = leerFiltrosDesdeSearchParams(paramsVacio);
+    expect(tieneFiltrosActivos(leidoVacio)).toBe(false);
+    const queryVacio = construirQueryInspecciones(leidoVacio);
+    expect(queryVacio.departamentoId).toBeUndefined();
+    expect(queryVacio.departamentosIds).toBeUndefined();
+    expect(queryVacio.departamentoResponsableId).toBeUndefined();
+    expect(queryVacio.departamentoAuditoriaId).toBeUndefined();
 
     const conteoMes = obtenerConteoPeriodoSeleccionado(leido, PERIODOS_MOCK);
     expect(conteoMes).toEqual({ totalDefectos: 80, totalInspecciones: 19 });
