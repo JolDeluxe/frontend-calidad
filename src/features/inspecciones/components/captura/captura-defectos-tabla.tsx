@@ -106,29 +106,20 @@ export function CapturaDefectosTabla({
                     key={item.idTemporal}
                     className={`transition-colors ${
                       esDeptoExterno
-                        ? 'bg-amber-50/70 dark:bg-amber-950/20 hover:bg-amber-100/70 dark:hover:bg-amber-900/30'
+                        ? 'bg-amber-100/70 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/40'
                         : 'hover:bg-app-surface-muted/50'
                     }`}
                   >
-                    <td className="py-2.5 px-2 text-center font-mono font-semibold text-text-secondary text-[11px]">
+                    <td className="py-2.5 px-2 text-center font-mono font-bold text-text-primary text-[11px]">
                       {index + 1}
                     </td>
                     <td className="py-2.5 px-3 text-center font-mono font-bold text-emerald-700 dark:text-emerald-400">
                       {item.clave}
                     </td>
-                    <td className="py-2.5 px-3 font-semibold text-text-primary">
-                      <div className="relative group max-w-full">
-                        <span className="block truncate" title={item.defecto}>
-                          {item.defecto}
-                        </span>
-                        {/* Tooltip flotante enriquecido si el texto se corta */}
-                        <div className="absolute left-0 bottom-full mb-1 hidden group-hover:flex flex-col z-50 pointer-events-none transition-all">
-                          <div className="bg-slate-900/95 text-white text-[11px] font-medium py-1 px-2.5 rounded-lg shadow-xl max-w-xs whitespace-normal leading-tight backdrop-blur-xs">
-                            {item.defecto}
-                          </div>
-                          <div className="w-2 h-1 bg-slate-900/95 rotate-45 ml-3 -mt-0.5" />
-                        </div>
-                      </div>
+                    <td className={`py-2.5 px-3 font-semibold ${esDeptoExterno ? 'text-slate-950 dark:text-slate-100' : 'text-text-primary'}`}>
+                      <span className="block truncate" title={item.defecto}>
+                        {item.defecto}
+                      </span>
                     </td>
                     {/* Celda Depto */}
                     {mostrarColumnaDepto && (
@@ -136,7 +127,7 @@ export function CapturaDefectosTabla({
                         <span
                           className={`text-xs ${
                             esDeptoExterno
-                              ? 'text-amber-800 dark:text-amber-300 font-bold bg-amber-100/60 dark:bg-amber-900/40 px-1.5 py-0.5 rounded'
+                              ? 'text-slate-950 dark:text-slate-100 font-bold'
                               : 'text-text-secondary font-semibold'
                           }`}
                           title={
@@ -223,14 +214,12 @@ export function CapturaDefectosTabla({
 
       {/* Banner informativo si hay defectos de otros departamentos registrados */}
       {hayDefectosExternos && (
-        <div className="mt-1 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 rounded-xl flex items-center justify-between text-xs text-amber-900 dark:text-amber-200 shrink-0 animate-in fade-in duration-150">
-          <div className="flex items-center gap-2">
-            <Icon name="info" size="14px" className="text-amber-600 dark:text-amber-400 shrink-0" />
-            <span className="font-medium">
-              Defectos externos detectados (se registrarán como encontrados en{' '}
-              <strong className="font-bold uppercase font-mono">{terminalNombre || 'esta terminal'}</strong>).
-            </span>
-          </div>
+        <div className="mt-1 px-3 py-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-lg flex items-center gap-2 text-xs text-slate-950 dark:text-slate-100 font-medium shrink-0 animate-in fade-in duration-150">
+          <Icon name="info" size="16px" className="text-amber-700 dark:text-amber-400 shrink-0" />
+          <span>
+            Defectos externos detectados (se registrarán como encontrados en{' '}
+            <strong className="font-black uppercase font-mono text-slate-950 dark:text-white">{terminalNombre || 'esta terminal'}</strong>).
+          </span>
         </div>
       )}
     </div>

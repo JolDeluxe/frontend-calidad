@@ -188,27 +188,27 @@ export function InspeccionesTabla({
           <thead className="sticky top-0 z-30 shadow-xs">
             {toolbar && (
               <tr className="bg-white border-b border-border/80">
-                <th colSpan={mostrarColumnaLinea ? 14 : 13} className="p-2.5 xl:p-3 font-normal text-left bg-white rounded-t-xl">
+                <th colSpan={mostrarColumnaLinea ? 14 : 13} className="p-2 sm:p-2.5 xl:p-3 font-normal text-left bg-white rounded-t-xl">
                   {toolbar}
                 </th>
               </tr>
             )}
             <tr className="bg-slate-100 border-b border-border text-text-secondary uppercase tracking-wider font-semibold text-2xs select-none">
-              <th className="py-2 px-1 xl:px-1.5 w-[38px] text-center">No</th>
-              <th className="py-2 px-1 xl:px-1.5 w-[8%] truncate">Depto</th>
-              <th className="py-2 px-1 xl:px-1.5 w-[7.5%] truncate">Fecha</th>
-              <th className="py-2 px-1 xl:px-1.5 w-[4.5%] truncate">Lista</th>
-              <th className="py-2 px-1 xl:px-1.5 w-[7%] truncate">Lote</th>
+              <th className="py-2 px-1 w-[34px] text-center whitespace-nowrap">No</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[8%] truncate whitespace-nowrap">Depto</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[8%] text-center whitespace-nowrap">Fecha</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[5.5%] text-center whitespace-nowrap truncate">Lista</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[7%] text-center whitespace-nowrap truncate">Lote</th>
               {mostrarColumnaLinea && (
-                <th className="py-2 px-0.5 xl:px-1 w-[48px] text-center">Línea</th>
+                <th className="py-2 px-0.5 w-[42px] text-center whitespace-nowrap">Línea</th>
               )}
-              <th className="py-2 px-1 xl:px-1.5 w-[6.5%] truncate">Modelo</th>
-              <th className={`py-2 px-1.5 xl:px-2.5 ${mostrarColumnaLinea ? 'w-[35%]' : 'w-[37%]'}`}>Descripción</th>
-              <th className="py-2 px-0.5 xl:px-1 w-[52px] text-center font-mono">Clave</th>
-              <th className={`py-2 px-1.5 xl:px-2.5 ${mostrarColumnaLinea ? 'w-[21.5%]' : 'w-[22.5%]'}`}>Defecto</th>
-              <th className="py-2 px-1 xl:px-1.5 w-[5%]">Clasif.</th>
-              <th className="py-2 px-0.5 xl:px-1 w-[42px] text-center">Prs</th>
-              <th className="py-2 px-1 xl:px-1.5 w-[5%] truncate">Inspector</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[6.5%] truncate whitespace-nowrap">Modelo</th>
+              <th className={`py-2 px-1.5 xl:px-2 ${mostrarColumnaLinea ? 'w-[26%]' : 'w-[29%]'} truncate whitespace-nowrap`}>Descripción</th>
+              <th className="py-2 px-0.5 w-[48px] text-center font-mono whitespace-nowrap">Clave</th>
+              <th className={`py-2 px-1.5 xl:px-2 ${mostrarColumnaLinea ? 'w-[18%]' : 'w-[19%]'} truncate whitespace-nowrap`}>Defecto</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[7%] text-center whitespace-nowrap">Clasif.</th>
+              <th className="py-2 px-0.5 w-[38px] text-center whitespace-nowrap">Prs</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[8%] truncate whitespace-nowrap">Inspector</th>
               <th className="py-2 px-1 w-[32px] text-center"></th>
             </tr>
           </thead>
@@ -288,23 +288,23 @@ export function InspeccionesTabla({
             </tr>
           )}
 
-          {/* Fila 2: Títulos de Columnas Proporcionales (suman 100% con table-fixed) */}
+          {/* Fila 2: Títulos de Columnas Proporcionales y Equilibradas para que NUNCA se empalmen */}
           <tr className="bg-slate-100 border-b border-border text-text-secondary uppercase tracking-wider font-semibold text-2xs select-none">
-            <th className="py-2 px-1 xl:px-1.5 w-[38px] text-center">No</th>
-            <th className="py-2 px-1 xl:px-1.5 w-[8%] truncate">Depto</th>
-            <th className="py-2 px-1 xl:px-1.5 w-[7.5%] truncate">Fecha</th>
-            <th className="py-2 px-1 xl:px-1.5 w-[4.5%] truncate">Lista</th>
-            <th className="py-2 px-1 xl:px-1.5 w-[7%] truncate">Lote</th>
+            <th className="py-2 px-1 w-[34px] text-center whitespace-nowrap">No</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[8%] truncate whitespace-nowrap">Depto</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[8%] text-center whitespace-nowrap">Fecha</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[5.5%] text-center whitespace-nowrap truncate">Lista</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[7%] text-center whitespace-nowrap truncate">Lote</th>
             {mostrarColumnaLinea && (
-              <th className="py-2 px-0.5 xl:px-1 w-[48px] text-center">Línea</th>
+              <th className="py-2 px-0.5 w-[42px] text-center whitespace-nowrap">Línea</th>
             )}
-            <th className="py-2 px-1 xl:px-1.5 w-[6.5%] truncate">Modelo</th>
-            <th className={`py-2 px-1.5 xl:px-2.5 ${mostrarColumnaLinea ? 'w-[35%]' : 'w-[37%]'}`}>Descripción</th>
-            <th className="py-2 px-0.5 xl:px-1 w-[52px] text-center font-mono">Clave</th>
-            <th className={`py-2 px-1.5 xl:px-2.5 ${mostrarColumnaLinea ? 'w-[21.5%]' : 'w-[22.5%]'}`}>Defecto</th>
-            <th className="py-2 px-1 xl:px-1.5 w-[5%]">Clasif.</th>
-            <th className="py-2 px-0.5 xl:px-1 w-[42px] text-center">Prs</th>
-            <th className="py-2 px-1 xl:px-1.5 w-[5%] truncate">Inspector</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[6.5%] truncate whitespace-nowrap">Modelo</th>
+            <th className={`py-2 px-1.5 xl:px-2 ${mostrarColumnaLinea ? 'w-[26%]' : 'w-[29%]'} truncate whitespace-nowrap`}>Descripción</th>
+            <th className="py-2 px-0.5 w-[48px] text-center font-mono whitespace-nowrap">Clave</th>
+            <th className={`py-2 px-1.5 xl:px-2 ${mostrarColumnaLinea ? 'w-[18%]' : 'w-[19%]'} truncate whitespace-nowrap`}>Defecto</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[7%] text-center whitespace-nowrap">Clasif.</th>
+            <th className="py-2 px-0.5 w-[38px] text-center whitespace-nowrap">Prs</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[8%] truncate whitespace-nowrap">Inspector</th>
             <th className="py-2 px-1 w-[32px] text-center"></th>
           </tr>
         </thead>
@@ -411,10 +411,12 @@ export function InspeccionesTabla({
 
                   {/* Línea */}
                   {mostrarColumnaLinea && (
-                    <td className="py-2 px-0.5 text-center">
-                      <span className="inline-block px-1 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 truncate">
-                        {row.linea}
-                      </span>
+                    <td className="py-2 px-0.5 text-center whitespace-nowrap">
+                      {row.linea ? (
+                        <span className="inline-block px-1 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 truncate">
+                          {row.linea}
+                        </span>
+                      ) : null}
                     </td>
                   )}
 

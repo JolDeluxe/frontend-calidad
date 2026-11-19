@@ -120,6 +120,8 @@ export function construirBloquesCsvExportacion(
   chunkSize = 2000
 ): string[] {
   const filasUnicas = deduplicarFilasExportacion(items);
+  const mostrarColumnaLineaCsv = filasUnicas.some((i) => Boolean(i.linea && i.linea.trim()));
+
   const headers = [
     'No',
     'Departamento Auditado',
@@ -127,7 +129,7 @@ export function construirBloquesCsvExportacion(
     'Fecha',
     'Lista',
     'Lote',
-    'Línea',
+    ...(mostrarColumnaLineaCsv ? ['Línea'] : []),
     'Modelo',
     'Descripción Lote',
     'Clave Defecto',
@@ -151,14 +153,14 @@ export function construirBloquesCsvExportacion(
         item.nomenclatura ||
         `DEFECTO DE ${(item.defDepto || '').trim().toUpperCase()} ENCONTRADO EN ${lugarDeteccion.toUpperCase()}`;
 
-      return [
+      const rowValues = [
         i + idx + 1,
         escaparCsv(item.departamentoAuditoria),
         escaparCsv(item.defDepto),
         escaparCsv(formatearFechaReporte(item.fecha)),
         escaparCsv(item.lista),
         escaparCsv(item.lote),
-        escaparCsv(item.linea),
+        ...(mostrarColumnaLineaCsv ? [escaparCsv(item.linea || '')] : []),
         escaparCsv(item.modelo),
         escaparCsv(item.descripcion || ''),
         item.defectoClave,
@@ -168,7 +170,8 @@ export function construirBloquesCsvExportacion(
         escaparCsv(item.usuario),
         escaparCsv(lugarDeteccion),
         escaparCsv(nomenclatura),
-      ].join(',');
+      ];
+      return rowValues.join(',');
     });
     chunks.push(lineas.join('\r\n') + (i + chunkSize < filasUnicas.length ? '\r\n' : ''));
   }
@@ -227,6 +230,7 @@ export function construirHtmlReportePdf(
   const totalDefectos = filtros.totalDefectos ?? resumen.totalDefectos;
   const totalInspecciones = filtros.totalInspecciones ?? resumen.totalInspecciones;
   const totalPares = filtros.totalParesDefectuosos ?? resumen.totalParesDefectuosos;
+  const mostrarColumnaLineaPdf = filasUnicas.some((i) => Boolean(i.linea && i.linea.trim()));
 
   const ahora = new Date();
   const fechaGeneracion = ahora.toLocaleDateString('es-MX', {
@@ -247,7 +251,17 @@ export function construirHtmlReportePdf(
       <td style="white-space: nowrap; font-family: monospace;">${escaparHtml(formatearFechaReporte(item.fecha))}</td>
       <td style="font-weight: 600;">${escaparHtml(item.lista)}</td>
       <td style="font-family: monospace; font-weight: 800; color: #0284c7;">${escaparHtml(item.lote)}</td>
-      <td style="text-align: center;"><span style="background: #f1f5f9; padding: 2px 5px; border-radius: 4px; font-weight: 600;">${escaparHtml(item.linea)}</span></td>
+      ${
+        mostrarColumnaLineaPdf
+          ? `<td style="text-align: center;">${
+              item.linea
+                ? `<span style="background: #f1f5f9; padding: 2px 5px; border-radius: 4px; font-weight: 600;">${escaparHtml(
+                    item.linea
+                  )}</span>`
+                : ''
+            }</td>`
+          : ''
+      }
       <td style="font-weight: 600;">${escaparHtml(item.modelo)}</td>
       <td style="color: #64748b; font-size: 10px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escaparHtml(item.descripcion || '')}</td>
       <td style="text-align: center; font-family: monospace; font-weight: 800; color: #0284c7;">${escaparHtml(item.defectoClave)}</td>
@@ -415,7 +429,7 @@ export function construirHtmlReportePdf(
             <th style="width: 65px;">Fecha</th>
             <th style="width: 50px;">Lista</th>
             <th style="width: 55px;">Lote</th>
-            <th style="width: 45px; text-align: center;">Línea</th>
+            ${mostrarColumnaLineaPdf ? '<th style="width: 45px; text-align: center;">Línea</th>' : ''}
             <th style="width: 75px;">Modelo</th>
             <th>Descripción</th>
             <th style="width: 40px; text-align: center;">Clave</th>

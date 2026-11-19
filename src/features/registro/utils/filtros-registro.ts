@@ -97,20 +97,119 @@ export function formatearEtiquetaAnio(anio: number): string {
   return String(anio);
 }
 
+export const NOMBRES_MESES_CORTO: Record<number, string> = {
+  1: 'ene.',
+  2: 'feb.',
+  3: 'mar.',
+  4: 'abr.',
+  5: 'may.',
+  6: 'jun.',
+  7: 'jul.',
+  8: 'ago.',
+  9: 'sep.',
+  10: 'oct.',
+  11: 'nov.',
+  12: 'dic.',
+};
+
 /**
- * Formatea la etiqueta visible para una semana en los selectores:
- * muestra únicamente `Semana XX` (ej. `Semana 01`, `Semana 41`), sin rango de fechas,
- * sin la palabra `ISO`, sin repetir el año y sin conteos.
+ * Calcula el rango de fechas de una semana de Calidad (Miércoles a Martes) y su etiqueta visible.
+ * Formato: `del Miércoles 18 al Martes 24 (SEMANA 47)`
+ */
+export function calcularRangoSemanaCalidad(
+  anioIso: number,
+  semanaIso: number
+): { fechaInicio: string; fechaFin: string; label: string } {
+  const ene4 = new Date(Date.UTC(anioIso, 0, 4));
+  const diaSemEne4 = ene4.getUTCDay() === 0 ? 7 : ene4.getUTCDay();
+  const lunesSem1 = new Date(Date.UTC(anioIso, 0, 4 - (diaSemEne4 - 1)));
+  const miercolesSem1 = new Date(lunesSem1.getTime() + 2 * 86400000);
+  const miercolesTarget = new Date(miercolesSem1.getTime() + (semanaIso - 1) * 7 * 86400000);
+  const martesTarget = new Date(miercolesTarget.getTime() + 6 * 86400000);
+
+  const y1 = miercolesTarget.getUTCFullYear();
+  const m1 = miercolesTarget.getUTCMonth() + 1;
+  const d1 = miercolesTarget.getUTCDate();
+
+  const y2 = martesTarget.getUTCFullYear();
+  const m2 = martesTarget.getUTCMonth() + 1;
+  const d2 = martesTarget.getUTCDate();
+
+  const fechaInicio = `${String(y1).padStart(4, '0')}-${String(m1).padStart(2, '0')}-${String(d1).padStart(2, '0')}`;
+  const fechaFin = `${String(y2).padStart(4, '0')}-${String(m2).padStart(2, '0')}-${String(d2).padStart(2, '0')}`;
+
+  const mesCorto1 = NOMBRES_MESES_CORTO[m1] || '';
+  const mesCorto2 = NOMBRES_MESES_CORTO[m2] || '';
+  const semPad = String(semanaIso).padStart(2, '0');
+
+  let rangoTexto = '';
+  if (y1 !== y2) {
+    rangoTexto = `del Miércoles ${d1} ${mesCorto1} ${y1} al Martes ${d2} ${mesCorto2} ${y2}`;
+  } else if (m1 !== m2) {
+    rangoTexto = `del Miércoles ${d1} ${mesCorto1} al Martes ${d2} ${mesCorto2}`;
+  } else {
+    rangoTexto = `del Miércoles ${d1} al Martes ${d2}`;
+  }
+
+  const label = `${rangoTexto} (SEMANA ${semPad})`;
+  return { fechaInicio, fechaFin, label };
+}
+
+/**
+ * Formatea la etiqueta visible para una semana en los selectores (<select>):
+ * Muestra únicamente `Semana XX` (ej. `Semana 46`, `Semana 47`).
  */
 export function formatearEtiquetaSemana(semanaItem: {
   semana: number;
+}): string {
+  const semPad = String(semanaItem.semana).padStart(2, '0');
+  return `Semana ${semPad}`;
+}
+
+/**
+ * Formatea el rango descriptivo completo de la semana operativa de Calidad (Miércoles a Martes):
+ * Ej. `del Miércoles 18 al Martes 24 (SEMANA 47)`
+ * Utilizado en el encabezado superior, badges de filtros activos y en las exportaciones (Excel/PDF).
+ */
+export function formatearRangoCompletoSemana(semanaItem: {
+  semana: number;
+  anioIso?: number;
   label?: string;
   etiqueta?: string;
   fechaInicio?: string;
   fechaFin?: string;
 }): string {
-  const numStr = String(semanaItem.semana).padStart(2, '0');
-  return `Semana ${numStr}`;
+  const semPad = String(semanaItem.semana).padStart(2, '0');
+
+  if (semanaItem.label && semanaItem.label.includes('Miércoles')) {
+    return semanaItem.label;
+  }
+  if (semanaItem.etiqueta && semanaItem.etiqueta.includes('Miércoles')) {
+    return semanaItem.etiqueta;
+  }
+
+  if (semanaItem.fechaInicio && semanaItem.fechaFin) {
+    const [y1, m1, d1] = semanaItem.fechaInicio.split('-').map(Number);
+    const [y2, m2, d2] = semanaItem.fechaFin.split('-').map(Number);
+    const mesCorto1 = NOMBRES_MESES_CORTO[m1] || '';
+    const mesCorto2 = NOMBRES_MESES_CORTO[m2] || '';
+
+    let rangoTexto = '';
+    if (y1 !== y2) {
+      rangoTexto = `del Miércoles ${d1} ${mesCorto1} ${y1} al Martes ${d2} ${mesCorto2} ${y2}`;
+    } else if (m1 !== m2) {
+      rangoTexto = `del Miércoles ${d1} ${mesCorto1} al Martes ${d2} ${mesCorto2}`;
+    } else {
+      rangoTexto = `del Miércoles ${d1} al Martes ${d2}`;
+    }
+    return `${rangoTexto} (SEMANA ${semPad})`;
+  }
+
+  if (semanaItem.anioIso) {
+    return calcularRangoSemanaCalidad(semanaItem.anioIso, semanaItem.semana).label;
+  }
+
+  return `Semana ${semPad}`;
 }
 
 /**
@@ -359,10 +458,18 @@ export function leerFiltrosDesdeSearchParams(searchParams: URLSearchParams): Fil
   }
 
   const deptoRaw = searchParams.get('depto');
+  const deptosRaw = searchParams.get('deptos');
   const inspectorRaw = searchParams.get('inspector');
   const lineaRaw = searchParams.get('linea');
   const busquedaRaw = searchParams.get('q');
   const eliminadosRaw = searchParams.get('eliminados') === 'true';
+
+  const departamentosIds = deptosRaw
+    ? deptosRaw
+        .split(',')
+        .map((s) => Number(s.trim()))
+        .filter((n) => !isNaN(n) && n > 0)
+    : undefined;
 
   return {
     periodo,
@@ -378,6 +485,8 @@ export function leerFiltrosDesdeSearchParams(searchParams: URLSearchParams): Fil
     fechaHasta: fechaHastaValida,
     busqueda: busquedaRaw?.trim() || undefined,
     departamentoId: deptoRaw && /^\d+$/.test(deptoRaw) ? Number(deptoRaw) : undefined,
+    departamentosIds:
+      departamentosIds && departamentosIds.length > 0 ? departamentosIds : undefined,
     inspectorId: inspectorRaw && /^\d+$/.test(inspectorRaw) ? Number(inspectorRaw) : undefined,
     lineaTexto: lineaRaw?.trim() || undefined,
     soloEliminados: eliminadosRaw,
@@ -427,7 +536,11 @@ export function serializarFiltrosASearchParams(filtros: FiltrosRegistroState): U
   }
 
   if (filtros.busqueda?.trim()) params.set('q', filtros.busqueda.trim());
-  if (filtros.departamentoId) params.set('depto', String(filtros.departamentoId));
+  if (filtros.departamentosIds && filtros.departamentosIds.length > 0) {
+    params.set('deptos', filtros.departamentosIds.join(','));
+  } else if (filtros.departamentoId) {
+    params.set('depto', String(filtros.departamentoId));
+  }
   if (filtros.inspectorId) params.set('inspector', String(filtros.inspectorId));
   if (filtros.lineaTexto?.trim()) params.set('linea', filtros.lineaTexto.trim());
   if (filtros.soloEliminados) params.set('eliminados', 'true');
@@ -633,7 +746,14 @@ export function construirQueryPeriodosDisponibles(
     anio: filtros.anio,
     anioIso: filtros.anioIso ?? filtros.anio,
     mes: filtros.mes,
-    departamentoResponsableId: filtros.departamentoId,
+    departamentoId:
+      filtros.departamentosIds && filtros.departamentosIds.length === 1
+        ? filtros.departamentosIds[0]
+        : filtros.departamentoId,
+    departamentosIds:
+      filtros.departamentosIds && filtros.departamentosIds.length > 0
+        ? filtros.departamentosIds
+        : undefined,
     inspectorId: filtros.inspectorId,
     lineaTexto: filtros.lineaTexto || undefined,
     busqueda: filtros.busqueda || undefined,
@@ -662,7 +782,14 @@ export function construirQueryInspecciones(
   const base: FiltrosInspeccionesQueryParams = {
     periodo: periodoSeguro,
     busqueda: filtros.busqueda?.trim() || undefined,
-    departamentoResponsableId: filtros.departamentoId || undefined,
+    departamentoId:
+      filtros.departamentosIds && filtros.departamentosIds.length > 0
+        ? undefined
+        : filtros.departamentoId || undefined,
+    departamentosIds:
+      filtros.departamentosIds && filtros.departamentosIds.length > 0
+        ? filtros.departamentosIds
+        : undefined,
     lineaTexto: filtros.lineaTexto?.trim() || undefined,
     inspectorId: filtros.inspectorId || undefined,
     soloEliminados: filtros.soloEliminados === true,
@@ -808,7 +935,10 @@ export function describirPeriodoActivo(
       const semanasDelAnio = obtenerSemanasDeAnio(periodos?.semanas, anioIso);
       const semObj = semanasDelAnio.find((s) => s.semana === filtros.semana);
       if (semObj) {
-        return formatearEtiquetaSemana(semObj);
+        return formatearRangoCompletoSemana(semObj);
+      }
+      if (filtros.semana && anioIso) {
+        return calcularRangoSemanaCalidad(anioIso, filtros.semana).label;
       }
       if (filtros.semana) {
         return `Semana ${String(filtros.semana).padStart(2, '0')}`;

@@ -31,6 +31,9 @@ function construirQueryStringInspecciones(params?: GetFilasInspeccionQueryParams
   if (params.lote) query.set('lote', params.lote);
   if (params.defectoClave !== undefined) query.set('defectoClave', params.defectoClave.toString());
   if (params.departamentoId) query.set('departamentoId', params.departamentoId.toString());
+  if (params.departamentosIds && params.departamentosIds.length > 0) {
+    query.set('departamentosIds', params.departamentosIds.join(','));
+  }
   if (params.departamentoAuditoriaId) {
     query.set('departamentoAuditoriaId', params.departamentoAuditoriaId.toString());
   }
@@ -195,6 +198,9 @@ export const inspeccionesApi = {
     if (params?.anioIso !== undefined) query.set('anioIso', params.anioIso.toString());
     if (params?.mes !== undefined) query.set('mes', params.mes.toString());
     if (params?.departamentoId) query.set('departamentoId', params.departamentoId.toString());
+    if (params?.departamentosIds && params.departamentosIds.length > 0) {
+      query.set('departamentosIds', params.departamentosIds.join(','));
+    }
     if (params?.departamentoAuditoriaId) {
       query.set('departamentoAuditoriaId', params.departamentoAuditoriaId.toString());
     }

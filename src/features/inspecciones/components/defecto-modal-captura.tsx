@@ -867,8 +867,8 @@ export function DefectoModalCaptura({
             {/* LADO DERECHO (COLUMNA 7 DE 12): CAPTURA Y LISTA DE DEFECTOS */}
             <div className="lg:col-span-7 flex flex-col min-h-0 overflow-hidden bg-app-surface rounded-xl border border-border p-3 xl:p-5 gap-2.5 xl:gap-4">
               {avisoCatalogoOffline && (
-                <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-800 flex items-center gap-2 shrink-0">
-                  <Icon name="wifi_off" size="16px" className="text-amber-600 shrink-0" />
+                <div className="p-2.5 bg-amber-100 border-2 border-amber-400 rounded-xl text-xs font-bold text-slate-900 flex items-center gap-2 shrink-0">
+                  <Icon name="wifi_off" size="16px" className="text-amber-700 shrink-0" />
                   <span>{avisoCatalogoOffline}</span>
                 </div>
               )}

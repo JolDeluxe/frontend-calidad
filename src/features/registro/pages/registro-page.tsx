@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router';
 import { Icon } from '@/components/ui/icon';
 import { Spinner } from '@/components/ui/spinner';
 import { RegistroHistoricoTabla } from '../components/registro-historico-tabla';
-import { SearchableSelect } from '../components/searchable-select';
+// import { SearchableSelect } from '../components/searchable-select';
 import { CalendarioDiaPicker } from '../components/calendario-dia-picker';
 import { RegistroExportModal, type ExportModalConfig } from '../components/registro-export-modal';
 import {
@@ -227,6 +227,19 @@ export function RegistroPage() {
     [departamentos, filtros.departamentoId]
   );
 
+  // La columna de línea solo se muestra si el departamento filtrado tiene más de 1 línea,
+  // o si están TODOS los departamentos (vista general) donde algunos departamentos sí tienen líneas
+  const mostrarColumnaLinea = useMemo(() => {
+    if (deptoSeleccionado) {
+      return (deptoSeleccionado.numeroLineas ?? 1) > 1;
+    }
+    if (filtros.departamentosIds && filtros.departamentosIds.length > 0) {
+      const deptos = departamentos.filter((d) => filtros.departamentosIds!.includes(d.id));
+      return deptos.some((d) => (d.numeroLineas ?? 1) > 1);
+    }
+    return departamentos.some((d) => (d.numeroLineas ?? 1) > 1);
+  }, [deptoSeleccionado, filtros.departamentosIds, departamentos]);
+
   const estadoConsulta = useMemo(
     () =>
       puedeEjecutarConsultaTemporal(
@@ -364,12 +377,12 @@ export function RegistroPage() {
     }));
   };
 
-  const handleInspectorChange = (id: number | string | null) => {
-    aplicarNuevosFiltros((prev) => ({
-      ...prev,
-      inspectorId: id ? Number(id) : undefined,
-    }));
-  };
+  // const _handleInspectorChange = (id: number | string | null) => {
+  //   aplicarNuevosFiltros((prev) => ({
+  //     ...prev,
+  //     inspectorId: id ? Number(id) : undefined,
+  //   }));
+  // };
 
   const handleLimpiarFiltros = () => {
     setInputBusqueda('');
@@ -394,16 +407,15 @@ export function RegistroPage() {
     deptoSeleccionado && (deptoSeleccionado.numeroLineas || 1) > 1
   );
 
-  // Opciones para el selector de inspectores activos
-  const inspectorOptions = useMemo(
-    () =>
-      inspectores.map((insp) => ({
-        id: insp.id,
-        label: insp.nombre || insp.usuario,
-        sublabel: insp.rol?.nombre ? `${insp.rol.nombre} (${insp.usuario})` : insp.usuario,
-      })),
-    [inspectores]
-  );
+  // const _inspectorOptions = useMemo(
+  //   () =>
+  //     inspectores.map((insp) => ({
+  //       id: insp.id,
+  //       label: insp.nombre || insp.usuario,
+  //       sublabel: insp.rol?.nombre ? `${insp.rol.nombre} (${insp.usuario})` : insp.usuario,
+  //     })),
+  //   [inspectores]
+  // );
 
   const periodoActivoDescripcion = useMemo(
     () => describirPeriodoActivo(filtros, periodosDisponibles),
@@ -414,7 +426,18 @@ export function RegistroPage() {
 
   // Procesar la exportación completa sin truncamiento mediante descarga por bloques seguros
   const handleProcesarExportacion = async (cfg: ExportModalConfig) => {
-    const deptoObj = departamentos.find((d) => d.id === cfg.filtros.departamentoId);
+    const deptosSeleccionados =
+      cfg.filtros.departamentosIds && cfg.filtros.departamentosIds.length > 0
+        ? departamentos.filter((d) => cfg.filtros.departamentosIds!.includes(d.id))
+        : cfg.filtros.departamentoId
+        ? departamentos.filter((d) => d.id === cfg.filtros.departamentoId)
+        : [];
+
+    const departamentoNombre =
+      deptosSeleccionados.length === 0
+        ? 'Todos los Departamentos'
+        : deptosSeleccionados.map((d) => d.nombre).join(', ');
+
     const inspectorObj = inspectores.find((i) => i.id === cfg.filtros.inspectorId);
     const periodoNombre = describirPeriodoActivo(cfg.filtros, periodosDisponibles);
 
@@ -450,7 +473,7 @@ export function RegistroPage() {
 
     const configReporte = {
       periodoNombre,
-      departamentoNombre: deptoObj?.nombre,
+      departamentoNombre,
       lineaNombre: cfg.filtros.lineaTexto || undefined,
       inspectorNombre: inspectorObj?.nombre || inspectorObj?.usuario,
       busqueda: cfg.filtros.busqueda || undefined,
@@ -459,9 +482,12 @@ export function RegistroPage() {
       totalInspecciones: totalInspeccionesExport,
     };
 
-    const nombreArchivoBase = deptoObj
-      ? `defectos_${deptoObj.codigo.toLowerCase()}`
-      : 'defectos_planta_completa';
+    const nombreArchivoBase =
+      deptosSeleccionados.length === 1
+        ? `defectos_${deptosSeleccionados[0].nombre.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`
+        : deptosSeleccionados.length > 1
+        ? 'defectos_multidepartamento'
+        : 'defectos_planta_completa';
 
     if (cfg.formato === 'excel') {
       const resultado = exportarRegistrosAExcel(
@@ -522,6 +548,7 @@ export function RegistroPage() {
         periodoDescripcion={periodoActivoDescripcion}
         errorMensaje={errorConsulta}
         tieneFiltrosActivos={hayFiltrosActivos}
+        mostrarColumnaLinea={mostrarColumnaLinea}
         onReintentar={() => void cargarRegistros(1, false)}
         onLimpiarFiltros={handleLimpiarFiltros}
         puedeCargarMas={page < totalPages}
@@ -529,19 +556,19 @@ export function RegistroPage() {
         onCargarMas={handleCargarMas}
         onVerDetalle={handleAbrirDetalle}
         toolbar={
-          <div className="flex flex-wrap items-center justify-between gap-2 w-full select-none py-1">
-            {/* Lado izquierdo: Buscador, Segmentación Temporal, Inspector y Línea */}
-            <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-1 w-full select-none py-1 flex-nowrap min-w-0 overflow-hidden">
+            {/* Lado izquierdo: Buscador, Segmentación Temporal y Limpiar */}
+            <div className="flex items-center gap-1 min-w-0 flex-1 flex-nowrap">
               {/* Buscador */}
-              <div className="relative w-52 sm:w-56 shrink-0">
+              <div className="relative min-w-[90px] max-w-[140px] flex-1 shrink">
                 <Icon
                   name="search"
-                  size="16px"
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+                  size="13px"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
                 />
                 <input
                   type="text"
-                  placeholder="Buscar lote, modelo, defecto..."
+                  placeholder="Buscar..."
                   value={inputBusqueda}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -551,7 +578,7 @@ export function RegistroPage() {
                       busqueda: val.trim() || undefined,
                     }));
                   }}
-                  className="w-full h-8 pl-8 pr-7 py-1 bg-white border border-slate-300 rounded-lg text-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 focus:border-brand-primary transition-all text-slate-800"
+                  className="w-full h-7.5 pl-6 pr-5 py-0.5 bg-white border border-slate-300 rounded-lg text-2xs sm:text-xs placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-accent/50 text-slate-800"
                 />
                 {inputBusqueda && (
                   <button
@@ -563,10 +590,10 @@ export function RegistroPage() {
                         busqueda: undefined,
                       }));
                     }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                     title="Limpiar búsqueda"
                   >
-                    <Icon name="close" size="14px" />
+                    <Icon name="close" size="13px" />
                   </button>
                 )}
               </div>
@@ -578,7 +605,7 @@ export function RegistroPage() {
                     key={mod.id}
                     type="button"
                     onClick={() => handleModalidadChange(mod.id)}
-                    className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                    className={`px-2 py-1 text-2xs sm:text-xs font-semibold rounded-md transition-colors cursor-pointer ${
                       filtros.periodo === mod.id
                         ? 'bg-marca-primario text-white'
                         : 'text-slate-600 hover:text-slate-900'
@@ -591,7 +618,7 @@ export function RegistroPage() {
 
               {/* Selectores Dependientes: Modalidad AÑO (sin conteos) */}
               {filtros.periodo === 'anio' && (
-                <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in duration-150">
+                <div className="flex items-center gap-1 shrink-0 animate-in fade-in duration-150">
                   <select
                     value={filtros.anio ?? ''}
                     disabled={!periodosDisponibles || periodosDisponibles.anios.length === 0}
@@ -601,7 +628,7 @@ export function RegistroPage() {
                         anio: e.target.value ? Number(e.target.value) : undefined,
                       }))
                     }
-                    className="w-24 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
+                    className="w-20 h-8 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
                     title="Filtrar por año"
                   >
                     {(!periodosDisponibles || periodosDisponibles.anios.length === 0) && (
@@ -618,7 +645,7 @@ export function RegistroPage() {
 
               {/* Selectores Dependientes: Modalidad MES */}
               {filtros.periodo === 'mes' && (
-                <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in duration-150">
+                <div className="flex items-center gap-1 shrink-0 animate-in fade-in duration-150">
                   <select
                     value={filtros.anio ?? ''}
                     disabled={!periodosDisponibles || periodosDisponibles.anios.length === 0}
@@ -629,7 +656,7 @@ export function RegistroPage() {
                         mes: undefined,
                       }))
                     }
-                    className="w-24 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
+                    className="w-20 h-8 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
                     title="Seleccionar año"
                   >
                     {(!periodosDisponibles || periodosDisponibles.anios.length === 0) && (
@@ -651,7 +678,7 @@ export function RegistroPage() {
                         mes: e.target.value ? Number(e.target.value) : undefined,
                       }))
                     }
-                    className="w-32 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
+                    className="w-28 h-8 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
                     title="Seleccionar mes"
                   >
                     {(!periodosDisponibles || periodosDisponibles.meses.length === 0) && (
@@ -668,7 +695,7 @@ export function RegistroPage() {
 
               {/* Selectores Dependientes: Modalidad SEMANA (sin palabra ISO ni conteos) */}
               {filtros.periodo === 'semana' && (
-                <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in duration-150">
+                <div className="flex items-center gap-1 shrink-0 animate-in fade-in duration-150">
                   <select
                     value={filtros.anioIso ?? ''}
                     disabled={
@@ -682,7 +709,7 @@ export function RegistroPage() {
                         semanaIsoCodigo: undefined,
                       }))
                     }
-                    className="w-24 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
+                    className="w-20 h-8 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
                     title="Seleccionar año"
                   >
                     {(!periodosDisponibles ||
@@ -714,7 +741,7 @@ export function RegistroPage() {
                         }));
                       }
                     }}
-                    className="w-32 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
+                    className="w-28 h-8 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shrink-0"
                     title="Seleccionar semana"
                   >
                     {semanasDelAnioSeleccionado.length === 0 && (
@@ -731,7 +758,7 @@ export function RegistroPage() {
 
               {/* Selector Dependiente: Modalidad DÍA mediante Calendario */}
               {filtros.periodo === 'dia' && (
-                <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in duration-150">
+                <div className="flex items-center gap-1 shrink-0 animate-in fade-in duration-150">
                   <CalendarioDiaPicker
                     value={filtros.dia}
                     anio={filtros.anio}
@@ -741,7 +768,7 @@ export function RegistroPage() {
                     diasDisponibles={periodosDisponibles?.dias || []}
                     hoyIso={periodosDisponibles?.rangoTotal.hoy || hoyIso}
                     disabled={!periodosDisponibles || periodosDisponibles.anios.length === 0}
-                    className="w-36"
+                    className="w-32"
                     onSelectDia={(fechaIso, anioSel, mesSel) =>
                       aplicarNuevosFiltros((prev) => ({
                         ...prev,
@@ -764,9 +791,9 @@ export function RegistroPage() {
 
               {/* Selector Dependiente: Modalidad RANGO personalizado (Desde y Hasta) */}
               {filtros.periodo === 'rango' && (
-                <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in duration-150">
-                  <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-lg px-2.5 h-8 shadow-2xs">
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Del</span>
+                <div className="flex items-center gap-1 shrink-0 animate-in fade-in duration-150">
+                  <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-lg px-2 h-8 shadow-2xs">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Del</span>
                     <input
                       type="date"
                       value={filtros.fechaDesde || ''}
@@ -777,10 +804,10 @@ export function RegistroPage() {
                           fechaDesde: e.target.value || undefined,
                         }))
                       }
-                      className="text-xs text-slate-800 font-semibold bg-transparent focus:outline-none cursor-pointer"
+                      className="text-2xs text-slate-800 font-semibold bg-transparent focus:outline-none cursor-pointer"
                       title="Fecha inicial"
                     />
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">al</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">al</span>
                     <input
                       type="date"
                       value={filtros.fechaHasta || ''}
@@ -792,37 +819,10 @@ export function RegistroPage() {
                           fechaHasta: e.target.value || undefined,
                         }))
                       }
-                      className="text-xs text-slate-800 font-semibold bg-transparent focus:outline-none cursor-pointer"
+                      className="text-2xs text-slate-800 font-semibold bg-transparent focus:outline-none cursor-pointer"
                       title="Fecha final"
                     />
                   </div>
-                </div>
-              )}
-
-              {/* Selector de Línea: Solo aplica si el departamento seleccionado tiene más de 1 línea */}
-              {tieneMultiplesLineas && deptoSeleccionado && (
-                <div className="flex items-center gap-1 shrink-0 animate-in fade-in duration-150">
-                  <select
-                    value={filtros.lineaTexto || ''}
-                    onChange={(e) =>
-                      aplicarNuevosFiltros((prev) => ({
-                        ...prev,
-                        lineaTexto: e.target.value || undefined,
-                      }))
-                    }
-                    className="h-8 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer w-28 shrink-0"
-                    title="Filtrar por línea operativa del departamento"
-                  >
-                    <option value="">Todas Líneas</option>
-                    {Array.from(
-                      { length: deptoSeleccionado.numeroLineas || 1 },
-                      (_, i) => `L${i + 1}`
-                    ).map((lin) => (
-                      <option key={lin} value={lin}>
-                        {lin}
-                      </option>
-                    ))}
-                  </select>
                 </div>
               )}
 
@@ -831,18 +831,18 @@ export function RegistroPage() {
                 <button
                   type="button"
                   onClick={handleLimpiarFiltros}
-                  className="inline-flex items-center gap-1 h-8 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0"
+                  className="inline-flex items-center gap-1 h-8 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0"
                   title="Restablecer filtros"
                 >
-                  <Icon name="filter_alt_off" size="14px" className="text-slate-500" />
-                  <span>Limpiar</span>
+                  <Icon name="filter_alt_off" size="13px" className="text-slate-500" />
+                  <span className="hidden sm:inline">Limpiar</span>
                 </button>
               )}
             </div>
 
-            {/* Lado derecho: Selector de Inspector, Departamento, Exportar y Papelera */}
-            <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
-              {/* Selector con buscador de Inspector activo junto al de Departamento */}
+            {/* Lado derecho: Selector de DEPTOS, Línea (si aplica), Exportar y Papelera (SIEMPRE EN 1 LÍNEA) */}
+            <div className="flex items-center gap-1.5 shrink-0 flex-nowrap ml-auto">
+              {/* Selector de Inspector activo (comentado a petición del usuario para optimizar espacio horizontal)
               {puedeFiltrarInspector && (
                 <div className="w-44 sm:w-48 shrink-0 min-w-0">
                   <SearchableSelect
@@ -858,13 +858,14 @@ export function RegistroPage() {
                   />
                 </div>
               )}
+              */}
 
               {/* Selector de Departamento */}
               {puedeCambiarDepto ? (
                 <select
                   value={deptoSeleccionado?.id.toString() || ''}
                   onChange={(e) => handleDeptoChange(e.target.value)}
-                  className="h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer w-40 shrink-0"
+                  className="h-7.5 bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 text-2xs sm:text-xs text-slate-700 font-bold focus:outline-none focus:ring-1 focus:ring-brand-accent/50 cursor-pointer max-w-[120px] sm:max-w-[155px] shrink truncate"
                   title="Filtrar por departamento"
                 >
                   <option value="">Todos los Deptos</option>
@@ -875,12 +876,12 @@ export function RegistroPage() {
                   ))}
                 </select>
               ) : (
-                <div className="flex items-center gap-1.5 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs shrink-0">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <div className="flex items-center gap-1 h-7.5 bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 text-2xs sm:text-xs shrink-0">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                     Depto:
                   </span>
                   <span
-                    className="font-bold text-marca-primario truncate max-w-[130px]"
+                    className="font-bold text-marca-primario truncate max-w-[90px] sm:max-w-[120px]"
                     title="Departamento asignado"
                   >
                     {deptoSeleccionado?.nombre || 'Asignado'}
@@ -888,18 +889,45 @@ export function RegistroPage() {
                 </div>
               )}
 
-              {/* Botón Exportar que abre el Modal de selección */}
+              {/* Selector de Línea: Situado inmediatamente junto a su departamento */}
+              {tieneMultiplesLineas && deptoSeleccionado && (
+                <div className="flex items-center gap-1 shrink animate-in fade-in duration-150">
+                  <select
+                    value={filtros.lineaTexto || ''}
+                    onChange={(e) =>
+                      aplicarNuevosFiltros((prev) => ({
+                        ...prev,
+                        lineaTexto: e.target.value || undefined,
+                      }))
+                    }
+                    className="h-7.5 bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 text-2xs sm:text-xs text-slate-700 font-bold focus:outline-none focus:ring-1 focus:ring-brand-accent/50 cursor-pointer w-20 sm:w-22 shrink"
+                    title="Filtrar por línea operativa del departamento"
+                  >
+                    <option value="">Todas Líneas</option>
+                    {Array.from(
+                      { length: deptoSeleccionado.numeroLineas || 1 },
+                      (_, i) => `L${i + 1}`
+                    ).map((lin) => (
+                      <option key={lin} value={lin}>
+                        Línea {lin}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Botón Exportar */}
               <button
                 type="button"
                 onClick={() => setModalExportarAbierto(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 h-8 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-700 hover:text-slate-900 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 shadow-2xs cursor-pointer transition-colors"
+                className="inline-flex items-center gap-1 px-2 h-7.5 bg-white border border-slate-300 rounded-lg text-2xs sm:text-xs font-bold text-slate-700 hover:text-slate-900 hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-brand-accent/50 shadow-2xs cursor-pointer transition-colors shrink-0"
                 title="Configurar y exportar reporte completo"
               >
-                <Icon name="download" size="15px" className="text-slate-500" />
+                <Icon name="download" size="13px" className="text-slate-500" />
                 <span>Exportar</span>
               </button>
 
-              {/* Botón Papelera (solo si el usuario tiene permiso defectos.eliminar) */}
+              {/* Botón Papelera / Bote de Basura */}
               {puedeVerEliminados && (
                 <button
                   type="button"
@@ -914,7 +942,7 @@ export function RegistroPage() {
                       ? 'Papelera: Viendo defectos eliminados (Click para volver a activos)'
                       : 'Papelera: Ver defectos eliminados'
                   }
-                  className={`h-8 px-2.5 py-1 rounded-lg border transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold shrink-0 ${
+                  className={`h-7.5 px-2 py-0.5 rounded-lg border transition-colors cursor-pointer flex items-center gap-1 text-2xs sm:text-xs font-semibold shrink-0 ${
                     filtros.soloEliminados
                       ? 'bg-rose-100 text-rose-700 border-rose-300 shadow-2xs'
                       : 'bg-white text-slate-500 border-slate-300 hover:text-slate-700 hover:bg-slate-50'
@@ -922,7 +950,7 @@ export function RegistroPage() {
                 >
                   <Icon
                     name="delete"
-                    size="16px"
+                    size="15px"
                     className={filtros.soloEliminados ? 'text-rose-600' : 'text-slate-400'}
                   />
                   {filtros.soloEliminados && <span>Eliminados</span>}

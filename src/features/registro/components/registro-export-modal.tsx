@@ -62,13 +62,13 @@ export function RegistroExportModal({
   onClose,
   onExportar,
   departamentos,
-  inspectores,
+  inspectores: _inspectores,
   filtrosActivos,
   periodosIniciales = null,
   totalDefectosVista,
   totalInspeccionesVista = 0,
   puedeCambiarDepto = true,
-  puedeFiltrarInspector = true,
+  puedeFiltrarInspector: _puedeFiltrarInspector = true,
 }: RegistroExportModalProps) {
   const [formato, setFormato] = useState<'excel' | 'pdf'>('excel');
   const [filtros, setFiltros] = useState<FiltrosRegistroState>(filtrosActivos);
@@ -81,9 +81,30 @@ export function RegistroExportModal({
     totalDefectos: number;
     totalInspecciones: number;
   } | null>(null);
+  const [dropdownDeptosAbierto, setDropdownDeptosAbierto] = useState(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const dropdownDeptosRef = useRef<HTMLDivElement>(null);
   const hoyIso = useMemo(() => getHoyMexicoIso(), []);
+
+  // Cerrar dropdown de departamentos al hacer clic fuera o presionar Escape
+  useEffect(() => {
+    if (!dropdownDeptosAbierto) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownDeptosRef.current && !dropdownDeptosRef.current.contains(e.target as Node)) {
+        setDropdownDeptosAbierto(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDropdownDeptosAbierto(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [dropdownDeptosAbierto]);
 
   // Inicializar con los filtros activos de la tabla al abrir el modal
   useEffect(() => {
@@ -102,6 +123,7 @@ export function RegistroExportModal({
     () => construirQueryPeriodosDisponibles(filtros),
     [
       filtros.departamentoId,
+      filtros.departamentosIds,
       filtros.lineaTexto,
       filtros.inspectorId,
       filtros.busqueda,
@@ -152,14 +174,60 @@ export function RegistroExportModal({
     filtros.semana,
     filtros.dia,
     filtros.departamentoId,
+    filtros.departamentosIds,
     filtros.lineaTexto,
     filtros.inspectorId,
   ]);
 
-  const deptoSeleccionado = departamentos.find((d) => d.id === filtros.departamentoId);
-  const tieneMultiplesLineas = Boolean(
-    deptoSeleccionado && (deptoSeleccionado.numeroLineas || 1) > 1
+  const deptosSeleccionados = useMemo(() => {
+    if (filtros.departamentosIds && filtros.departamentosIds.length > 0) {
+      return departamentos.filter((d) => filtros.departamentosIds!.includes(d.id));
+    }
+    if (filtros.departamentoId) {
+      const found = departamentos.find((d) => d.id === filtros.departamentoId);
+      return found ? [found] : [];
+    }
+    return [];
+  }, [departamentos, filtros.departamentoId, filtros.departamentosIds]);
+
+  const textoTriggerDeptos = useMemo(() => {
+    if (deptosSeleccionados.length === 0 || deptosSeleccionados.length === departamentos.length) {
+      return 'Todos los departamentos';
+    }
+    if (deptosSeleccionados.length === 1) {
+      return deptosSeleccionados[0].nombre;
+    }
+    if (deptosSeleccionados.length === 2) {
+      return `${deptosSeleccionados[0].nombre}, ${deptosSeleccionados[1].nombre}`;
+    }
+    return `${deptosSeleccionados.length} departamentos seleccionados`;
+  }, [deptosSeleccionados, departamentos.length]);
+
+  // Departamentos base para evaluar si aplican múltiples líneas
+  const deptosParaLineas = useMemo(() => {
+    return deptosSeleccionados.length > 0 ? deptosSeleccionados : departamentos;
+  }, [deptosSeleccionados, departamentos]);
+
+  // Líneas disponibles dinámicamente según los departamentos en alcance
+  const maxLineas = useMemo(() => {
+    if (deptosParaLineas.length === 0) return 1;
+    return Math.max(1, ...deptosParaLineas.map((d) => d.numeroLineas || 1));
+  }, [deptosParaLineas]);
+
+  const tieneMultiplesLineas = maxLineas > 1;
+
+  const lineasDisponibles = useMemo(
+    () => Array.from({ length: maxLineas }, (_, i) => `L${i + 1}`),
+    [maxLineas]
   );
+
+  useEffect(() => {
+    if (!tieneMultiplesLineas && filtros.lineaTexto) {
+      setFiltros((prev) => ({ ...prev, lineaTexto: undefined }));
+    } else if (filtros.lineaTexto && !lineasDisponibles.includes(filtros.lineaTexto)) {
+      setFiltros((prev) => ({ ...prev, lineaTexto: undefined }));
+    }
+  }, [tieneMultiplesLineas, lineasDisponibles, filtros.lineaTexto]);
 
   const estadoConsulta = useMemo(
     () => puedeEjecutarConsultaTemporal(filtros, periodos, hoyIso),
@@ -168,6 +236,15 @@ export function RegistroExportModal({
 
   // Determinar si los filtros del modal coinciden exactamente con los de la vista actual
   const coincideConVistaActual = useMemo(() => {
+    const sonMismosDeptos =
+      (!filtros.departamentosIds?.length &&
+        !filtrosActivos.departamentosIds?.length &&
+        filtros.departamentoId === filtrosActivos.departamentoId) ||
+      (Boolean(filtros.departamentosIds?.length) &&
+        Boolean(filtrosActivos.departamentosIds?.length) &&
+        filtros.departamentosIds!.length === filtrosActivos.departamentosIds!.length &&
+        filtros.departamentosIds!.every((id) => filtrosActivos.departamentosIds!.includes(id)));
+
     return (
       filtros.periodo === filtrosActivos.periodo &&
       filtros.anio === filtrosActivos.anio &&
@@ -175,7 +252,7 @@ export function RegistroExportModal({
       filtros.anioIso === filtrosActivos.anioIso &&
       filtros.semana === filtrosActivos.semana &&
       filtros.dia === filtrosActivos.dia &&
-      filtros.departamentoId === filtrosActivos.departamentoId &&
+      sonMismosDeptos &&
       filtros.lineaTexto === filtrosActivos.lineaTexto &&
       filtros.inspectorId === filtrosActivos.inspectorId
     );
@@ -223,12 +300,38 @@ export function RegistroExportModal({
     );
   };
 
-  const handleDeptoChange = (idNum: number | undefined) => {
-    const dep = departamentos.find((d) => d.id === idNum);
+  const handleToggleDepto = (idNum: number) => {
+    setFiltros((prev) => {
+      const idsActuales =
+        prev.departamentosIds && prev.departamentosIds.length > 0
+          ? [...prev.departamentosIds]
+          : prev.departamentoId
+          ? [prev.departamentoId]
+          : [];
+
+      const existe = idsActuales.includes(idNum);
+      const nuevosIds = existe
+        ? idsActuales.filter((id) => id !== idNum)
+        : [...idsActuales, idNum];
+
+      const nuevoDeptoId = nuevosIds.length === 1 ? nuevosIds[0] : undefined;
+      const dep = nuevoDeptoId ? departamentos.find((d) => d.id === nuevoDeptoId) : null;
+
+      return {
+        ...prev,
+        departamentoId: nuevoDeptoId,
+        departamentosIds: nuevosIds.length > 0 ? nuevosIds : undefined,
+        lineaTexto: !dep || (dep.numeroLineas || 1) <= 1 ? undefined : prev.lineaTexto,
+      };
+    });
+  };
+
+  const handleSeleccionarTodosDeptos = () => {
     setFiltros((prev) => ({
       ...prev,
-      departamentoId: idNum,
-      lineaTexto: !dep || (dep.numeroLineas || 1) <= 1 ? undefined : prev.lineaTexto,
+      departamentoId: undefined,
+      departamentosIds: undefined,
+      lineaTexto: undefined,
     }));
   };
 
@@ -298,7 +401,7 @@ export function RegistroExportModal({
   );
 
   return (
-    <Modal isOpen={isOpen} onClose={handleCloseSeguro} size="lg">
+    <Modal isOpen={isOpen} onClose={handleCloseSeguro} size="xl">
       <ModalHeader title="Exportar Reporte de Defectos" onClose={handleCloseSeguro} />
       <ModalBody className="space-y-4 text-xs">
         {/* 1. Selección de Formato */}
@@ -327,9 +430,7 @@ export function RegistroExportModal({
               </div>
               <div className="min-w-0">
                 <span className="font-bold text-slate-900 block text-xs">Excel (.csv completo)</span>
-                <span className="text-[11px] text-slate-500">
-                  Sin límite de filas para el período elegido
-                </span>
+
               </div>
             </button>
 
@@ -353,7 +454,6 @@ export function RegistroExportModal({
               </div>
               <div className="min-w-0">
                 <span className="font-bold text-slate-900 block text-xs">Documento PDF</span>
-                <span className="text-[11px] text-slate-500">Formato horizontal imprimible</span>
               </div>
             </button>
           </div>
@@ -617,92 +717,155 @@ export function RegistroExportModal({
           )}
         </div>
 
-        {/* 3. Filtros de Alcance: Departamento, Inspector y Línea */}
-        <div className="space-y-3">
-          <label className="block text-2xs font-extrabold uppercase tracking-wider text-slate-500">
-            3. Filtros de Alcance
-          </label>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Departamento */}
-            <div>
-              <span className="text-[11px] font-bold text-slate-700 block mb-1">
-                Departamento:
-              </span>
-              <select
-                value={filtros.departamentoId ? String(filtros.departamentoId) : ''}
-                disabled={!puedeCambiarDepto}
-                onChange={(e) =>
-                  handleDeptoChange(e.target.value ? Number(e.target.value) : undefined)
-                }
-                className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer disabled:opacity-60"
+        {/* 3. Filtros de Alcance: Departamentos y Líneas */}
+        <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <label className="block text-2xs font-extrabold uppercase tracking-wider text-slate-600">
+              3. Alcance: Departamentos y Líneas
+            </label>
+            {deptosSeleccionados.length > 0 && (
+              <button
+                type="button"
+                onClick={handleSeleccionarTodosDeptos}
+                className="text-[10px] font-bold text-marca-primario hover:underline cursor-pointer"
               >
-                <option value="">Todos los Departamentos</option>
-                {departamentos.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Inspector (solo inspectores activos) */}
-            <div>
-              <span className="text-[11px] font-bold text-slate-700 block mb-1">
-                Inspector activo:
-              </span>
-              <select
-                value={filtros.inspectorId ? String(filtros.inspectorId) : ''}
-                disabled={!puedeFiltrarInspector}
-                onChange={(e) =>
-                  setFiltros((prev) => ({
-                    ...prev,
-                    inspectorId: e.target.value ? Number(e.target.value) : undefined,
-                  }))
-                }
-                className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer disabled:opacity-60"
-              >
-                <option value="">Todos los Inspectores</option>
-                {inspectores.map((insp) => (
-                  <option key={insp.id} value={insp.id}>
-                    {insp.nombre || insp.usuario}
-                  </option>
-                ))}
-              </select>
-            </div>
+                Restablecer a todos ({deptosSeleccionados.length} seleccionado{deptosSeleccionados.length > 1 ? 's' : ''})
+              </button>
+            )}
           </div>
 
-          {/* Línea Operativa (solo si el depto tiene más de 1 línea) */}
-          {tieneMultiplesLineas && deptoSeleccionado && (
-            <div className="p-2.5 bg-amber-50/70 border border-amber-200 rounded-lg flex items-center justify-between gap-3 animate-in fade-in duration-150">
-              <div className="flex items-center gap-2">
-                <Icon name="linear_scale" size="16px" className="text-amber-700" />
-                <span className="text-xs font-bold text-amber-950">
-                  Línea operativa ({deptoSeleccionado.nombre}):
-                </span>
-              </div>
-              <select
-                value={filtros.lineaTexto || ''}
-                onChange={(e) =>
-                  setFiltros((prev) => ({
-                    ...prev,
-                    lineaTexto: e.target.value || undefined,
-                  }))
-                }
-                className="bg-white border border-amber-300 rounded-lg px-2.5 py-1 text-xs text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/50 cursor-pointer w-36"
+          <div className={tieneMultiplesLineas ? "grid grid-cols-1 sm:grid-cols-2 gap-3 items-start" : "space-y-3"}>
+            {/* 1. Selector de Departamento(s) mediante Dropdown con Checkboxes perfectamente alineados */}
+            <div ref={dropdownDeptosRef}>
+              <span className="text-[11px] font-bold text-slate-700 block mb-1">
+                Departamento(s):
+              </span>
+              <button
+                type="button"
+                disabled={!puedeCambiarDepto}
+                onClick={() => setDropdownDeptosAbierto((prev) => !prev)}
+                className="w-full h-9 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-left text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer disabled:opacity-60 flex items-center justify-between gap-2 shadow-2xs hover:bg-slate-50/80 transition-colors"
+                title={textoTriggerDeptos}
               >
-                <option value="">Todas Líneas</option>
-                {Array.from(
-                  { length: deptoSeleccionado.numeroLineas || 1 },
-                  (_, i) => `L${i + 1}`
-                ).map((lin) => (
-                  <option key={lin} value={lin}>
-                    {lin}
-                  </option>
-                ))}
-              </select>
+                <div className="truncate flex items-center gap-2 min-w-0">
+                  <Icon name="domain" size="16px" className="text-slate-400 shrink-0" />
+                  <span className="truncate">{textoTriggerDeptos}</span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {deptosSeleccionados.length > 1 && deptosSeleccionados.length < departamentos.length && (
+                    <span className="px-1.5 py-0.2 rounded-md text-[10px] font-bold bg-marca-primario/10 text-marca-primario">
+                      {deptosSeleccionados.length}
+                    </span>
+                  )}
+                  <Icon
+                    name="expand_more"
+                    size="16px"
+                    className={`text-slate-400 transition-transform duration-200 ${
+                      dropdownDeptosAbierto ? 'rotate-180' : ''
+                    }`}
+                  />
+                </div>
+              </button>
+
+              {/* Menú desplegable en flujo normal (expande el modal hacia abajo sin cortarse) */}
+              {dropdownDeptosAbierto && (
+                <div className="mt-2 w-full bg-white border border-slate-200 rounded-xl shadow-xs p-1.5 animate-in fade-in-50 duration-150">
+                  {/* Opción Todos los Departamentos */}
+                  <button
+                    type="button"
+                    onClick={handleSeleccionarTodosDeptos}
+                    className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-bold text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer text-left"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                          deptosSeleccionados.length === 0 || deptosSeleccionados.length === departamentos.length
+                            ? 'bg-marca-primario border-marca-primario text-white'
+                            : 'border-slate-300 bg-white'
+                        }`}
+                      >
+                        {(deptosSeleccionados.length === 0 || deptosSeleccionados.length === departamentos.length) && (
+                          <Icon name="check" size="13px" className="stroke-[3]" />
+                        )}
+                      </div>
+                      <span>Todos los Departamentos</span>
+                    </div>
+                    {deptosSeleccionados.length > 0 && deptosSeleccionados.length < departamentos.length && (
+                      <span className="text-[10px] font-semibold text-marca-primario">
+                        Restablecer
+                      </span>
+                    )}
+                  </button>
+
+                  <div className="my-1 border-t border-slate-100" />
+
+                  {/* Lista de Departamentos (Solo nombres limpios, sin códigos) */}
+                  <div className="max-h-56 overflow-y-auto space-y-0.5 pr-0.5">
+                    {departamentos.map((d) => {
+                      const isSelected = deptosSeleccionados.some((sel) => sel.id === d.id);
+                      return (
+                        <button
+                          key={d.id}
+                          type="button"
+                          onClick={() => handleToggleDepto(d.id)}
+                          className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs transition-colors cursor-pointer text-left ${
+                            isSelected
+                              ? 'bg-marca-primario/5 text-slate-900 font-bold'
+                              : 'text-slate-700 hover:bg-slate-50 font-medium'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div
+                              className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                                isSelected
+                                  ? 'bg-marca-primario border-marca-primario text-white'
+                                  : 'border-slate-300 bg-white hover:border-slate-400'
+                              }`}
+                            >
+                              {isSelected && <Icon name="check" size="13px" className="stroke-[3]" />}
+                            </div>
+                            <span className="truncate">{d.nombre}</span>
+                          </div>
+                          {(d.numeroLineas ?? 1) > 1 && (
+                            <span className="text-[10px] font-medium text-slate-400 shrink-0 ml-2">
+                              {d.numeroLineas} líneas
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+
+            {/* 2. Selector de Línea Operativa (SOLO visible si hay departamentos con más de 1 línea) */}
+            {tieneMultiplesLineas && (
+              <div>
+                <span className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Línea Operativa:
+                </span>
+                <select
+                  value={filtros.lineaTexto || ''}
+                  onChange={(e) =>
+                    setFiltros((prev) => ({
+                      ...prev,
+                      lineaTexto: e.target.value || undefined,
+                    }))
+                  }
+                  className="w-full h-9 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer shadow-2xs"
+                  title="Filtrar por línea operativa"
+                >
+                  <option value="">Todas las líneas</option>
+                  {lineasDisponibles.map((lin) => (
+                    <option key={lin} value={lin}>
+                      Línea {lin}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Resumen de alcance */}
@@ -715,7 +878,11 @@ export function RegistroExportModal({
               <strong className="font-extrabold text-slate-900">{periodoActivoTexto}</strong>
               <span className="text-slate-400">•</span>
               <span className="font-bold text-marca-primario">
-                {deptoSeleccionado ? `Depto: ${deptoSeleccionado.nombre}` : 'Planta Completa (Todos los Deptos)'}
+                {deptosSeleccionados.length === 0
+                  ? 'Planta Completa (Todos los Deptos)'
+                  : deptosSeleccionados.length === 1
+                  ? `Depto: ${deptosSeleccionados[0].nombre}`
+                  : `Deptos (${deptosSeleccionados.length}): ${deptosSeleccionados.map((d) => d.nombre).join(', ')}`}
               </span>
               {filtros.lineaTexto && (
                 <>

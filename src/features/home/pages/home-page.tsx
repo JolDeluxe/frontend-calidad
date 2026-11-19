@@ -581,7 +581,7 @@ export function HomePage() {
                     });
                   }
                 }}
-                className="w-48 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer"
+                className="w-36 h-8 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer"
                 title="Seleccionar semana"
               >
                 {semanasDelAnioSeleccionado.length === 0 && (

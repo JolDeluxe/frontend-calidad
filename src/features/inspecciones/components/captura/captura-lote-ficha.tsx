@@ -54,12 +54,12 @@ export function CapturaLoteFicha({ lote, error, cargando }: CapturaLoteFichaProp
 
   if (error) {
     return (
-      <div className="rounded-xl border border-amber-300/60 dark:border-amber-800/60 bg-amber-50/70 dark:bg-amber-950/20 p-4 xl:p-6 text-center text-text-muted flex-1 flex flex-col items-center justify-center">
+      <div className="rounded-xl border-2 border-amber-400 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-4 xl:p-6 text-center text-text-muted flex-1 flex flex-col items-center justify-center">
         <Icon name="search_off" size="44px" className="mx-auto mb-3 text-amber-700 dark:text-amber-400 opacity-90" />
-        <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+        <p className="text-sm font-black text-slate-900 dark:text-slate-100">
           {error}
         </p>
-        <p className="text-xs mt-1.5 text-text-secondary max-w-xs">
+        <p className="text-xs mt-1.5 text-slate-700 dark:text-slate-300 font-medium max-w-xs">
           Verifique que el número de lote sea correcto y corresponda a producción activa.
         </p>
       </div>

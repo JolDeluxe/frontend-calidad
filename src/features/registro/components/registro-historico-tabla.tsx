@@ -17,6 +17,7 @@ export interface RegistroHistoricoTablaProps {
   periodoDescripcion?: string;
   errorMensaje?: string | null;
   tieneFiltrosActivos?: boolean;
+  mostrarColumnaLinea?: boolean;
   onReintentar?: () => void;
   onLimpiarFiltros?: () => void;
   toolbar?: ReactNode;
@@ -121,6 +122,7 @@ export function RegistroHistoricoTabla({
   periodoDescripcion,
   errorMensaje = null,
   tieneFiltrosActivos = false,
+  mostrarColumnaLinea = true,
   onReintentar,
   onLimpiarFiltros,
   toolbar,
@@ -150,25 +152,27 @@ export function RegistroHistoricoTabla({
           <thead className="sticky top-0 z-30 shadow-xs">
             {toolbar && (
               <tr className="bg-white border-b border-border/80">
-                <th colSpan={14} className="p-2.5 xl:p-3 font-normal text-left bg-white rounded-t-xl">
+                <th colSpan={mostrarColumnaLinea ? 14 : 13} className="p-2 sm:p-2.5 xl:p-3 font-normal text-left bg-white rounded-t-xl">
                   {toolbar}
                 </th>
               </tr>
             )}
             <tr className="bg-slate-100 border-b border-border text-text-secondary uppercase tracking-wider font-semibold text-2xs select-none">
-              <th className="py-2 px-1 xl:px-1.5 w-[38px] text-center">No</th>
-              <th className="py-2 px-1 xl:px-1.5 w-[8%] truncate">Depto</th>
-              <th className="py-2 px-1 xl:px-1.5 w-[7.5%] truncate">Fecha</th>
-              <th className="py-2 px-1 xl:px-1.5 w-[4.5%] truncate">Lista</th>
-              <th className="py-2 px-1 xl:px-1.5 w-[7%] truncate ">Lote</th>
-              <th className="py-2 px-0.5 xl:px-1 w-[48px] text-center">Línea</th>
-              <th className="py-2 px-1 xl:px-1.5 w-[6.5%] truncate">Modelo</th>
-              <th className="py-2 px-1.5 xl:px-2.5 w-[35%]">Descripción</th>
-              <th className="py-2 px-0.5 xl:px-1 w-[52px] text-center font-mono">Clave</th>
-              <th className="py-2 px-1.5 xl:px-2.5 w-[21.5%]">Defecto</th>
-              <th className="py-2 px-1 xl:px-1.5 w-[5%]">Clasif.</th>
-              <th className="py-2 px-0.5 xl:px-1 w-[42px] text-center">Prs</th>
-              <th className="py-2 px-1 xl:px-1.5 w-[5%] truncate">Inspector</th>
+              <th className="py-2 px-1 w-[34px] text-center whitespace-nowrap">No</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[8%] truncate whitespace-nowrap">Depto</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[8%] text-center whitespace-nowrap">Fecha</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[5.5%] text-center whitespace-nowrap truncate">Lista</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[7%] text-center whitespace-nowrap truncate">Lote</th>
+              {mostrarColumnaLinea && (
+                <th className="py-2 px-0.5 w-[42px] text-center whitespace-nowrap">Línea</th>
+              )}
+              <th className="py-2 px-1 xl:px-1.5 w-[6.5%] truncate whitespace-nowrap">Modelo</th>
+              <th className={`py-2 px-1.5 xl:px-2 ${mostrarColumnaLinea ? 'w-[26%]' : 'w-[28.5%]'} truncate whitespace-nowrap`}>Descripción</th>
+              <th className="py-2 px-0.5 w-[48px] text-center font-mono whitespace-nowrap">Clave</th>
+              <th className={`py-2 px-1.5 xl:px-2 ${mostrarColumnaLinea ? 'w-[18%]' : 'w-[19.5%]'} truncate whitespace-nowrap`}>Defecto</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[7%] text-center whitespace-nowrap">Clasif.</th>
+              <th className="py-2 px-0.5 w-[38px] text-center whitespace-nowrap">Prs</th>
+              <th className="py-2 px-1 xl:px-1.5 w-[8%] truncate whitespace-nowrap">Inspector</th>
               <th className="py-2 px-1 w-[32px] text-center"></th>
             </tr>
           </thead>
@@ -227,36 +231,38 @@ export function RegistroHistoricoTabla({
       {/* TABLA PRINCIPAL: ENCABEZADO Y FILTROS INTEGRADOS EN THEAD STICKY TOP-0 */}
       <table className="w-full text-left border-collapse table-fixed text-[11px] xl:text-xs">
         <thead className="sticky top-0 z-30 shadow-xs">
-          {/* Fila 1: Filtros Integrados (Cero cálculo top-14, irrompible) */}
+          {/* Fila 1: Filtros Integrados */}
           {toolbar && (
             <tr className="bg-white border-b border-border/80">
-              <th colSpan={14} className="p-2.5 xl:p-3 font-normal text-left bg-white rounded-t-xl">
+              <th colSpan={mostrarColumnaLinea ? 14 : 13} className="p-2 sm:p-2.5 xl:p-3 font-normal text-left bg-white rounded-t-xl">
                 {toolbar}
               </th>
             </tr>
           )}
 
-          {/* Fila 2: Títulos de Columnas Proporcionales (suman 100% con table-fixed) */}
+          {/* Fila 2: Títulos de Columnas Proporcionales y Equilibradas para que NUNCA se empalmen */}
           <tr className="bg-slate-100 border-b border-border text-text-secondary uppercase tracking-wider font-semibold text-2xs select-none">
-            <th className="py-2 px-1 xl:px-1.5 w-[38px] text-center">No</th>
-            <th className="py-2 px-1 xl:px-1.5 w-[8%] truncate">Depto</th>
-            <th className="py-2 px-1 xl:px-1.5 w-[7.5%] truncate">Fecha</th>
-            <th className="py-2 px-1 xl:px-1.5 w-[4.5%] truncate">Lista</th>
-            <th className="py-2 px-1 xl:px-1.5 w-[7%] truncate text-center">Lote</th>
-            <th className="py-2 px-0.5 xl:px-1 w-[48px] text-center">Línea</th>
-            <th className="py-2 px-1 xl:px-1.5 w-[6.5%] truncate">Modelo</th>
-            <th className="py-2 px-1.5 xl:px-2.5 w-[35%]">Descripción</th>
-            <th className="py-2 px-0.5 xl:px-1 w-[52px] text-center font-mono">Clave</th>
-            <th className="py-2 px-1.5 xl:px-2.5 w-[21.5%]">Defecto</th>
-            <th className="py-2 px-1 xl:px-1.5 w-[5%]">Clasif.</th>
-            <th className="py-2 px-0.5 xl:px-1 w-[42px] text-center">Prs</th>
-            <th className="py-2 px-1 xl:px-1.5 w-[5%] truncate">Inspector</th>
+            <th className="py-2 px-1 w-[34px] text-center whitespace-nowrap">No</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[8%] truncate whitespace-nowrap">Depto</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[8%] text-center whitespace-nowrap">Fecha</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[5.5%] text-center whitespace-nowrap truncate">Lista</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[7%] text-center whitespace-nowrap truncate">Lote</th>
+            {mostrarColumnaLinea && (
+              <th className="py-2 px-0.5 w-[42px] text-center whitespace-nowrap">Línea</th>
+            )}
+            <th className="py-2 px-1 xl:px-1.5 w-[6.5%] truncate whitespace-nowrap">Modelo</th>
+            <th className={`py-2 px-1.5 xl:px-2 ${mostrarColumnaLinea ? 'w-[26%]' : 'w-[28.5%]'} truncate whitespace-nowrap`}>Descripción</th>
+            <th className="py-2 px-0.5 w-[48px] text-center font-mono whitespace-nowrap">Clave</th>
+            <th className={`py-2 px-1.5 xl:px-2 ${mostrarColumnaLinea ? 'w-[18%]' : 'w-[19.5%]'} truncate whitespace-nowrap`}>Defecto</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[7%] text-center whitespace-nowrap">Clasif.</th>
+            <th className="py-2 px-0.5 w-[38px] text-center whitespace-nowrap">Prs</th>
+            <th className="py-2 px-1 xl:px-1.5 w-[8%] truncate whitespace-nowrap">Inspector</th>
             <th className="py-2 px-1 w-[32px] text-center"></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border/60">
           {isLoading ? (
-            <TableRowsSkeleton columns={14} rows={10} />
+            <TableRowsSkeleton columns={mostrarColumnaLinea ? 14 : 13} rows={10} />
           ) : (
             items.map((row, idx) => {
               // Resaltar si el defecto es externo a los departamentos activos de la terminal
@@ -278,12 +284,12 @@ export function RegistroHistoricoTabla({
                   className="transition-colors duration-200 hover:bg-app-surface-muted/50"
                 >
                   {/* No: Contador dinámico en base a la lista mostrada */}
-                  <td className="py-2 px-1 xl:px-2 text-center font-mono font-semibold text-slate-500">
+                  <td className="py-2 px-1 text-center font-mono font-semibold text-slate-500 whitespace-nowrap">
                     {idx + 1}
                   </td>
 
                   {/* Depto: Departamento al que pertenece el defecto */}
-                  <td className="py-2 px-1.5 xl:px-2.5">
+                  <td className="py-2 px-1 xl:px-1.5 truncate">
                     <div className="flex items-center gap-1 min-w-0">
                       <span className="font-bold text-slate-800 uppercase truncate" title={row.defDepto}>
                         {row.defDepto}
@@ -310,34 +316,38 @@ export function RegistroHistoricoTabla({
                   </td>
 
                   {/* Fecha */}
-                  <td className="py-2 px-1.5 xl:px-2 font-mono font-semibold text-slate-700 whitespace-nowrap truncate">
+                  <td className="py-2 px-1 xl:px-1.5 font-mono font-semibold text-slate-700 text-center whitespace-nowrap truncate">
                     {formatearFecha(row.fecha)}
                   </td>
 
                   {/* Lista */}
-                  <td className="py-2 px-1 xl:px-2 font-semibold text-slate-700 truncate" title={row.lista}>
+                  <td className="py-2 px-1 xl:px-1.5 font-semibold text-slate-700 text-center whitespace-nowrap truncate" title={row.lista}>
                     <HighlightText text={row.lista} highlight={busqueda} />
                   </td>
 
                   {/* Lote */}
-                  <td className="py-2 px-3 xl:px-4 font-mono font-extrabold text-sm text-marca-primario truncate text-center" title={row.lote}>
+                  <td className="py-2 px-1 xl:px-1.5 font-mono font-extrabold text-xs text-marca-primario text-center whitespace-nowrap truncate" title={row.lote}>
                     <HighlightText text={row.lote} highlight={busqueda} />
                   </td>
 
                   {/* Línea */}
-                  <td className="py-2 px-0.5 text-center">
-                    <span className="inline-block px-1 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 truncate">
-                      {row.linea}
-                    </span>
-                  </td>
+                  {mostrarColumnaLinea && (
+                    <td className="py-2 px-0.5 text-center whitespace-nowrap">
+                      {row.linea ? (
+                        <span className="inline-block px-1 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">
+                          {row.linea}
+                        </span>
+                      ) : null}
+                    </td>
+                  )}
 
                   {/* Modelo */}
-                  <td className="py-2 px-1.5 xl:px-2 font-semibold text-slate-900 truncate" title={row.modelo}>
+                  <td className="py-2 px-1 xl:px-1.5 font-semibold text-slate-900 whitespace-nowrap truncate" title={row.modelo}>
                     <HighlightText text={row.modelo} highlight={busqueda} />
                   </td>
 
                   {/* Descripción: Truncate con title para que nunca empuje la tabla */}
-                  <td className="py-2 px-1.5 xl:px-2.5 text-text-muted truncate" title={row.descripcion || ''}>
+                  <td className="py-2 px-1.5 xl:px-2 text-text-muted truncate" title={row.descripcion || ''}>
                     {row.descripcion ? (
                       <HighlightText text={row.descripcion} highlight={busqueda} />
                     ) : (
@@ -346,34 +356,34 @@ export function RegistroHistoricoTabla({
                   </td>
 
                   {/* Clave de Defecto */}
-                  <td className="py-2 px-5 text-center font-mono font-extrabold text-3 text-brand-primary truncate" title={`Clave ${row.defectoClave}`}>
+                  <td className="py-2 px-0.5 text-center font-mono font-extrabold text-xs text-brand-primary whitespace-nowrap truncate" title={`Clave ${row.defectoClave}`}>
                     <HighlightText text={row.defectoClave} highlight={busqueda} />
                   </td>
 
                   {/* Defecto */}
-                  <td className="py-2 px-1.5 xl:px-2.5 truncate" title={row.defectoNombre}>
+                  <td className="py-2 px-1.5 xl:px-2 truncate" title={row.defectoNombre}>
                     <HighlightText text={row.defectoNombre} highlight={busqueda} />
                   </td>
 
                   {/* Clasificación */}
-                  <td className="py-2 px-1 xl:px-2">
+                  <td className="py-2 px-1 xl:px-1.5 text-center whitespace-nowrap">
                     <DefectoClasificacionIndicator clasificacion={row.clasificacion} />
                   </td>
 
                   {/* Prs */}
-                  <td className="py-2 px-0.5 text-center">
+                  <td className="py-2 px-0.5 text-center whitespace-nowrap">
                     <span className="inline-flex items-center justify-center font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-900 text-xs">
                       {row.paresDefectuosos}
                     </span>
                   </td>
 
                   {/* Usuario Inspector */}
-                  <td className="py-2 px-1.5 xl:px-2 text-text-muted text-[11px] truncate" title={row.usuario}>
+                  <td className="py-2 px-1 xl:px-1.5 text-text-muted text-[11px] whitespace-nowrap truncate" title={row.usuario}>
                     {row.usuario}
                   </td>
 
                   {/* Columna de Acción (3 puntos) */}
-                  <td className="py-2 px-1 w-[32px] text-center">
+                  <td className="py-2 px-1 w-[32px] text-center whitespace-nowrap">
                     <MenuAccionesRegistro
                       row={row}
                       onVerDetalle={onVerDetalle}

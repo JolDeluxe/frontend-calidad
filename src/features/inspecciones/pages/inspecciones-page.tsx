@@ -975,7 +975,11 @@ export function InspeccionesPage() {
         sinConexion={estaSinConexionBackend}
         errorConsulta={errorConsulta}
         mostrandoDatosLocales={mostrandoDatosLocales}
-        mostrarColumnaLinea={(deptoAuditor?.numeroLineas ?? 1) > 1}
+        mostrarColumnaLinea={
+          deptoAuditor
+            ? (deptoAuditor.numeroLineas ?? 1) > 1
+            : departamentos.some((d) => (d.numeroLineas ?? 1) > 1)
+        }
         onReintentar={async () => {
           setIsLoading(true);
           try {
@@ -991,14 +995,14 @@ export function InspeccionesPage() {
         onVerDetalle={handleAbrirDetalle}
         onCancelar={puedeEliminar ? handleAbrirCancelar : undefined}
         toolbar={
-          <div className="flex flex-wrap items-center justify-between gap-2.5 w-full select-none py-1">
+          <div className="flex items-center justify-between gap-1.5 w-full select-none py-1 flex-nowrap min-w-0">
             {/* Lado izquierdo: Buscador y Pestañas de Período agrupadas */}
-            <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 shrink-0 flex-nowrap">
               {/* Buscador */}
-              <div className="relative w-56 sm:w-64 shrink-0">
+              <div className="relative w-40 sm:w-52 shrink min-w-[120px]">
                 <Icon
                   name="search"
-                  size="16px"
+                  size="15px"
                   className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
                 />
                 <input
@@ -1009,7 +1013,7 @@ export function InspeccionesPage() {
                     setInputBusqueda(e.target.value);
                     actualizarParametro('q', e.target.value.trim() || null);
                   }}
-                  className="w-full pl-8 pr-7 py-1.5 bg-white border border-slate-300 rounded-lg text-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 focus:border-brand-primary transition-all text-slate-800"
+                  className="w-full h-8 pl-8 pr-7 py-1 bg-white border border-slate-300 rounded-lg text-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 focus:border-brand-primary transition-all text-slate-800"
                 />
                 {inputBusqueda && (
                   <button
@@ -1018,22 +1022,22 @@ export function InspeccionesPage() {
                       setInputBusqueda('');
                       actualizarParametro('q', null);
                     }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                     title="Limpiar búsqueda"
                   >
-                    <Icon name="close" size="14px" />
+                    <Icon name="close" size="13px" />
                   </button>
                 )}
               </div>
 
-              {/* Botones de Período al lado izquierdo: RECIENTES | HOY | HISTÓRICO (Ocultos en Papelera) */}
+              {/* Botones de Período: RECIENTES | HOY | HISTÓRICO */}
               {!verEliminados && (
                 <>
                   <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5 shadow-2xs shrink-0">
                     <button
                       type="button"
                       onClick={() => handlePeriodoChange('ultimos')}
-                      className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                      className={`px-2 py-1 text-2xs sm:text-xs font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
                         periodo === 'ultimos'
                           ? 'bg-marca-primario text-white'
                           : 'text-slate-600 hover:text-slate-900'
@@ -1044,7 +1048,7 @@ export function InspeccionesPage() {
                     <button
                       type="button"
                       onClick={() => handlePeriodoChange('hoy')}
-                      className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                      className={`px-2 py-1 text-2xs sm:text-xs font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
                         periodo === 'hoy'
                           ? 'bg-marca-primario text-white'
                           : 'text-slate-600 hover:text-slate-900'
@@ -1055,7 +1059,7 @@ export function InspeccionesPage() {
                     <button
                       type="button"
                       onClick={() => handlePeriodoChange('todos')}
-                      className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                      className={`px-2 py-1 text-2xs sm:text-xs font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
                         periodo === 'todos'
                           ? 'bg-marca-primario text-white'
                           : 'text-slate-600 hover:text-slate-900'
@@ -1067,11 +1071,11 @@ export function InspeccionesPage() {
 
                   {/* Selectores de Mes y Año si el período es 'todos' (Histórico) */}
                   {periodo === 'todos' && (
-                    <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in duration-150">
+                    <div className="flex items-center gap-1 shrink-0 animate-in fade-in duration-150">
                       <select
                         value={mesParam}
                         onChange={(e) => actualizarParametro('mes', e.target.value || null)}
-                        className="bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer w-28 shrink-0"
+                        className="h-8 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer w-24 sm:w-28 shrink-0"
                         title="Filtrar por mes"
                       >
                         {MESES.map((m) => (
@@ -1084,7 +1088,7 @@ export function InspeccionesPage() {
                       <select
                         value={anioParam}
                         onChange={(e) => actualizarParametro('anio', e.target.value || null)}
-                        className="bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer w-20 shrink-0"
+                        className="h-8 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer w-18 sm:w-20 shrink-0"
                         title="Filtrar por año"
                       >
                         {ANIOS.map((a) => (
@@ -1100,12 +1104,12 @@ export function InspeccionesPage() {
             </div>
 
             {/* Lado derecho: Selector de Departamento y Papelera */}
-            <div className="shrink-0 flex items-center justify-end gap-2">
+            <div className="flex items-center gap-1.5 shrink-0 flex-nowrap ml-auto">
               {puedeCambiarDepto && (
                 <select
                   value={deptoAuditor?.id.toString() || ''}
                   onChange={(e) => handleDeptoAuditorChange(Number(e.target.value))}
-                  className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer w-40"
+                  className="h-8 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer max-w-[150px] sm:max-w-[180px] shrink-0 truncate"
                   title="Estación de inspección"
                 >
                   {departamentos.map((d) => (
@@ -1117,23 +1121,25 @@ export function InspeccionesPage() {
               )}
 
               {/* Botón Papelera al final de los filtros (solo con permiso defectos.eliminar) */}
-              {puedeEliminar && (<button
-                type="button"
-                onClick={() => actualizarParametro('eliminados', verEliminados ? null : 'true')}
-                title={
-                  verEliminados
-                    ? 'Papelera: Viendo defectos eliminados (Click para volver a activos)'
-                    : 'Papelera: Ver defectos eliminados'
-                }
-                className={`p-1.5 rounded-lg border transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold shrink-0 ${
-                  verEliminados
-                    ? 'bg-rose-100 text-rose-700 border-rose-300 shadow-2xs'
-                    : 'bg-white text-slate-500 border-slate-300 hover:text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <Icon name="delete" size="18px" className={verEliminados ? 'text-rose-600' : 'text-slate-400'} />
-                {verEliminados && <span>Eliminados</span>}
-              </button>)}
+              {puedeEliminar && (
+                <button
+                  type="button"
+                  onClick={() => actualizarParametro('eliminados', verEliminados ? null : 'true')}
+                  title={
+                    verEliminados
+                      ? 'Papelera: Viendo defectos eliminados (Click para volver a activos)'
+                      : 'Papelera: Ver defectos eliminados'
+                  }
+                  className={`h-8 px-2 py-1 rounded-lg border transition-colors cursor-pointer flex items-center gap-1 text-xs font-semibold shrink-0 whitespace-nowrap ${
+                    verEliminados
+                      ? 'bg-rose-100 text-rose-700 border-rose-300 shadow-2xs'
+                      : 'bg-white text-slate-500 border-slate-300 hover:text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <Icon name="delete" size="16px" className={verEliminados ? 'text-rose-600' : 'text-slate-400'} />
+                  {verEliminados && <span>Eliminados</span>}
+                </button>
+              )}
             </div>
           </div>
         }

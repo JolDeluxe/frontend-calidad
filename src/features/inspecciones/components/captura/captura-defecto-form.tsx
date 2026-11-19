@@ -276,19 +276,19 @@ export function CapturaDefectoForm({
                               }}
                               className={`w-full min-h-[44px] p-2.5 text-left flex items-center justify-between gap-3 text-xs cursor-pointer touch-manipulation transition-colors rounded-lg ${
                                 esDeptoExterno
-                                  ? 'bg-amber-50/70 dark:bg-amber-950/20 hover:bg-amber-100/70 dark:hover:bg-amber-900/30'
+                                  ? 'bg-amber-50 dark:bg-amber-950/20 hover:bg-amber-100/70 dark:hover:bg-amber-900/30'
                                   : 'hover:bg-app-surface-muted active:bg-brand-primary/10'
                               } ${defectoSeleccionado?.id === d.id ? 'ring-2 ring-brand-primary/30 font-bold' : ''}`}
                             >
                               <div className="flex items-center gap-1.5 truncate min-w-0 flex-1">
                                 <strong className="font-mono text-brand-primary shrink-0">{d.clave} —</strong>
-                                <span className="truncate text-text-primary">{d.defecto}</span>
+                                <span className={`truncate ${esDeptoExterno ? 'text-slate-950 dark:text-slate-100 font-medium' : 'text-text-primary'}`}>{d.defecto}</span>
                               </div>
 
                               {/* Columna / punto fijo a la derecha para el departamento cuando es externo */}
                               <div className="shrink-0 w-24 text-right">
                                 {esDeptoExterno && nombreDepto ? (
-                                  <span className="text-[11px] font-bold text-amber-800 dark:text-amber-300 truncate block">
+                                  <span className="text-[11px] font-bold text-slate-950 dark:text-slate-100 truncate block">
                                     {nombreDepto}
                                   </span>
                                 ) : (
@@ -298,18 +298,6 @@ export function CapturaDefectoForm({
                                 )}
                               </div>
                             </button>
-
-                            {/* Tooltip flotante enriquecido con retardo de 4s para no interferir con la navegación */}
-                            <div className="absolute left-2 bottom-full mb-1 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 delay-[2000ms] flex flex-col z-50">
-                              <div className="bg-slate-900/95 text-white text-[11px] font-medium py-1 px-2.5 rounded-lg shadow-xl max-w-sm whitespace-normal leading-tight backdrop-blur-xs">
-                                <span className="font-mono text-brand-secondary font-bold mr-1">{d.clave}</span>
-                                {d.defecto}
-                                {esDeptoExterno && nombreDepto && (
-                                  <span className="text-amber-300 ml-1 font-semibold">({nombreDepto})</span>
-                                )}
-                              </div>
-                              <div className="w-2 h-1 bg-slate-900/95 rotate-45 ml-4 -mt-0.5" />
-                            </div>
                           </div>
                         );
                       })

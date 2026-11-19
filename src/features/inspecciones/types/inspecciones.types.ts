@@ -216,6 +216,7 @@ export interface FiltrosInspeccionesQueryParams {
   lote?: string;
   defectoClave?: number;
   departamentoId?: number;
+  departamentosIds?: number[];
   departamentoAuditoriaId?: number;
   departamentoResponsableId?: number;
   clasificacion?: 'CRITICO' | 'MAYOR' | 'MENOR';
@@ -236,6 +237,7 @@ export interface GetPeriodosDisponiblesQueryParams {
   anioIso?: number;
   mes?: number;
   departamentoId?: number;
+  departamentosIds?: number[];
   departamentoAuditoriaId?: number;
   departamentoResponsableId?: number;
   inspectorId?: number;
