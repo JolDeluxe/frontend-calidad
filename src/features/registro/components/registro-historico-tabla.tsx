@@ -289,7 +289,7 @@ export function RegistroHistoricoTabla({
                   </td>
 
                   {/* Depto: Departamento al que pertenece el defecto */}
-                  <td className="py-2 px-1 xl:px-1.5 truncate">
+                  <td className="py-2 px-1.5 xl:px-2.5">
                     <div className="flex items-center gap-1 min-w-0">
                       <span className="font-bold text-slate-800 uppercase truncate" title={row.defDepto}>
                         {row.defDepto}
