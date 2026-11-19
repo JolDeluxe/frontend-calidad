@@ -282,7 +282,7 @@ export function InspeccionesTabla({
           {/* Fila 1: Filtros Integrados (Cero cálculo top-14, irrompible) */}
           {toolbar && (
             <tr className="bg-white border-b border-border/80">
-              <th colSpan={mostrarColumnaLinea ? 14 : 13} className="p-2.5 xl:p-3 font-normal text-left bg-white rounded-t-xl">
+              <th colSpan={mostrarColumnaLinea ? 14 : 13} className="p-2 sm:p-2.5 xl:p-3 font-normal text-left bg-white rounded-t-xl">
                 {toolbar}
               </th>
             </tr>
@@ -395,17 +395,17 @@ export function InspeccionesTabla({
                   </td>
 
                   {/* Fecha */}
-                  <td className="py-2 px-1.5 xl:px-2 font-mono font-semibold text-slate-700 whitespace-nowrap truncate">
+                  <td className="py-2 px-1 xl:px-1.5 font-mono font-semibold text-slate-700 text-center whitespace-nowrap truncate">
                     {formatearFecha(row.fecha)}
                   </td>
 
                   {/* Lista */}
-                  <td className="py-2 px-1 xl:px-2 font-semibold text-slate-700 truncate" title={row.lista}>
+                  <td className="py-2 px-1 xl:px-1.5 font-semibold text-slate-700 text-center whitespace-nowrap truncate" title={row.lista}>
                     <HighlightText text={row.lista} highlight={busqueda} />
                   </td>
 
                   {/* Lote */}
-                  <td className="py-2 px-1 xl:px-1.5 font-mono font-extrabold text-sm text-marca-primario truncate" title={row.lote}>
+                  <td className="py-2 px-1 xl:px-1.5 font-mono font-extrabold text-xs text-marca-primario text-center whitespace-nowrap truncate" title={row.lote}>
                     <HighlightText text={row.lote} highlight={busqueda} />
                   </td>
 
@@ -445,7 +445,7 @@ export function InspeccionesTabla({
                   </td>
 
                   {/* Clasificación */}
-                  <td className="py-2 px-1 xl:px-2">
+                  <td className="py-2 px-1 xl:px-1.5 text-center whitespace-nowrap">
                     <DefectoClasificacionIndicator clasificacion={row.clasificacion} />
                   </td>
 

@@ -995,25 +995,25 @@ export function InspeccionesPage() {
         onVerDetalle={handleAbrirDetalle}
         onCancelar={puedeEliminar ? handleAbrirCancelar : undefined}
         toolbar={
-          <div className="flex items-center justify-between gap-1.5 w-full select-none py-1 flex-nowrap min-w-0">
+          <div className="flex items-center justify-between gap-1 w-full select-none py-0.5 flex-nowrap min-w-0">
             {/* Lado izquierdo: Buscador y Pestañas de Período agrupadas */}
-            <div className="flex items-center gap-1.5 shrink-0 flex-nowrap">
+            <div className="flex items-center gap-1 min-w-0 flex-1 flex-nowrap">
               {/* Buscador */}
-              <div className="relative w-40 sm:w-52 shrink min-w-[120px]">
+              <div className="relative min-w-[90px] max-w-[140px] sm:max-w-[180px] flex-1 shrink">
                 <Icon
                   name="search"
-                  size="15px"
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+                  size="13px"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
                 />
                 <input
                   type="text"
-                  placeholder="Buscar por lote, modelo, defecto..."
+                  placeholder="Buscar..."
                   value={inputBusqueda}
                   onChange={(e) => {
                     setInputBusqueda(e.target.value);
                     actualizarParametro('q', e.target.value.trim() || null);
                   }}
-                  className="w-full h-8 pl-8 pr-7 py-1 bg-white border border-slate-300 rounded-lg text-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 focus:border-brand-primary transition-all text-slate-800"
+                  className="w-full h-7.5 pl-6 pr-5 py-0.5 bg-white border border-slate-300 rounded-lg text-2xs sm:text-xs placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-accent/50 focus:border-brand-primary transition-all text-slate-800"
                 />
                 {inputBusqueda && (
                   <button
@@ -1037,7 +1037,7 @@ export function InspeccionesPage() {
                     <button
                       type="button"
                       onClick={() => handlePeriodoChange('ultimos')}
-                      className={`px-2 py-1 text-2xs sm:text-xs font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
+                      className={`px-1.5 sm:px-2 py-0.5 text-2xs sm:text-xs font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
                         periodo === 'ultimos'
                           ? 'bg-marca-primario text-white'
                           : 'text-slate-600 hover:text-slate-900'
@@ -1048,7 +1048,7 @@ export function InspeccionesPage() {
                     <button
                       type="button"
                       onClick={() => handlePeriodoChange('hoy')}
-                      className={`px-2 py-1 text-2xs sm:text-xs font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
+                      className={`px-1.5 sm:px-2 py-0.5 text-2xs sm:text-xs font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
                         periodo === 'hoy'
                           ? 'bg-marca-primario text-white'
                           : 'text-slate-600 hover:text-slate-900'
@@ -1059,7 +1059,7 @@ export function InspeccionesPage() {
                     <button
                       type="button"
                       onClick={() => handlePeriodoChange('todos')}
-                      className={`px-2 py-1 text-2xs sm:text-xs font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
+                      className={`px-1.5 sm:px-2 py-0.5 text-2xs sm:text-xs font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
                         periodo === 'todos'
                           ? 'bg-marca-primario text-white'
                           : 'text-slate-600 hover:text-slate-900'
@@ -1075,7 +1075,7 @@ export function InspeccionesPage() {
                       <select
                         value={mesParam}
                         onChange={(e) => actualizarParametro('mes', e.target.value || null)}
-                        className="h-8 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer w-24 sm:w-28 shrink-0"
+                        className="h-7.5 bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 text-2xs sm:text-xs text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-brand-accent/50 cursor-pointer w-20 sm:w-24 shrink-0"
                         title="Filtrar por mes"
                       >
                         {MESES.map((m) => (
@@ -1088,7 +1088,7 @@ export function InspeccionesPage() {
                       <select
                         value={anioParam}
                         onChange={(e) => actualizarParametro('anio', e.target.value || null)}
-                        className="h-8 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer w-18 sm:w-20 shrink-0"
+                        className="h-7.5 bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 text-2xs sm:text-xs text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-brand-accent/50 cursor-pointer w-16 sm:w-18 shrink-0"
                         title="Filtrar por año"
                       >
                         {ANIOS.map((a) => (
@@ -1104,12 +1104,12 @@ export function InspeccionesPage() {
             </div>
 
             {/* Lado derecho: Selector de Departamento y Papelera */}
-            <div className="flex items-center gap-1.5 shrink-0 flex-nowrap ml-auto">
+            <div className="flex items-center gap-1 shrink-0 flex-nowrap ml-auto">
               {puedeCambiarDepto && (
                 <select
                   value={deptoAuditor?.id.toString() || ''}
                   onChange={(e) => handleDeptoAuditorChange(Number(e.target.value))}
-                  className="h-8 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-brand-accent/50 cursor-pointer max-w-[150px] sm:max-w-[180px] shrink-0 truncate"
+                  className="h-7.5 bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 text-2xs sm:text-xs text-slate-700 font-bold focus:outline-none focus:ring-1 focus:ring-brand-accent/50 cursor-pointer max-w-[120px] sm:max-w-[160px] shrink truncate"
                   title="Estación de inspección"
                 >
                   {departamentos.map((d) => (
@@ -1130,13 +1130,13 @@ export function InspeccionesPage() {
                       ? 'Papelera: Viendo defectos eliminados (Click para volver a activos)'
                       : 'Papelera: Ver defectos eliminados'
                   }
-                  className={`h-8 px-2 py-1 rounded-lg border transition-colors cursor-pointer flex items-center gap-1 text-xs font-semibold shrink-0 whitespace-nowrap ${
+                  className={`h-7.5 px-2 py-0.5 rounded-lg border transition-colors cursor-pointer flex items-center gap-1 text-2xs sm:text-xs font-semibold shrink-0 whitespace-nowrap ${
                     verEliminados
                       ? 'bg-rose-100 text-rose-700 border-rose-300 shadow-2xs'
                       : 'bg-white text-slate-500 border-slate-300 hover:text-slate-700 hover:bg-slate-50'
                   }`}
                 >
-                  <Icon name="delete" size="16px" className={verEliminados ? 'text-rose-600' : 'text-slate-400'} />
+                  <Icon name="delete" size="14px" className={verEliminados ? 'text-rose-600' : 'text-slate-400'} />
                   {verEliminados && <span>Eliminados</span>}
                 </button>
               )}
