@@ -780,6 +780,15 @@ export class CatalogoOfflineService {
   }
 
   /**
+   * Obtiene todos los lotes coincidentes por número en IndexedDB para permitir al usuario seleccionar la lista.
+   */
+  async getLotesLocalesCoincidentes(codigoLote: string): Promise<LoteOfflineStore[]> {
+    if (!idbDatabase.getAvailable()) return [];
+    const term = codigoLote.trim().toUpperCase();
+    return await idbDatabase.getAllByIndex<LoteOfflineStore>('cat_lotes', 'by_lote', term);
+  }
+
+  /**
    * Búsqueda local de lotes por coincidencia parcial de código o modelo.
    */
   async buscarLotesLocales(query: string, limit: number = 20): Promise<LoteOfflineStore[]> {

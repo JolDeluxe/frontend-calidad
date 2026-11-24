@@ -13,7 +13,7 @@ import {
   computeLocalRowId,
 } from '../services/inspecciones-offline.service';
 import type { Departamento } from '@/features/departamentos/types/departamentos.types';
-import type { LineaOperativa, ProduccionLote } from '../types/inspecciones.types';
+import type { LineaOperativa, ProduccionLote, LoteCoincidenciaResumen } from '../types/inspecciones.types';
 import type { Defecto } from '@/features/defectos/types/defectos.types';
 import { useAuthSession } from '@/providers/auth-provider';
 import {
@@ -22,6 +22,7 @@ import {
   CapturaDefectoForm,
   CapturaDefectosTabla,
   FloatingNumpad,
+  LoteSeleccionModal,
 } from './captura';
 
 /** Clave única por intento de captura; el backend la usa para no duplicar inspecciones en reintentos. */
@@ -130,6 +131,8 @@ export function DefectoModalCaptura({
   const [errorLote, setErrorLote] = useState<string | null>(null);
   const [loteActivo, setLoteActivo] = useState<ProduccionLote | null>(null);
   const [lineaCodigo, setLineaCodigo] = useState('L1');
+  const [lotesCoincidentes, setLotesCoincidentes] = useState<LoteCoincidenciaResumen[]>([]);
+  const [modalSeleccionListaAbierto, setModalSeleccionListaAbierto] = useState(false);
 
   // LADO DERECHO: Formulario de captura y lista dinámica
   const [claveDefecto, setClaveDefecto] = useState('');
@@ -267,6 +270,8 @@ export function DefectoModalCaptura({
     setLoteInput('');
     setLoteActivo(null);
     setErrorLote(null);
+    setLotesCoincidentes([]);
+    setModalSeleccionListaAbierto(false);
     setDefectosCapturados([]);
     setClaveDefecto('');
     setFiltroTextoDefecto('');
@@ -296,6 +301,8 @@ export function DefectoModalCaptura({
     setLoteInput('');
     setLoteActivo(null);
     setErrorLote(null);
+    setLotesCoincidentes([]);
+    setModalSeleccionListaAbierto(false);
     setDefectosCapturados([]);
     setClaveDefecto('');
     setFiltroTextoDefecto('');
@@ -308,7 +315,7 @@ export function DefectoModalCaptura({
   };
 
   // Búsqueda de Lote (con fallback a IndexedDB cat_lotes cuando no hay red)
-  const handleBuscarLote = async (valorOverride?: string) => {
+  const handleBuscarLote = async (valorOverride?: string, listaOverride?: string) => {
     const cod = (valorOverride !== undefined ? valorOverride : loteInput).trim();
     if (!cod) {
       handleLimpiarLote();
@@ -319,6 +326,8 @@ export function DefectoModalCaptura({
     if (cod.length < 4) {
       setLoteActivo(null);
       setErrorLote(null);
+      setLotesCoincidentes([]);
+      setModalSeleccionListaAbierto(false);
       return;
     }
 
@@ -326,9 +335,9 @@ export function DefectoModalCaptura({
     setErrorLote(null);
 
     const buscarEnIdb = async (): Promise<boolean> => {
-      const loteOffline = await catalogoOfflineService.getLoteLocal(cod);
+      const loteOffline = await catalogoOfflineService.getLoteLocal(cod, listaOverride);
       if (loteOffline) {
-        if (loteActivo && loteActivo.lote !== loteOffline.lote) {
+        if (loteActivo && (loteActivo.lote !== loteOffline.lote || loteActivo.lista !== loteOffline.lista)) {
           setDefectosCapturados([]);
         }
         setLoteActivo({
@@ -345,6 +354,8 @@ export function DefectoModalCaptura({
           estado: 'ACTIVO',
         });
         setErrorLote(null);
+        setLotesCoincidentes([]);
+        setModalSeleccionListaAbierto(false);
         setTimeout(() => {
           claveInputRef.current?.focus();
         }, 100);
@@ -355,6 +366,31 @@ export function DefectoModalCaptura({
 
     try {
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        if (!listaOverride) {
+          const coincidentesLocales = await catalogoOfflineService.getLotesLocalesCoincidentes(cod);
+          if (coincidentesLocales.length > 1) {
+            setLoteActivo(null);
+            setLotesCoincidentes(
+              coincidentesLocales.map((c) => ({
+                id: c.id,
+                listaLote: `${c.lista}-${c.lote}`,
+                lista: c.lista,
+                lote: c.lote,
+                idProducto: c.idProducto,
+                modelo: c.modelo,
+                cantidad: c.cantidad,
+                descripcion: c.descripcion ?? null,
+                cliente: c.cliente,
+                horma: c.horma ?? null,
+              }))
+            );
+            setModalSeleccionListaAbierto(true);
+            setErrorLote(`El lote '${cod}' existe en ${coincidentesLocales.length} listas activas diferentes.`);
+            setTecladoTarget((prev) => (prev === 'lote' ? null : prev));
+            return;
+          }
+        }
+
         const hallado = await buscarEnIdb();
         if (!hallado) {
           setLoteActivo(null);
@@ -366,26 +402,71 @@ export function DefectoModalCaptura({
         return;
       }
 
-      const lote = await inspeccionesApi.getLoteByCodigo(cod);
-      if (loteActivo && loteActivo.lote !== lote.lote) {
+      const lote = await inspeccionesApi.getLoteByCodigo(cod, listaOverride);
+      if (loteActivo && (loteActivo.lote !== lote.lote || loteActivo.lista !== lote.lista)) {
         setDefectosCapturados([]);
       }
       setLoteActivo(lote);
       setErrorLote(null);
+      setLotesCoincidentes([]);
+      setModalSeleccionListaAbierto(false);
       // Cerrar teclado numérico automáticamente si encontró el lote
       setTecladoTarget((prev) => (prev === 'lote' ? null : prev));
       setTimeout(() => {
         claveInputRef.current?.focus();
       }, 100);
     } catch (err: any) {
-      // Si fue un 404 o 409 (ambigüedad) o 400 del servidor en línea
-      if (err instanceof ApiError && (err.statusCode === 404 || err.statusCode === 409 || err.statusCode === 400)) {
-        setLoteActivo(null);
-        setErrorLote(err.message || `El lote '${cod}' no existe o no está disponible`);
-        return;
+      if (err instanceof ApiError) {
+        if (err.statusCode === 409) {
+          const bodyErrors = err.body?.errors as {
+            codigo?: string;
+            lote?: string;
+            coincidencias?: LoteCoincidenciaResumen[];
+          } | undefined;
+
+          if (bodyErrors?.codigo === 'AMBIGUOUS_LOTE' && bodyErrors.coincidencias && bodyErrors.coincidencias.length > 0) {
+            setLoteActivo(null);
+            setLotesCoincidentes(bodyErrors.coincidencias);
+            setModalSeleccionListaAbierto(true);
+            setErrorLote(`El lote '${cod}' existe en ${bodyErrors.coincidencias.length} listas activas diferentes.`);
+            setTecladoTarget((prev) => (prev === 'lote' ? null : prev));
+            return;
+          }
+        }
+
+        if (err.statusCode === 404 || err.statusCode === 400 || err.statusCode === 409) {
+          setLoteActivo(null);
+          setErrorLote(err.message || `El lote '${cod}' no existe o no está disponible`);
+          return;
+        }
       }
 
       // Fallo de red: intentar resolver desde IndexedDB
+      if (!listaOverride) {
+        const coincidentesLocales = await catalogoOfflineService.getLotesLocalesCoincidentes(cod);
+        if (coincidentesLocales.length > 1) {
+          setLoteActivo(null);
+          setLotesCoincidentes(
+            coincidentesLocales.map((c) => ({
+              id: c.id,
+              listaLote: `${c.lista}-${c.lote}`,
+              lista: c.lista,
+              lote: c.lote,
+              idProducto: c.idProducto,
+              modelo: c.modelo,
+              cantidad: c.cantidad,
+              descripcion: c.descripcion ?? null,
+              cliente: c.cliente,
+              horma: c.horma ?? null,
+            }))
+          );
+          setModalSeleccionListaAbierto(true);
+          setErrorLote(`El lote '${cod}' existe en ${coincidentesLocales.length} listas activas diferentes.`);
+          setTecladoTarget((prev) => (prev === 'lote' ? null : prev));
+          return;
+        }
+      }
+
       const halladoLocal = await buscarEnIdb();
       if (!halladoLocal) {
         setLoteActivo(null);
@@ -399,6 +480,82 @@ export function DefectoModalCaptura({
     } finally {
       setCargandoLote(false);
     }
+  };
+
+  const handleSeleccionarListaLote = (coincidencia: LoteCoincidenciaResumen) => {
+    if (loteActivo && (loteActivo.lote !== coincidencia.lote || loteActivo.lista !== coincidencia.lista)) {
+      setDefectosCapturados([]);
+    }
+    setLoteActivo({
+      id: coincidencia.id,
+      listaLote: coincidencia.listaLote,
+      lista: coincidencia.lista,
+      lote: coincidencia.lote,
+      idProducto: coincidencia.idProducto,
+      modelo: coincidencia.modelo,
+      cantidad: coincidencia.cantidad,
+      descripcion: coincidencia.descripcion,
+      cliente: coincidencia.cliente,
+      horma: coincidencia.horma,
+      estado: 'ACTIVO',
+    });
+    setErrorLote(null);
+    setModalSeleccionListaAbierto(false);
+    setTecladoTarget((prev) => (prev === 'lote' ? null : prev));
+    setTimeout(() => {
+      claveInputRef.current?.focus();
+    }, 100);
+  };
+
+  const handleAbrirCambiarLista = async () => {
+    if (lotesCoincidentes.length > 1) {
+      setModalSeleccionListaAbierto(true);
+      return;
+    }
+    const loteNumero = (loteActivo?.lote || loteInput).trim();
+    if (!loteNumero) return;
+
+    try {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        const coincidentesLocales = await catalogoOfflineService.getLotesLocalesCoincidentes(loteNumero);
+        if (coincidentesLocales.length > 1) {
+          setLotesCoincidentes(
+            coincidentesLocales.map((c) => ({
+              id: c.id,
+              listaLote: `${c.lista}-${c.lote}`,
+              lista: c.lista,
+              lote: c.lote,
+              idProducto: c.idProducto,
+              modelo: c.modelo,
+              cantidad: c.cantidad,
+              descripcion: c.descripcion ?? null,
+              cliente: c.cliente,
+              horma: c.horma ?? null,
+            }))
+          );
+          setModalSeleccionListaAbierto(true);
+        }
+        return;
+      }
+
+      // Online: consultar ambigüedad del lote sin lista para recuperar todas las opciones
+      try {
+        await inspeccionesApi.getLoteByCodigo(loteNumero);
+      } catch (err: any) {
+        if (err instanceof ApiError && err.statusCode === 409) {
+          const bodyErrors = err.body?.errors as {
+            codigo?: string;
+            lote?: string;
+            coincidencias?: LoteCoincidenciaResumen[];
+          } | undefined;
+
+          if (bodyErrors?.codigo === 'AMBIGUOUS_LOTE' && bodyErrors.coincidencias && bodyErrors.coincidencias.length > 0) {
+            setLotesCoincidentes(bodyErrors.coincidencias);
+            setModalSeleccionListaAbierto(true);
+          }
+        }
+      }
+    } catch {}
   };
 
   // Debounce automático al escribir el número de lote
@@ -670,6 +827,8 @@ export function DefectoModalCaptura({
 
     const payloadCaptura = {
       lote: loteActivo.lote,
+      lista: loteActivo.lista,
+      loteId: loteActivo.id,
       lineaId: null,
       lineaTexto: sublineaEfectiva,
       horma: loteActivo.horma,
@@ -850,7 +1009,14 @@ export function DefectoModalCaptura({
                 />
 
                 {/* FICHA TÉCNICA DEL LOTE: LOTE | LISTA | MODELO | PARES | HORMA | CLIENTE */}
-                <CapturaLoteFicha lote={loteActivo} error={errorLote} cargando={cargandoLote} />
+                <CapturaLoteFicha
+                  lote={loteActivo}
+                  error={errorLote}
+                  cargando={cargandoLote}
+                  tieneListasMultiples={lotesCoincidentes.length > 1}
+                  onSeleccionarLista={() => setModalSeleccionListaAbierto(true)}
+                  onCambiarLista={handleAbrirCambiarLista}
+                />
               </div>
 
               {/* SELLO DE AUDITORÍA */}
@@ -1031,6 +1197,16 @@ export function DefectoModalCaptura({
           }}
         />
       </Modal>
+
+      {/* MODAL DE SELECCIÓN DE LISTA CUANDO HAY MÚLTIPLES COINCIDENCIAS */}
+      <LoteSeleccionModal
+        isOpen={modalSeleccionListaAbierto}
+        onClose={() => setModalSeleccionListaAbierto(false)}
+        lote={loteActivo?.lote || loteInput}
+        coincidencias={lotesCoincidentes}
+        listaActual={loteActivo?.lista}
+        onSeleccionar={handleSeleccionarListaLote}
+      />
     </>
   );
 }

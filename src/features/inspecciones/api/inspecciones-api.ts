@@ -117,11 +117,12 @@ export interface DashboardMetricasResponse {
 
 export const inspeccionesApi = {
   /**
-   * Obtiene la información oficial de un lote maestro por su número.
+   * Obtiene la información oficial de un lote maestro por su número y opcionalmente lista.
    */
-  getLoteByCodigo: async (codigoLote: string): Promise<ProduccionLote> => {
+  getLoteByCodigo: async (codigoLote: string, lista?: string): Promise<ProduccionLote> => {
     const res = await httpClient.get<ApiResponse<ProduccionLote>>(
       `/lotes/${encodeURIComponent(codigoLote.trim())}`,
+      lista ? { params: { lista: lista.trim() } } : undefined,
     );
     return res.data!;
   },

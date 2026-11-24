@@ -19,6 +19,19 @@ export interface ProduccionLote {
   estado: 'ACTIVO' | 'INACTIVO';
 }
 
+export interface LoteCoincidenciaResumen {
+  id: number;
+  listaLote: string;
+  lista: string;
+  lote: string;
+  idProducto: string;
+  modelo: string;
+  cantidad: number;
+  descripcion: string | null;
+  cliente: string;
+  horma: string | null;
+}
+
 export interface DefectoItemStaging {
   idTemporal: string;
   defectoId: number;
@@ -253,6 +266,8 @@ export interface GetPeriodosDisponiblesQueryParams {
 
 export interface CreateInspeccionPayload {
   lote: string;
+  lista?: string | null;
+  loteId?: number | null;
   lineaId?: number | null;
   lineaTexto?: string | null;
   horma?: string | null;

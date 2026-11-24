@@ -6,9 +6,19 @@ export interface CapturaLoteFichaProps {
   lote: ProduccionLote | null;
   error: string | null;
   cargando?: boolean;
+  onSeleccionarLista?: () => void;
+  tieneListasMultiples?: boolean;
+  onCambiarLista?: () => void;
 }
 
-export function CapturaLoteFicha({ lote, error, cargando }: CapturaLoteFichaProps) {
+export function CapturaLoteFicha({
+  lote,
+  error,
+  cargando,
+  onSeleccionarLista,
+  tieneListasMultiples,
+  onCambiarLista,
+}: CapturaLoteFichaProps) {
   if (cargando) {
     return (
       <div className="rounded-xl border border-border bg-app-surface p-3 xl:p-5 space-y-2 xl:space-y-3.5 shadow-2xs flex-1 min-h-0 flex flex-col justify-between overflow-hidden">
@@ -53,6 +63,28 @@ export function CapturaLoteFicha({ lote, error, cargando }: CapturaLoteFichaProp
   }
 
   if (error) {
+    if (tieneListasMultiples && onSeleccionarLista) {
+      return (
+        <div className="rounded-xl border-2 border-amber-400 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-4 xl:p-6 text-center text-text-muted flex-1 flex flex-col items-center justify-center">
+          <Icon name="layers" size="44px" className="mx-auto mb-3 text-amber-700 dark:text-amber-400 opacity-90" />
+          <p className="text-sm font-black text-slate-900 dark:text-slate-100">
+            {error}
+          </p>
+          <p className="text-xs mt-1.5 text-slate-700 dark:text-slate-300 font-medium max-w-xs">
+            Seleccione el modelo correspondiente a la lista de producción activa en planta.
+          </p>
+          <button
+            type="button"
+            onClick={onSeleccionarLista}
+            className="mt-4 px-4 py-2 bg-marca-primario hover:bg-marca-secundario text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+          >
+            <Icon name="touch_app" size="18px" />
+            <span>Seleccionar Modelo / Lista</span>
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div className="rounded-xl border-2 border-amber-400 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-4 xl:p-6 text-center text-text-muted flex-1 flex flex-col items-center justify-center">
         <Icon name="search_off" size="44px" className="mx-auto mb-3 text-amber-700 dark:text-amber-400 opacity-90" />
@@ -98,6 +130,19 @@ export function CapturaLoteFicha({ lote, error, cargando }: CapturaLoteFichaProp
           <span className="text-base xl:text-xl font-bold text-text-secondary font-mono leading-none">
             {lote.lista}
           </span>
+          {tieneListasMultiples && onCambiarLista && (
+            <div className="mt-1">
+              <button
+                type="button"
+                onClick={onCambiarLista}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black text-marca-primario hover:text-marca-secundario bg-marca-primario/10 hover:bg-marca-primario/20 border border-marca-primario/30 transition-all cursor-pointer active:scale-95 whitespace-nowrap"
+                title="Cambiar a otra lista de este lote"
+              >
+                <Icon name="swap_horiz" size="13px" />
+                <span>Cambiar lista</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
